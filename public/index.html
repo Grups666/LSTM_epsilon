@@ -1,0 +1,2684 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Epsilon Change | Tereon</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { width: 100%; height: 100%; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; color: #1e293b; overflow: hidden; }
+
+      /* Map Area - Full screen */
+      .map-area {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: linear-gradient(180deg, #f7fafc 0%, #eef6f8 58%, #e7f0f4 100%);
+      }
+
+      #mapCanvas { width: 100%; height: 100%; }
+
+      /* Left Panel - Floating overlay */
+      .left-panel {
+        position: absolute;
+        top: 0; left: 0;
+        width: 260px;
+        height: 100vh;
+        background: #f8fafc;
+        border-right: 1px solid #e2e8f0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        z-index: 50;
+        box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+      }
+      .left-panel.hidden {
+        transform: translateX(-100%);
+      }
+      .panel-main {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+      }
+      .panel-bottom {
+        margin-top: auto;
+        border-top: 1px solid #e2e8f0;
+        background: #f8fafc;
+      }
+
+      /* Panel header bar - full width toggle button */
+      .panel-header {
+        padding: 0;
+        background: #f1f5f9;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 44px;
+      }
+      .panel-toggle-btn {
+        width: 100%;
+        height: 44px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        color: #64748b;
+        font-size: 14px;
+        font-weight: normal;
+        word-spacing: 0.3px;
+        line-height: 44px;
+        text-align: center;
+      }
+      .panel-toggle-btn:hover { background: #e2e8f0; color: #1e293b; }
+      .panel-toggle-btn::before { content: "<<"; letter-spacing: 0.3px; }
+
+      /* Show panel button - between panel and map layer */
+      .panel-show-btn {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        width: 28px;
+        height: 28px;
+        background: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        z-index: 40;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        display: block;
+        color: #64748b;
+        font-size: 14px;
+        font-weight: normal;
+        word-spacing: 0.3px;
+        line-height: 28px;
+        text-align: center;
+      }
+      .panel-show-btn:hover { background: #f8fafc; color: #1e293b; }
+      .panel-show-btn::before { content: ">>"; letter-spacing: 0.3px; }
+
+      /* Panel sections */
+      .panel-section { border-bottom: 1px solid #e2e8f0; position: relative; }
+      .panel-section-header {
+        padding: 12px 16px;
+        background: #f1f5f9;
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #64748b;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .panel-section-header:hover { background: #e2e8f0; }
+      .panel-section.collapsed .panel-section-content { display: none; }
+      .panel-section.collapsed .toggle-icon { transform: rotate(-90deg); }
+      .toggle-icon {
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 6px solid #94a3b8;
+        transition: transform 0.2s;
+      }
+      .panel-section-content { padding: 8px; }
+      .legend-list { display: flex; flex-direction: column; gap: 8px; }
+      .legend-empty { padding: 8px 12px; font-size: 12px; color: #94a3b8; line-height: 1.45; }
+      .legend-card { border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; padding: 10px 12px; font-size: 11px; color: #334155; }
+      .legend-title { font-weight: 600; margin-bottom: 7px; }
+      .legend-grid { display: grid; grid-template-columns: 12px 1fr; gap: 5px 7px; align-items: center; }
+      .legend-swatch { width: 12px; height: 12px; border: 1px solid #64748b; }
+      .legend-note { margin-top: 7px; color: #64748b; line-height: 1.35; }
+
+      /* Module/Layer items */
+      .module-item, .layer-item {
+        padding: 8px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .module-item:hover, .layer-item:hover { background: #e2e8f0; }
+      .module-item.loaded { background: #dbeafe; }
+      .module-item.loaded .module-name { color: #1d4ed8; font-weight: 500; }
+      .module-remove-btn {
+        margin-left: auto;
+        width: 20px;
+        height: 20px;
+        border: none;
+        border-radius: 3px;
+        background: transparent;
+        color: #64748b;
+        cursor: pointer;
+      }
+      .module-remove-btn:hover { background: #bfdbfe; color: #1e293b; }
+      .module-remove-btn,
+      .layer-btn,
+      .import-close,
+      .inspector-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        font-family: inherit;
+        font-weight: 500;
+        font-size: 0;
+        padding: 0;
+        position: relative;
+      }
+      .module-remove-btn::before,
+      .module-remove-btn::after,
+      .layer-btn::before,
+      .layer-btn::after,
+      .import-close::before,
+      .import-close::after,
+      .inspector-close::before,
+      .inspector-close::after {
+        content: "";
+        position: absolute;
+        width: 8px;
+        height: 1px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+      .import-close::before,
+      .import-close::after,
+      .inspector-close::before,
+      .inspector-close::after {
+        width: 10px;
+      }
+      .module-remove-btn::before,
+      .layer-btn::before,
+      .import-close::before,
+      .inspector-close::before {
+        transform: rotate(45deg);
+      }
+      .module-remove-btn::after,
+      .layer-btn::after,
+      .import-close::after,
+      .inspector-close::after {
+        transform: rotate(-45deg);
+      }
+      .layer-checkbox {
+        width: 14px;
+        height: 14px;
+        appearance: none;
+        border: 1px solid #cbd5e1;
+        border-radius: 3px;
+        background: transparent;
+        cursor: pointer;
+        position: relative;
+      }
+      .layer-checkbox:checked {
+        background: transparent;
+        border-color: #94a3b8;
+      }
+      .layer-checkbox:checked::after {
+        content: "";
+        position: absolute;
+        left: 4px;
+        top: 1px;
+        width: 4px;
+        height: 8px;
+        border: solid #64748b;
+        border-width: 0 1px 1px 0;
+        transform: rotate(45deg);
+      }
+      .layer-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .layer-expandable {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      .layer-expandable:hover { background: #e2e8f0; }
+      .layer-expandable.expanded + .layer-sublayers { display: block; }
+      .layer-sublayers {
+        padding-left: 22px;
+        display: none;
+      }
+      .layer-sublayer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+      }
+      .layer-sublayer:hover { background: #f1f5f9; }
+      .layer-expandable.expanded + .layer-sublayers.map-display-options { display: flex; }
+      .map-display-options {
+        flex-direction: column;
+      }
+      .map-display-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #334155;
+      }
+      .map-display-option:hover { background: #f1f5f9; }
+      .map-display-option input {
+        width: 13px;
+        height: 13px;
+        accent-color: #64748b;
+      }
+      .map-display-label { font-size: 12px; }
+
+      /* Add Module button - dashed border style */
+      .add-module-btn {
+        margin: 8px 12px;
+        padding: 8px 12px;
+        background: transparent;
+        border: 1px dashed #cbd5e1;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        color: #94a3b8;
+        width: calc(100% - 24px);
+        text-align: center;
+      }
+      .add-module-btn:hover {
+        border-color: #94a3b8;
+        color: #64748b;
+        background: #f8fafc;
+      }
+
+      .layer-actions { opacity: 0; margin-left: auto; }
+      .layer-item:hover .layer-actions { opacity: 1; }
+      .layer-btn {
+        width: 20px; height: 20px;
+        border: none; background: transparent;
+        cursor: pointer; border-radius: 3px;
+        color: #64748b;
+      }
+      .layer-btn:hover { background: #cbd5e1; color: #1e293b; }
+
+      /* Import Modal */
+      .import-modal {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 200;
+        display: none;
+        justify-content: center;
+        align-items: center;
+      }
+      .import-modal.visible { display: flex; }
+      .import-dialog {
+        width: 480px;
+        display: flex;
+        flex-direction: column;
+        max-height: 80vh;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        overflow: hidden;
+      }
+      .confirm-dialog { width: 420px; }
+      .import-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .import-title { font-weight: 600; font-size: 15px; }
+      .import-close {
+        width: 28px; height: 28px;
+        border: none; background: transparent;
+        cursor: pointer; border-radius: 4px;
+        color: #64748b;
+      }
+      .import-close:hover { background: #e2e8f0; }
+      .import-body {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+      }
+      .import-section { margin-bottom: 20px; }
+      .import-section-title {
+        font-size: 12px;
+        color: #64748b;
+        margin-bottom: 12px;
+        font-weight: 500;
+      }
+      .source-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .source-tab {
+        padding: 8px 16px;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        color: #64748b;
+      }
+      .source-tab.active {
+        background: #fff;
+        border-color: #3b82f6;
+        color: #1e293b;
+      }
+      .source-tab.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        color: #94a3b8;
+      }
+      .import-dropzone {
+        padding: 32px;
+        border: 2px dashed #e2e8f0;
+        border-radius: 8px;
+        text-align: center;
+        cursor: pointer;
+        color: #64748b;
+        font-size: 13px;
+      }
+      .import-dropzone:hover { border-color: #cbd5e1; background: #f8fafc; }
+      .import-url-box { display: none; }
+      .import-url-input {
+        width: 100%;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 9px 10px;
+        font-size: 12px;
+        color: #1e293b;
+      }
+      .import-url-input:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+      }
+      .import-url-help {
+        margin-top: 7px;
+        color: #64748b;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .import-preview {
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 12px;
+      }
+      .import-preview-table {
+        width: 100%;
+        font-size: 12px;
+        border-collapse: collapse;
+      }
+      .import-preview-table th {
+        background: #f1f5f9;
+        padding: 8px 12px;
+        text-align: left;
+        color: #64748b;
+        font-weight: 500;
+      }
+      .import-preview-table td {
+        padding: 8px 12px;
+        border-bottom: 1px solid #f1f5f9;
+      }
+      .import-footer {
+        padding: 16px 20px;
+        border-top: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-shrink: 0;
+        background: #fff;
+      }
+      .import-btn {
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .import-btn-cancel {
+        background: transparent;
+        border: 1px solid #e2e8f0;
+        color: #64748b;
+      }
+      .import-btn-cancel:hover { background: #f8fafc; }
+      .import-btn-submit {
+        background: #3b82f6;
+        border: none;
+        color: #fff;
+      }
+      .import-btn-submit:hover { background: #2563eb; }
+      .import-btn-submit.disabled {
+        background: #94a3b8;
+        cursor: not-allowed;
+      }
+      .import-btn-danger {
+        background: #dc2626;
+        border: none;
+        color: #fff;
+      }
+      .import-btn-danger:hover { background: #b91c1c; }
+      .confirm-message {
+        color: #334155;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .confirm-detail {
+        margin-top: 10px;
+        color: #64748b;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      /* Map Controls */
+      .map-controls {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        z-index: 10;
+      }
+      .map-btn {
+        width: 32px; height: 32px;
+        border: none; background: #fff;
+        border-radius: 6px;
+        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .map-btn:hover { background: #f8fafc; }
+      .map-icon {
+        position: relative;
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+      }
+      .map-icon-plus::before,
+      .map-icon-minus::before {
+        content: "";
+        position: absolute;
+        left: 1px;
+        right: 1px;
+        top: 6px;
+        height: 2px;
+        background: #111827;
+        border-radius: 1px;
+      }
+      .map-icon-plus::after {
+        content: "";
+        position: absolute;
+        top: 1px;
+        bottom: 1px;
+        left: 6px;
+        width: 2px;
+        background: #111827;
+        border-radius: 1px;
+      }
+      .map-icon-home::before {
+        content: "";
+        position: absolute;
+        left: 1px;
+        top: 1px;
+        width: 12px;
+        height: 12px;
+        background: #111827;
+        clip-path: polygon(50% 0, 100% 42%, 82% 42%, 82% 100%, 18% 100%, 18% 42%, 0 42%);
+      }
+
+      .map-status {
+        position: absolute;
+        bottom: 12px; left: 12px;
+        font-size: 11px; color: #64748b;
+        background: rgba(255,255,255,0.9);
+        padding: 6px 12px;
+        border-radius: 4px;
+        display: flex;
+        gap: 16px;
+        z-index: 10;
+      }
+      .map-attribution {
+        display: none;
+      }
+      .map-attribution.visible {
+        display: inline;
+      }
+      .map-attribution a {
+        color: inherit;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      /* Inspector Panel */
+      .inspector-panel {
+        position: absolute;
+        top: 60px;
+        right: 20px;
+        width: 360px;
+        max-height: calc(100vh - 100px);
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+        z-index: 100;
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .inspector-panel.visible { display: flex; }
+      .inspector-header {
+        padding: 12px 16px;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #f8fafc;
+      }
+      .inspector-title { font-weight: 600; font-size: 14px; }
+      .inspector-close {
+        width: 24px; height: 24px;
+        border: none; background: transparent;
+        cursor: pointer; border-radius: 4px;
+        color: #64748b;
+      }
+      .inspector-close:hover { background: #e2e8f0; }
+      .inspector-body { flex: 1; overflow-y: auto; padding: 16px; }
+
+      /* Toast */
+      .toast {
+        position: fixed;
+        bottom: 24px; right: 24px;
+        color: #64748b;
+        padding: 0;
+        border-radius: 0;
+        font-size: 12px;
+        opacity: 0;
+        transform: translateY(10px);
+        transition: opacity 0.2s, transform 0.2s;
+        z-index: 200;
+      }
+      .toast.visible { opacity: 1; transform: translateY(0); }
+
+      /* Global dark UI theme, activated by Theme > Dark */
+      body.theme-dark {
+        color: #dbe7f3;
+        background: #07111f;
+        color-scheme: dark;
+      }
+      body.theme-dark .left-panel {
+        background: #0f172a;
+        border-right-color: #243247;
+        box-shadow: 2px 0 14px rgba(0,0,0,0.35);
+      }
+      body.theme-dark .panel-header,
+      body.theme-dark .panel-section-header,
+      body.theme-dark .inspector-header {
+        background: #111c2f;
+        border-color: #243247;
+      }
+      body.theme-dark .panel-bottom,
+      body.theme-dark .import-footer {
+        background: #0f172a;
+        border-color: #243247;
+      }
+      body.theme-dark .panel-section {
+        border-bottom-color: #243247;
+      }
+      body.theme-dark .panel-section-header,
+      body.theme-dark .panel-toggle-btn,
+      body.theme-dark .panel-show-btn,
+      body.theme-dark .module-remove-btn,
+      body.theme-dark .layer-btn,
+      body.theme-dark .import-close,
+      body.theme-dark .inspector-close {
+        color: #94a3b8;
+      }
+      body.theme-dark .panel-toggle-btn:hover,
+      body.theme-dark .panel-show-btn:hover,
+      body.theme-dark .panel-section-header:hover,
+      body.theme-dark .module-item:hover,
+      body.theme-dark .layer-item:hover,
+      body.theme-dark .layer-expandable:hover,
+      body.theme-dark .layer-sublayer:hover,
+      body.theme-dark .map-display-option:hover,
+      body.theme-dark .import-close:hover,
+      body.theme-dark .inspector-close:hover {
+        background: #1e293b;
+        color: #e2e8f0;
+      }
+      body.theme-dark .panel-show-btn,
+      body.theme-dark .map-btn,
+      body.theme-dark .legend-card,
+      body.theme-dark .import-dialog,
+      body.theme-dark .inspector-panel {
+        background: #0f172a;
+        color: #dbe7f3;
+      }
+      body.theme-dark .module-item.loaded {
+        background: #17335f;
+      }
+      body.theme-dark .module-item.loaded .module-name {
+        color: #93c5fd;
+      }
+      body.theme-dark .module-remove-btn:hover,
+      body.theme-dark .layer-btn:hover {
+        background: #233047;
+        color: #e2e8f0;
+      }
+      body.theme-dark .legend-card,
+      body.theme-dark .import-preview,
+      body.theme-dark .import-url-input,
+      body.theme-dark .source-tab,
+      body.theme-dark .import-btn-cancel,
+      body.theme-dark .layer-checkbox {
+        border-color: #334155;
+      }
+      body.theme-dark .legend-empty,
+      body.theme-dark .legend-note,
+      body.theme-dark .import-section-title,
+      body.theme-dark .import-url-help,
+      body.theme-dark .confirm-detail,
+      body.theme-dark .map-display-option,
+      body.theme-dark .import-btn-cancel {
+        color: #94a3b8;
+      }
+      body.theme-dark .source-tab,
+      body.theme-dark .import-preview-table th {
+        background: #111c2f;
+        color: #94a3b8;
+      }
+      body.theme-dark .source-tab.active,
+      body.theme-dark .import-url-input {
+        background: #0b1220;
+        color: #e2e8f0;
+      }
+      body.theme-dark .import-url-input::placeholder {
+        color: #64748b;
+      }
+      body.theme-dark .source-tab.active {
+        border-color: #60a5fa;
+      }
+      body.theme-dark .import-dropzone {
+        border-color: #334155 !important;
+        color: #94a3b8;
+      }
+      body.theme-dark .map-display-option input {
+        accent-color: #60a5fa;
+      }
+      body.theme-dark select {
+        background: #0b1220 !important;
+        border-color: #334155 !important;
+        color: #e2e8f0 !important;
+      }
+      body.theme-dark .import-dropzone:hover,
+      body.theme-dark .import-btn-cancel:hover {
+        background: #111c2f;
+        border-color: #475569;
+      }
+      body.theme-dark .import-preview-table td {
+        border-bottom-color: #1e293b;
+      }
+      body.theme-dark .confirm-message {
+        color: #dbe7f3;
+      }
+      body.theme-dark .map-btn {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+      }
+      body.theme-dark .map-btn:hover {
+        background: #1e293b;
+      }
+      body.theme-dark .map-icon-plus::before,
+      body.theme-dark .map-icon-minus::before,
+      body.theme-dark .map-icon-plus::after,
+      body.theme-dark .map-icon-home::before {
+        background: #e2e8f0;
+      }
+      body.theme-dark .map-status {
+        color: #cbd5e1;
+        background: rgba(15, 23, 42, 0.9);
+      }
+      body.theme-dark .toggle-icon {
+        border-top-color: #64748b;
+      }
+      body.theme-dark .layer-checkbox:checked {
+        border-color: #94a3b8;
+      }
+      body.theme-dark .layer-checkbox:checked::after {
+        border-color: #cbd5e1;
+      }
+      body.theme-dark .toast {
+        color: #cbd5e1;
+      }
+      body.theme-dark .inspector-body h2,
+      body.theme-dark .inspector-body [style*="color:#334155"],
+      body.theme-dark .inspector-body [style*="color: #334155"] {
+        color: #e2e8f0 !important;
+      }
+      body.theme-dark .inspector-body [style*="background:#f8fafc"],
+      body.theme-dark .inspector-body [style*="background: #f8fafc"] {
+        background: #111c2f !important;
+      }
+      body.theme-dark .inspector-body [style*="color:#64748b"],
+      body.theme-dark .inspector-body [style*="color: #64748b"] {
+        color: #94a3b8 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Map Area - Full screen background -->
+    <div class="map-area">
+      <canvas id="mapCanvas"></canvas>
+    </div>
+
+    <!-- Left Panel - Floating overlay -->
+    <aside class="left-panel" id="leftPanel">
+      <div class="panel-header">
+        <button class="panel-toggle-btn" id="btnHidePanel"></button>
+      </div>
+      <div class="panel-main">
+      <div class="panel-section">
+        <div class="panel-section-header" data-section="modules">
+          <span>Modules</span>
+          <span class="toggle-icon" aria-hidden="true"></span>
+        </div>
+        <div class="panel-section-content">
+          <div id="moduleList"></div>
+          <button class="add-module-btn" id="btnAddModule">+ Add Module</button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-section-header" data-section="layers">
+          <span>Layers</span>
+          <span class="toggle-icon" aria-hidden="true"></span>
+        </div>
+        <div class="panel-section-content">
+          <div id="layerList"></div>
+        </div>
+      </div>
+      </div>
+      <div class="panel-bottom">
+        <div class="panel-section">
+          <div class="panel-section-header" data-section="legend">
+            <span>Legend</span>
+            <span class="toggle-icon" aria-hidden="true"></span>
+          </div>
+          <div class="panel-section-content">
+            <div id="legendList" class="legend-list"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Show panel button - appears when panel hidden -->
+    <button class="panel-show-btn" id="btnShowPanel"></button>
+
+    <!-- Map Controls -->
+    <div class="map-controls">
+      <button class="map-btn" id="btnZoomIn" aria-label="Zoom in"><span class="map-icon map-icon-plus" aria-hidden="true"></span></button>
+      <button class="map-btn" id="btnZoomOut" aria-label="Zoom out"><span class="map-icon map-icon-minus" aria-hidden="true"></span></button>
+      <button class="map-btn" id="btnReset" aria-label="Reset view"><span class="map-icon map-icon-home" aria-hidden="true"></span></button>
+    </div>
+
+    <!-- Map Status -->
+    <div class="map-status">
+      <span id="statusFeatures">0 layers</span>
+      <span id="statusCoords">--</span>
+      <span class="map-attribution" id="statusAttribution"></span>
+    </div>
+
+    <!-- Inspector -->
+    <div class="inspector-panel" id="inspectorPanel">
+      <div class="inspector-header">
+        <span class="inspector-title" id="inspectorTitle">Inspector</span>
+        <button class="inspector-close" id="btnCloseInspector" aria-label="Close inspector" title="Close inspector"></button>
+      </div>
+      <div class="inspector-body" id="inspectorBody"></div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Import Modal -->
+    <div class="import-modal" id="importModal">
+      <div class="import-dialog">
+        <div class="import-header">
+          <span class="import-title">Import Data</span>
+          <button class="import-close" id="btnCloseImport" aria-label="Close import dialog" title="Close import dialog"></button>
+        </div>
+        <div class="import-body">
+          <div class="import-section">
+            <div class="import-section-title">1. Select Source</div>
+            <div class="source-tabs">
+              <button class="source-tab active" data-source="csv">CSV</button>
+              <button class="source-tab" data-source="module">Module Manifest</button>
+              <button class="source-tab" data-source="url">URL</button>
+            </div>
+            <div class="import-dropzone" id="importDropzone">
+              Drag file here or click to browse<br>
+              <span id="importSupportText" style="color:#94a3b8;font-size:11px">Supports: CSV</span>
+            </div>
+            <div class="import-url-box" id="importUrlBox">
+              <input class="import-url-input" id="importUrlInput" type="url" placeholder="Paste module.json URL or GitHub repository URL">
+              <div class="import-url-help">
+                Examples: GitHub Pages module.json, raw GitHub module.json, GitHub blob URL, or a repository URL containing a module manifest.
+              </div>
+            </div>
+            <input type="file" id="importFile" accept=".csv" style="display:none">
+          </div>
+
+          <div class="import-section" id="previewSection" style="display:none">
+            <div class="import-section-title">2. Preview</div>
+            <div class="import-preview">
+              <table class="import-preview-table" id="previewTable">
+                <thead id="previewHead"></thead>
+                <tbody id="previewBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="import-section" id="mappingSection" style="display:none">
+            <div class="import-section-title">3. Field Mapping</div>
+            <div id="fieldMapping"></div>
+          </div>
+        </div>
+        <div class="import-footer">
+          <button class="import-btn import-btn-cancel" id="btnCancelImport">Cancel</button>
+          <button class="import-btn import-btn-submit disabled" id="btnSubmitImport">Import</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div class="import-modal" id="confirmModal">
+      <div class="import-dialog confirm-dialog">
+        <div class="import-header">
+          <span class="import-title" id="confirmTitle">Confirm</span>
+          <button class="import-close" id="btnCloseConfirm" aria-label="Close confirmation dialog" title="Close confirmation dialog"></button>
+        </div>
+        <div class="import-body">
+          <div class="confirm-message" id="confirmMessage"></div>
+          <div class="confirm-detail" id="confirmDetail"></div>
+        </div>
+        <div class="import-footer">
+          <button class="import-btn import-btn-cancel" id="btnCancelConfirm">Cancel</button>
+          <button class="import-btn import-btn-danger" id="btnConfirmAction">Remove</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="./assets/basin-data.js"></script>
+    <script src="./assets/land-50m.js"></script>
+    <script src="./assets/country-polygons-110m.js"></script>
+
+    <script src="./foundation/core/event-bus.js"></script>
+    <script src="./foundation/core/module-loader.js"></script>
+    <script src="./foundation/map/coordinate-system.js"></script>
+    <script src="./foundation/map/layer-manager.js"></script>
+    <script src="./foundation/map/render-scheduler.js"></script>
+    <script src="./foundation/performance/geometry-index.js"></script>
+    <script src="./foundation/ui/utilities.js"></script>
+
+    <script>
+    const App = {
+      canvas: null,
+      ctx: null,
+      layerManager: null,
+      renderScheduler: null,
+      renderer: null,
+      basinSpatialIndex: null,
+      eventBus: Foundation.eventBus,
+      moduleLoader: Foundation.moduleLoader,
+      modules: [],
+      legends: new Map(),
+      selectedFeature: null,
+      selectedLayer: null,
+      hoveredFeatureId: null,
+      hoveredLayer: null,
+      currentImportSource: 'csv',
+      remoteImportRequestId: 0,
+      remoteImportTimer: null,
+      pendingConfirm: null,
+      staticModules: [
+        { id: 'epsilon-change', name: 'Epsilon Change', defaultLoad: true }
+      ],
+      themeStyle: 'light',
+      imageryEnabled: false,
+      rasterTileCache: new Map(),
+      rasterTileCacheLimit: 384,
+      mapStyles: {
+        light: {
+          label: 'Light',
+          background: ['#f7fafc', '#eef6f8', '#e7f0f4'],
+          grid: 'rgba(112, 128, 144, 0.15)',
+          landFill: 'rgba(255, 255, 255, 0.92)',
+          landStroke: 'rgba(72, 84, 96, 0.3)',
+          basinStroke: 'rgba(72, 84, 96, 0.15)',
+          countryStroke: 'rgba(51, 65, 85, 0.38)'
+        },
+        dark: {
+          label: 'Dark',
+          background: ['#08111f', '#0f1e2f', '#132638'],
+          grid: 'rgba(148, 163, 184, 0.16)',
+          landFill: 'rgba(30, 41, 59, 0.96)',
+          landStroke: 'rgba(148, 163, 184, 0.38)',
+          basinStroke: 'rgba(148, 163, 184, 0.22)',
+          countryStroke: 'rgba(203, 213, 225, 0.42)'
+        }
+      },
+      imageryLayer: {
+        label: 'Imagery',
+        tileUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: 'Imagery: Esri, Maxar, Earthstar Geographics, GIS User Community'
+      },
+      worldBounds: {
+        minLat: -85.0511287798066,
+        maxLat: 85.0511287798066
+      },
+      maxViewportScale: 12,
+
+      // Viewport state
+      viewport: { width: 0, height: 0, scale: 1, offsetX: 0, offsetY: 0 },
+      dragging: false,
+      draggingActive: false,
+      suppressClick: false,
+      dragStart: null,
+      hoverPending: false,
+      latestHoverPoint: null,
+
+      async init() {
+        this.canvas = document.getElementById('mapCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.layerManager = new Foundation.LayerManager(this.eventBus);
+        this.renderScheduler = new Foundation.RenderScheduler((state) => this.drawNow(state));
+        this.basinSpatialIndex = new Foundation.SpatialGridIndex(
+          window.BASIN_DATA?.basins || [],
+          (basin) => basin.bbox,
+          10
+        );
+
+        // Event listeners
+        this.eventBus.on(Foundation.Events.LAYER_ADD, () => this.updateLayerList());
+        this.eventBus.on(Foundation.Events.LAYER_REMOVE, () => this.updateLayerList());
+        this.eventBus.on(Foundation.Events.LAYER_TOGGLE, () => this.updateLayerList());
+
+        // Foundation-level feature click handler
+        this.eventBus.on(Foundation.Events.FEATURE_CLICK, (payload) => {
+          if (payload.layer?.moduleId === 'foundation' && payload.layer?.id === 'outlines-basins') {
+            this.showBasinInspector(payload.feature);
+          } else if (payload.layer?.moduleId === 'foundation' && payload.layer?.id === 'outlines-countries') {
+            this.showCountryInspector(payload.feature);
+          }
+        });
+
+        // Add basemap display layer
+        this.layerManager.addLayer({
+          id: 'basemap',
+          name: 'Base Map',
+          type: 'basemap',
+          visible: true,
+          interactive: false,
+          renderer: (ctx, layer, vp) => this.renderBasemap(ctx, vp)
+        });
+
+        // Add basin layer under Outlines > Basins. This single third-level layer owns
+        // both basin rendering and basin click/hover interaction.
+        this.layerManager.addLayer({
+          id: 'outlines-basins',
+          name: 'Basins',
+          type: 'vector',
+          visible: false,
+          interactive: true,
+          moduleId: 'foundation',
+          groupPath: ['outlines', 'basins'],
+          renderer: (ctx, layer, vp) => this.renderBasinsLayer(ctx, vp),
+          hitTest: (lon, lat, vp, layer) => this.hitTestBasins(lon, lat)
+        });
+
+        this.layerManager.addLayer({
+          id: 'outlines-countries',
+          name: 'Countries',
+          type: 'vector',
+          visible: false,
+          interactive: true,
+          moduleId: 'foundation',
+          groupPath: ['outlines', 'countries'],
+          renderer: (ctx, layer, vp) => this.renderCountryOutlines(ctx, vp),
+          hitTest: (lon, lat, vp, layer) => this.hitTestCountryOutlines(lon, lat, vp)
+        });
+
+        // Setup interactions
+        this.setupCanvasEvents();
+        this.setupUI();
+        this.applyTheme();
+        this.updateMapAttribution();
+        this.updateLegendList();
+
+        // Fetch and show modules
+        await this.fetchModules();
+
+        // Initial render
+        this.resize();
+        await this.loadDefaultModules();
+        await this.loadUrlModules();
+        window.addEventListener('resize', () => this.resize());
+      },
+
+      // Canvas bounding rect (updated on resize)
+      canvasRect: null,
+
+      setupCanvasEvents() {
+        window.addEventListener('keydown', (e) => {
+          if (e.key !== 'Tab') return;
+          const tag = e.target?.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target?.isContentEditable) return;
+          e.preventDefault();
+          this.toggleSidebar();
+        });
+
+        // Mouse events
+        this.canvas.addEventListener('mousedown', (e) => {
+          this.dragging = true;
+          this.draggingActive = false;
+          const { x, y } = this.getCanvasCoords(e);
+          this.dragStart = { x, y, ox: this.viewport.offsetX, oy: this.viewport.offsetY };
+          this.canvas.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mouseup', () => {
+          if (this.dragging) {
+            this.dragging = false;
+            this.suppressClick = this.draggingActive;
+            if (this.draggingActive) this.renderScheduler.endInteraction();
+            this.draggingActive = false;
+            this.canvas.style.cursor = 'grab';
+          }
+        });
+
+        this.canvas.addEventListener('mousemove', (e) => {
+          const { x, y } = this.getCanvasCoords(e);
+          const { lon, lat } = this.screenToGeo(x, y);
+          document.getElementById('statusCoords').textContent = `${lon.toFixed(1)} deg, ${lat.toFixed(1)} deg`;
+
+          if (this.dragging) {
+            const moved = Math.abs(x - this.dragStart.x) + Math.abs(y - this.dragStart.y);
+            if (!this.draggingActive && moved > 5) {
+              this.draggingActive = true;
+              this.renderScheduler.beginInteraction();
+            }
+            if (!this.draggingActive) return;
+            this.viewport.offsetX = this.dragStart.ox + (x - this.dragStart.x);
+            this.viewport.offsetY = this.dragStart.oy + (y - this.dragStart.y);
+            this.clampOffset();
+            this.requestDraw("drag");
+          } else {
+            this.scheduleHover(x, y);
+          }
+        });
+
+        this.canvas.addEventListener('click', (e) => {
+          const { x, y } = this.getCanvasCoords(e);
+          if (this.suppressClick) {
+            this.suppressClick = false;
+            return;
+          }
+          const hit = this.hitTest(x, y);
+          if (hit) {
+            this.selectedFeature = hit.feature;
+            this.selectedLayer = hit.layer;
+            this.eventBus.emit(Foundation.Events.FEATURE_CLICK, hit);
+            this.requestDraw("select");
+          } else {
+            // Click on empty area - hide inspector
+            this.selectedFeature = null;
+            this.selectedLayer = null;
+            this.hoveredFeatureId = null;
+            this.hoveredLayer = null;
+            document.getElementById('inspectorPanel').classList.remove('visible');
+            this.requestDraw("clear-selection");
+          }
+        });
+
+        this.canvas.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          this.renderScheduler.beginInteraction();
+          const { x, y } = this.getCanvasCoords(e);
+          const { lon, lat } = this.screenToGeo(x, y);
+
+          const factor = e.deltaY < 0 ? 1.2 : 0.8;
+          const newScale = Math.max(this.getMinViewportScale(), Math.min(this.maxViewportScale, this.viewport.scale * factor));
+
+          if (newScale !== this.viewport.scale) {
+            this.viewport.scale = newScale;
+
+            // Adjust offset to keep mouse position fixed
+            const newBase = this.getBaseScale();
+            this.viewport.offsetX = x - this.viewport.width / 2 - lon * newBase;
+            this.viewport.offsetY = y - this.viewport.height / 2 + lat * newBase;
+
+            this.clampOffset();
+            this.requestDraw("wheel");
+          }
+          this.renderScheduler.endInteraction();
+        }, { passive: false });
+      },
+
+      // Convert window coords to canvas-local coords
+      getCanvasCoords(e) {
+        if (!this.canvasRect) this.canvasRect = this.canvas.getBoundingClientRect();
+        return {
+          x: e.clientX - this.canvasRect.left,
+          y: e.clientY - this.canvasRect.top
+        };
+      },
+
+      scheduleHover(x, y) {
+        this.latestHoverPoint = { x, y };
+        if (this.hoverPending) return;
+
+        this.hoverPending = true;
+        requestAnimationFrame(() => {
+          this.hoverPending = false;
+          if (!this.latestHoverPoint || this.dragging) return;
+
+          const hit = this.hitTest(this.latestHoverPoint.x, this.latestHoverPoint.y);
+          this.canvas.style.cursor = hit ? 'pointer' : 'grab';
+
+          const newHoveredId = hit?.feature?.id;
+          if (newHoveredId !== this.hoveredFeatureId) {
+            this.hoveredFeatureId = newHoveredId;
+            this.hoveredLayer = hit?.layer;
+            this.requestDraw("hover");
+          }
+        });
+      },
+
+      setupUI() {
+        // Zoom buttons
+        document.getElementById('btnZoomIn').onclick = () => {
+          this.viewport.scale = Math.min(this.maxViewportScale, this.viewport.scale * 1.2);
+          this.clampOffset();
+          this.draw();
+        };
+        document.getElementById('btnZoomOut').onclick = () => {
+          this.viewport.scale = Math.max(this.getMinViewportScale(), this.viewport.scale / 1.2);
+          this.clampOffset();
+          this.draw();
+        };
+        document.getElementById('btnReset').onclick = () => {
+          this.viewport = { ...this.viewport, scale: this.getMinViewportScale(), offsetX: 0, offsetY: 0 };
+          this.draw();
+        };
+
+        // Panel toggle - show button is covered by panel, reveals when panel hides
+        const showBtn = document.getElementById('btnShowPanel');
+        const panel = document.getElementById('leftPanel');
+
+        document.getElementById('btnHidePanel').onclick = () => {
+          panel.classList.add('hidden');
+        };
+        showBtn.onclick = () => this.toggleSidebar();
+
+        // Section toggle
+        document.querySelectorAll('.panel-section-header').forEach(h => {
+          h.onclick = () => h.parentElement.classList.toggle('collapsed');
+        });
+
+        // Inspector close
+        document.getElementById('btnCloseInspector').onclick = () => {
+          document.getElementById('inspectorPanel').classList.remove('visible');
+        };
+
+        // Import modal
+        const importModal = document.getElementById('importModal');
+        const importDropzone = document.getElementById('importDropzone');
+        const importUrlBox = document.getElementById('importUrlBox');
+        const importUrlInput = document.getElementById('importUrlInput');
+        const importFileInput = document.getElementById('importFile');
+        const importSupportText = document.getElementById('importSupportText');
+
+        document.getElementById('btnAddModule').onclick = () => {
+          importModal.classList.add('visible');
+        };
+        document.getElementById('btnCloseImport').onclick = () => {
+          importModal.classList.remove('visible');
+          this.resetImportForm();
+        };
+        document.getElementById('btnCancelImport').onclick = () => {
+          importModal.classList.remove('visible');
+          this.resetImportForm();
+        };
+
+        document.querySelectorAll('.source-tab').forEach(tab => {
+          tab.onclick = () => {
+            if (tab.classList.contains('disabled')) {
+              this.toast('This import source is planned but not enabled yet');
+              return;
+            }
+            document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            this.currentImportSource = tab.dataset.source;
+            importFileInput.accept = this.currentImportSource === 'module' ? '.json' : '.csv';
+            importSupportText.textContent = this.getImportSupportText();
+            importDropzone.style.display = this.currentImportSource === 'url' ? 'none' : 'block';
+            importUrlBox.style.display = this.currentImportSource === 'url' ? 'block' : 'none';
+            this.resetImportForm();
+          };
+        });
+
+        importDropzone.onclick = () => importFileInput.click();
+        importFileInput.onchange = (e) => {
+          const file = e.target.files[0];
+          if (file) this.handleImportFile(file);
+        };
+
+        // Drag and drop
+        importDropzone.ondragover = (e) => {
+          e.preventDefault();
+          importDropzone.style.borderColor = '#3b82f6';
+          importDropzone.style.background = '#f0f9ff';
+        };
+        importDropzone.ondragleave = () => {
+          importDropzone.style.borderColor = '#e2e8f0';
+          importDropzone.style.background = '';
+        };
+        importDropzone.ondrop = (e) => {
+          e.preventDefault();
+          importDropzone.style.borderColor = '#e2e8f0';
+          importDropzone.style.background = '';
+          const file = e.dataTransfer.files[0];
+          if (file) this.handleImportFile(file);
+        };
+
+        importUrlInput.oninput = () => {
+          clearTimeout(this.remoteImportTimer);
+          this.remoteImportTimer = setTimeout(() => {
+            this.handleImportUrlInput(importUrlInput.value);
+          }, 250);
+        };
+
+        document.getElementById('btnCloseConfirm').onclick = () => this.resolveConfirm(false);
+        document.getElementById('btnCancelConfirm').onclick = () => this.resolveConfirm(false);
+        document.getElementById('btnConfirmAction').onclick = () => this.resolveConfirm(true);
+      },
+
+      resetImportForm() {
+        this.remoteImportRequestId++;
+        clearTimeout(this.remoteImportTimer);
+        document.getElementById('importFile').value = '';
+        document.getElementById('importUrlInput').value = '';
+        this.clearImportPreview();
+        this.importData = null;
+      },
+
+      clearImportPreview() {
+        document.getElementById('previewSection').style.display = 'none';
+        document.getElementById('mappingSection').style.display = 'none';
+        document.getElementById('btnSubmitImport').classList.add('disabled');
+        document.getElementById('btnSubmitImport').onclick = null;
+      },
+
+      toggleSidebar() {
+        document.getElementById('leftPanel').classList.toggle('hidden');
+      },
+
+      importData: null,
+
+      getImportSupportText() {
+        if (this.currentImportSource === 'module') return 'Supports: module.json manifest';
+        if (this.currentImportSource === 'url') return 'Supports: module URL or GitHub repo URL';
+        return 'Supports: CSV';
+      },
+
+      handleImportFile(file) {
+        if (this.currentImportSource === 'module') {
+          if (!file.name.endsWith('.json')) {
+            this.toast('Please select a module manifest JSON file');
+            return;
+          }
+          this.parseModuleManifestFile(file);
+          return;
+        }
+
+        if (!file.name.endsWith('.csv')) {
+          this.toast('Please select a CSV file');
+          return;
+        }
+        this.parseCSVFile(file);
+      },
+
+      async parseModuleManifestFile(file) {
+        try {
+          const manifest = JSON.parse(await file.text());
+          if (!manifest.id || !manifest.entry || !manifest.className) {
+            this.toast('Manifest requires id, entry, and className');
+            return;
+          }
+
+          this.prepareModuleManifestImport(manifest);
+        } catch (e) {
+          console.error(e);
+          this.toast('Failed to parse module manifest');
+        }
+      },
+
+      async handleImportUrlInput(value) {
+        const rawUrl = value.trim();
+        const requestId = ++this.remoteImportRequestId;
+        this.clearImportPreview();
+        this.importData = null;
+        if (!rawUrl) return;
+
+        try {
+          const manifest = await this.fetchRemoteManifest(rawUrl);
+          if (requestId !== this.remoteImportRequestId) return;
+          this.prepareModuleManifestImport(manifest);
+        } catch (e) {
+          if (requestId !== this.remoteImportRequestId) return;
+          document.getElementById('previewSection').style.display = 'block';
+          document.getElementById('previewHead').innerHTML = '<tr><th>Status</th><th>Details</th></tr>';
+          document.getElementById('previewBody').innerHTML = `
+            <tr>
+              <td>Not ready</td>
+              <td>${this.escape(e.message)}</td>
+            </tr>
+          `;
+        }
+      },
+
+      async fetchRemoteManifest(rawUrl) {
+        const candidates = this.getManifestUrlCandidates(rawUrl);
+        const errors = [];
+
+        for (const candidate of candidates) {
+          try {
+            const response = await fetch(candidate, { cache: 'no-cache' });
+            if (!response.ok) {
+              errors.push(`${candidate} returned ${response.status}`);
+              continue;
+            }
+
+            const manifest = await response.json();
+            if (!manifest.id || !manifest.entry || !manifest.className) {
+              errors.push(`${candidate} is missing id, entry, or className`);
+              continue;
+            }
+
+            return {
+              ...manifest,
+              basePath: manifest.basePath || new URL('.', response.url).href,
+              manifestUrl: response.url
+            };
+          } catch (e) {
+            errors.push(`${candidate} failed: ${e.message}`);
+          }
+        }
+
+        throw new Error(errors.length
+          ? `No module manifest could be loaded. Tried ${errors.length} URL(s): ${errors.join(' | ')}`
+          : 'No module manifest candidate could be loaded'
+        );
+      },
+
+      getManifestUrlCandidates(rawUrl) {
+        let url;
+        try {
+          url = new URL(rawUrl);
+        } catch {
+          throw new Error('Enter a valid http(s) URL');
+        }
+
+        if (!/^https?:$/.test(url.protocol)) {
+          throw new Error('Only http(s) URLs are supported');
+        }
+
+        const candidates = [];
+        const add = (candidate) => {
+          if (candidate && !candidates.includes(candidate)) candidates.push(candidate);
+        };
+
+        if (url.hostname === 'github.com') {
+          const parts = url.pathname.split('/').filter(Boolean);
+          const [owner, repo] = parts;
+
+          if (owner && repo && parts[2] === 'blob' && parts[3]) {
+            const branch = parts[3];
+            const path = parts.slice(4).join('/');
+            add(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`);
+            return candidates;
+          }
+
+          if (owner && repo && parts.length <= 2) {
+            const repoSlug = repo.replace(/\.git$/i, '');
+            add(`https://${owner}.github.io/${repoSlug}/module.json`);
+            add(`https://${owner}.github.io/${repoSlug}/modules/${repoSlug}/module.json`);
+            add(`https://raw.githubusercontent.com/${owner}/${repoSlug}/main/module.json`);
+            return candidates;
+          }
+        }
+
+        add(url.href);
+        return candidates;
+      },
+
+      prepareModuleManifestImport(manifest) {
+        this.importData = { manifest };
+        document.getElementById('previewSection').style.display = 'block';
+        document.getElementById('previewHead').innerHTML = '<tr><th>Field</th><th>Value</th></tr>';
+        document.getElementById('previewBody').innerHTML = [
+          ['id', manifest.id],
+          ['name', manifest.name || ''],
+          ['version', manifest.version || ''],
+          ['entry', manifest.entry],
+          ['className', manifest.className],
+          ['manifestUrl', manifest.manifestUrl || ''],
+          ['basePath', manifest.basePath || `./modules/${manifest.id}/`],
+          ['knowledgeGraph', manifest.knowledgeGraph || '']
+        ].map(([k, v]) => `<tr><td>${this.escape(k)}</td><td>${this.escape(v)}</td></tr>`).join('');
+
+        document.getElementById('mappingSection').style.display = 'block';
+        document.getElementById('fieldMapping').innerHTML = `
+          <p style="font-size:12px;color:#64748b;line-height:1.5">
+            The module will be loaded through this manifest. Relative entry, dataset, and asset paths resolve from the manifest base path.
+          </p>
+        `;
+        document.getElementById('btnSubmitImport').classList.remove('disabled');
+        document.getElementById('btnSubmitImport').onclick = async () => {
+          await this.importModuleManifest(manifest);
+          document.getElementById('importModal').classList.remove('visible');
+          this.resetImportForm();
+        };
+      },
+
+      async importModuleManifest(manifest) {
+        try {
+          await this.loadModuleFromManifest(manifest);
+          if (!this.modules.some(m => m.id === manifest.id)) {
+            this.modules.push({
+              id: manifest.id,
+              name: manifest.name || manifest.id,
+              version: manifest.version || '',
+              description: manifest.description || '',
+              manifestUrl: manifest.manifestUrl || '',
+              basePath: manifest.basePath || '',
+              entry: manifest.entry || './index.js',
+              className: manifest.className || ''
+            });
+          }
+          this.updateModuleList();
+          this.draw();
+          this.toast(`Module imported: ${manifest.name || manifest.id}`);
+        } catch (e) {
+          console.error(e);
+          this.toast('Module import failed: ' + e.message);
+        }
+      },
+
+      async parseCSVFile(file) {
+        try {
+          const text = await file.text();
+          const lines = text.split('\n').filter(l => l.trim());
+          if (lines.length < 2) {
+            this.toast('File is empty or has no data');
+            return;
+          }
+
+          const headers = lines[0].split(',').map(h => h.trim());
+          const rows = lines.slice(1, 6).map(line => {
+            const values = line.split(',');
+            const row = {};
+            headers.forEach((h, i) => row[h] = values[i]?.trim() || '');
+            return row;
+          });
+
+          this.importData = { headers, rows, fullText: text };
+
+          // Show preview
+          const previewHead = document.getElementById('previewHead');
+          const previewBody = document.getElementById('previewBody');
+          previewHead.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+          previewBody.innerHTML = rows.map(row =>
+            `<tr>${headers.map(h => `<td>${row[h] || ''}</td>`).join('')}</tr>`
+          ).join('');
+
+          document.getElementById('previewSection').style.display = 'block';
+
+          // Auto-detect lat/lon columns
+          const latCol = headers.find(h => /lat|latitude/i.test(h));
+          const lonCol = headers.find(h => /lon|longitude|lng/i.test(h));
+
+          // Show field mapping
+          const fieldMapping = document.getElementById('fieldMapping');
+          fieldMapping.innerHTML = `
+            <div style="display:grid;gap:8px;font-size:12px">
+              <div>
+                <label style="color:#64748b">Latitude field:</label>
+                <select id="mapLat" style="margin-left:8px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:4px">
+                  ${headers.map(h => `<option value="${h}" ${h === latCol ? 'selected' : ''}>${h}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label style="color:#64748b">Longitude field:</label>
+                <select id="mapLon" style="margin-left:8px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:4px">
+                  ${headers.map(h => `<option value="${h}" ${h === lonCol ? 'selected' : ''}>${h}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+          `;
+          document.getElementById('mappingSection').style.display = 'block';
+          document.getElementById('btnSubmitImport').classList.remove('disabled');
+
+          // Submit handler
+          document.getElementById('btnSubmitImport').onclick = () => {
+            if (!this.importData) return;
+            const latCol = document.getElementById('mapLat').value;
+            const lonCol = document.getElementById('mapLon').value;
+            this.importCSVModule(latCol, lonCol);
+            document.getElementById('importModal').classList.remove('visible');
+            this.resetImportForm();
+          };
+
+        } catch (e) {
+          console.error(e);
+          this.toast('Failed to parse file');
+        }
+      },
+
+      importCSVModule(latCol, lonCol) {
+        // Parse full CSV
+        const lines = this.importData.fullText.split('\n').filter(l => l.trim());
+        const headers = this.importData.headers;
+        const features = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',');
+          const feature = { properties: {}, geometry: { type: 'Point' } };
+          headers.forEach((h, j) => {
+            if (h === latCol) {
+              feature.geometry.lat = parseFloat(values[j]);
+            } else if (h === lonCol) {
+              feature.geometry.lon = parseFloat(values[j]);
+            } else {
+              feature.properties[h] = values[j]?.trim() || '';
+            }
+          });
+          if (!isNaN(feature.geometry.lat) && !isNaN(feature.geometry.lon)) {
+            features.push(feature);
+          }
+        }
+
+        if (features.length === 0) {
+          this.toast('No valid data points found');
+          return;
+        }
+
+        // Create a simple layer for the imported data
+        const layerId = 'imported-' + Date.now();
+        this.layerManager.addLayer({
+          id: layerId,
+          name: 'Imported Data',
+          type: 'vector',
+          visible: true,
+          interactive: true,
+          moduleId: 'imported',
+          renderer: (ctx, layer, vp) => this.renderImportedLayer(ctx, vp, features),
+          hitTest: (lon, lat, vp, layer) => this.hitTestImported(lon, lat, features)
+        });
+
+        this.updateLayerList();
+        this.draw();
+        this.toast(`Imported ${features.length} points`);
+      },
+
+      renderImportedLayer(ctx, viewport, features) {
+        const base = (viewport.height / 180) * viewport.scale;
+        const { width, height, offsetX, offsetY } = viewport;
+
+        ctx.fillStyle = '#ef4444';
+        ctx.strokeStyle = '#991b1b';
+        ctx.lineWidth = 1;
+
+        for (const f of features) {
+          const x = width / 2 + f.geometry.lon * base + offsetX;
+          const y = height / 2 - f.geometry.lat * base + offsetY;
+
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      },
+
+      hitTestImported(lon, lat, features) {
+        const threshold = 0.5; // degrees
+        for (const f of features) {
+          const dLat = Math.abs(lat - f.geometry.lat);
+          const dLon = Math.abs(lon - f.geometry.lon);
+          if (dLat < threshold && dLon < threshold) {
+            return { id: `imported-${features.indexOf(f)}`, ...f };
+          }
+        }
+        return null;
+      },
+
+      resize() {
+        const parent = this.canvas.parentElement;
+        const rect = parent.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+
+        this.viewport.width = rect.width;
+        this.viewport.height = rect.height;
+        this.canvasRect = this.canvas.getBoundingClientRect();
+
+        this.canvas.width = Math.round(rect.width * dpr);
+        this.canvas.height = Math.round(rect.height * dpr);
+        this.canvas.style.width = rect.width + 'px';
+        this.canvas.style.height = rect.height + 'px';
+
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.ensureViewportScale();
+        this.clampOffset();
+        this.draw();
+      },
+
+      getBaseScale() {
+        return (this.viewport.height / 180) * this.viewport.scale;
+      },
+
+      getWorldLatitudeSpan() {
+        return this.worldBounds.maxLat - this.worldBounds.minLat;
+      },
+
+      getMinViewportScale() {
+        return 180 / this.getWorldLatitudeSpan();
+      },
+
+      ensureViewportScale() {
+        this.viewport.scale = Math.max(this.getMinViewportScale(), Math.min(this.maxViewportScale, this.viewport.scale));
+      },
+
+      screenToGeo(x, y) {
+        const base = this.getBaseScale();
+        return {
+          lon: (x - this.viewport.width / 2 - this.viewport.offsetX) / base,
+          lat: (this.viewport.height / 2 + this.viewport.offsetY - y) / base
+        };
+      },
+
+      clampOffset() {
+        this.ensureViewportScale();
+        const minScale = this.getMinViewportScale();
+
+        if (this.viewport.scale <= minScale + 0.000001) {
+          this.viewport.scale = minScale;
+          this.viewport.offsetY = 0;
+          return;
+        }
+
+        const mapHeight = this.getWorldLatitudeSpan() * this.getBaseScale();
+        if (mapHeight > this.viewport.height) {
+          const maxY = (mapHeight - this.viewport.height) / 2;
+          this.viewport.offsetY = Math.max(-maxY, Math.min(maxY, this.viewport.offsetY));
+        } else {
+          this.viewport.offsetY = 0;
+        }
+      },
+
+      draw() {
+        this.requestDraw("draw");
+      },
+
+      requestDraw(reason = "update") {
+        this.renderScheduler?.request(reason);
+      },
+
+      getCurrentMapStyle() {
+        return this.mapStyles[this.themeStyle] || this.mapStyles.light;
+      },
+
+      setThemeStyle(styleId) {
+        if (!this.mapStyles[styleId] || this.themeStyle === styleId) return;
+        this.themeStyle = styleId;
+        this.applyTheme();
+        this.updateMapAttribution();
+        this.requestDraw("theme-style");
+      },
+
+      setImageryEnabled(enabled) {
+        if (this.imageryEnabled === enabled) return;
+        this.imageryEnabled = enabled;
+        this.updateMapAttribution();
+        this.requestDraw("imagery-toggle");
+      },
+
+      applyTheme() {
+        document.body.classList.toggle('theme-dark', this.themeStyle === 'dark');
+      },
+
+      updateMapAttribution() {
+        const el = document.getElementById('statusAttribution');
+        if (!el) return;
+        const attribution = this.imageryEnabled ? this.imageryLayer.attribution : '';
+        if (!attribution) {
+          el.classList.remove('visible');
+          el.innerHTML = '';
+          return;
+        }
+        el.classList.add('visible');
+        el.innerHTML = `${this.escape(attribution)} - <a href="https://www.esri.com/en-us/legal/terms/data-attributions" target="_blank" rel="noopener">Attribution</a>`;
+      },
+
+      drawNow(renderState = {}) {
+        const { ctx, viewport } = this;
+        const { width, height } = viewport;
+        viewport.interacting = !!renderState.interacting;
+        const theme = this.getCurrentMapStyle();
+
+        // Background
+        const grad = ctx.createLinearGradient(0, 0, 0, height);
+        grad.addColorStop(0, theme.background[0]);
+        grad.addColorStop(0.58, theme.background[1]);
+        grad.addColorStop(1, theme.background[2]);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+
+        if (this.imageryEnabled) {
+          this.renderRasterTiles(ctx, viewport, this.imageryLayer.tileUrl);
+        }
+
+        // Grid
+        ctx.strokeStyle = theme.grid;
+        ctx.lineWidth = 1;
+        const base = this.getBaseScale();
+        const leftLon = (-width / 2 - viewport.offsetX) / base;
+        const rightLon = (width / 2 - viewport.offsetX) / base;
+        for (let lon = Math.floor(leftLon / 30) * 30; lon <= rightLon; lon += 30) {
+          const x = width / 2 + lon * base + viewport.offsetX;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+        for (let lat = -60; lat <= 60; lat += 20) {
+          const y = height / 2 - lat * base + viewport.offsetY;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+
+        // Layers
+        for (const layer of this.layerManager.getLayers()) {
+          if (!layer.visible) continue;
+          if (layer.renderer) {
+            layer.renderer(ctx, layer, viewport);
+          }
+        }
+        viewport.interacting = false;
+      },
+
+      renderBasemap(ctx, viewport) {
+        const landRings = window.LAND_50M || [];
+        const base = this.getBaseScale();
+        const { width, height, offsetX, offsetY } = viewport;
+        const style = this.getCurrentMapStyle();
+
+        const leftLon = (-width / 2 - offsetX) / base;
+        const rightLon = (width / 2 - offsetX) / base;
+        const firstSeg = Math.floor(leftLon / 360);
+        const lastSeg = Math.ceil(rightLon / 360);
+
+        ctx.fillStyle = style.landFill || 'transparent';
+        ctx.strokeStyle = style.landStroke;
+        ctx.lineWidth = 0.5;
+
+        for (let seg = firstSeg; seg <= lastSeg; seg++) {
+          const lonOffset = seg * 360;
+          for (const ring of landRings) {
+            if (ring.length < 3) continue;
+            const path = new Path2D();
+            for (let i = 0; i < ring.length; i++) {
+              const [lon, lat] = ring[i];
+              const x = width / 2 + (lon + lonOffset) * base + offsetX;
+              const y = height / 2 - lat * base + offsetY;
+                if (i === 0) path.moveTo(x, y);
+                else path.lineTo(x, y);
+              }
+            if (!this.imageryEnabled && style.landFill) ctx.fill(path);
+            ctx.stroke(path);
+          }
+        }
+      },
+
+      renderRasterTiles(ctx, viewport, tileUrl) {
+        const z = this.getRasterZoom();
+        const n = 2 ** z;
+        const base = this.getBaseScale();
+        const { width, height, offsetX, offsetY } = viewport;
+
+        const leftLon = (-width / 2 - offsetX) / base;
+        const rightLon = (width / 2 - offsetX) / base;
+        const topLat = this.clampLatitude((height / 2 + offsetY) / base);
+        const bottomLat = this.clampLatitude((-height / 2 + offsetY) / base);
+        const minY = Math.max(0, Math.floor(this.latToTileY(topLat, z)));
+        const maxY = Math.min(n - 1, Math.floor(this.latToTileY(bottomLat, z)));
+        const minX = Math.floor((leftLon + 180) / 360 * n);
+        const maxX = Math.floor((rightLon + 180) / 360 * n);
+
+        for (let x = minX; x <= maxX; x++) {
+          const wrappedX = ((x % n) + n) % n;
+          const west = x / n * 360 - 180;
+          const east = (x + 1) / n * 360 - 180;
+          const sx = width / 2 + west * base + offsetX;
+          const sw = Math.max(1, (east - west) * base);
+
+          for (let y = minY; y <= maxY; y++) {
+            const north = this.tileYToLat(y, z);
+            const south = this.tileYToLat(y + 1, z);
+            const sy = height / 2 - north * base + offsetY;
+            const sh = Math.max(1, (north - south) * base);
+            const tile = this.getRasterTile(z, wrappedX, y, tileUrl);
+            if (tile.loaded) {
+              this.drawRasterTile(ctx, tile.image, sx, sy, sw + 1, sh + 1, y, z);
+            }
+          }
+        }
+      },
+
+      drawRasterTile(ctx, image, sx, sy, sw, sh, tileY, z) {
+        const northLat = this.tileYToLat(tileY, z);
+        const southLat = this.tileYToLat(tileY + 1, z);
+        const latSpan = northLat - southLat;
+        const imageWidth = image.naturalWidth || image.width || 256;
+        const imageHeight = image.naturalHeight || image.height || 256;
+        const sliceCount = 32;
+        const sliceHeight = imageHeight / sliceCount;
+
+        for (let i = 0; i < sliceCount; i++) {
+          const srcY = i * sliceHeight;
+          const nextSrcY = (i + 1) * sliceHeight;
+          const sliceNorth = this.tileYToLat(tileY + i / sliceCount, z);
+          const sliceSouth = this.tileYToLat(tileY + (i + 1) / sliceCount, z);
+          const destY = sy + (northLat - sliceNorth) / latSpan * sh;
+          const destH = Math.max(1, (sliceNorth - sliceSouth) / latSpan * sh);
+
+          ctx.drawImage(
+            image,
+            0,
+            Math.floor(srcY),
+            imageWidth,
+            Math.ceil(nextSrcY - srcY),
+            sx,
+            destY,
+            sw,
+            destH + 0.5
+          );
+        }
+      },
+
+      getRasterZoom() {
+        return Math.max(1, Math.min(6, Math.round(Math.log2(this.viewport.scale) + 2)));
+      },
+
+      getRasterTile(z, x, y, tileUrl) {
+        const key = `${tileUrl}/${z}/${x}/${y}`;
+        if (this.rasterTileCache.has(key)) return this.rasterTileCache.get(key);
+
+        const tile = {
+          image: new Image(),
+          loaded: false,
+          failed: false
+        };
+        tile.image.crossOrigin = 'anonymous';
+        tile.image.onload = () => {
+          tile.loaded = true;
+          this.requestDraw("raster-tile");
+        };
+        tile.image.onerror = () => {
+          tile.failed = true;
+        };
+        tile.image.src = tileUrl
+          .replace('{z}', z)
+          .replace('{x}', x)
+          .replace('{y}', y);
+        this.rasterTileCache.set(key, tile);
+        if (this.rasterTileCache.size > this.rasterTileCacheLimit) {
+          const oldestKey = this.rasterTileCache.keys().next().value;
+          this.rasterTileCache.delete(oldestKey);
+        }
+        return tile;
+      },
+
+      latToTileY(lat, z) {
+        const clamped = this.clampLatitude(lat);
+        const rad = clamped * Math.PI / 180;
+        return (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * (2 ** z);
+      },
+
+      clampLatitude(lat) {
+        return Math.min(this.worldBounds.maxLat, Math.max(this.worldBounds.minLat, lat));
+      },
+
+      tileYToLat(y, z) {
+        const n = Math.PI - 2 * Math.PI * y / (2 ** z);
+        return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+      },
+
+      renderCountryOutlines(ctx, viewport) {
+        const countries = window.COUNTRY_POLYGONS_110M || [];
+        const base = this.getBaseScale();
+        const { width, height, offsetX, offsetY } = viewport;
+        const style = this.getCurrentMapStyle();
+
+        const leftLon = (-width / 2 - offsetX) / base;
+        const rightLon = (width / 2 - offsetX) / base;
+        const firstSeg = Math.floor(leftLon / 360);
+        const lastSeg = Math.ceil(rightLon / 360);
+
+        for (let seg = firstSeg; seg <= lastSeg; seg++) {
+          const lonOffset = seg * 360;
+          for (const country of countries) {
+            const isHovered = this.hoveredFeatureId === country.id;
+            const isSelected = this.selectedFeature?.id === country.id;
+            const path = this.createCountryPath(country, lonOffset, base, width, height, offsetX, offsetY);
+
+            if (isSelected || isHovered) {
+              ctx.fillStyle = isSelected ? 'rgba(59, 130, 246, 0.22)' : 'rgba(59, 130, 246, 0.12)';
+              ctx.fill(path);
+            }
+
+            ctx.strokeStyle = isSelected ? '#2563eb' : (isHovered ? '#3b82f6' : style.countryStroke);
+            ctx.lineWidth = isSelected ? 1.6 : (isHovered ? 1.1 : 0.65);
+            ctx.stroke(path);
+          }
+        }
+      },
+
+      createCountryPath(country, lonOffset, base, width, height, offsetX, offsetY) {
+        const path = new Path2D();
+        for (const polygon of country.polygons || []) {
+          for (const ring of polygon) {
+            if (ring.length < 3) continue;
+            for (let i = 0; i < ring.length; i++) {
+              const [lon, lat] = ring[i];
+              const x = width / 2 + (lon + lonOffset) * base + offsetX;
+              const y = height / 2 - lat * base + offsetY;
+              if (i === 0) path.moveTo(x, y);
+              else path.lineTo(x, y);
+            }
+            path.closePath();
+          }
+        }
+        return path;
+      },
+
+      hitTestCountryOutlines(lon, lat, viewport) {
+        const countries = window.COUNTRY_POLYGONS_110M || [];
+        const seg = Math.round(lon / 360);
+        const testLon = lon - seg * 360;
+        let best = null;
+        let bestArea = Infinity;
+
+        for (const country of countries) {
+          const [minLon, minLat, maxLon, maxLat] = country.bbox;
+          if (testLon < minLon || testLon > maxLon || lat < minLat || lat > maxLat) continue;
+          if (this.pointInCountry(testLon, lat, country) && country.areaKm2 < bestArea) {
+            best = country;
+            bestArea = country.areaKm2;
+          }
+        }
+
+        return best;
+      },
+
+      pointInCountry(lon, lat, country) {
+        for (const polygon of country.polygons || []) {
+          if (!polygon.length || !this.pointInRing(lon, lat, polygon[0])) continue;
+          let inHole = false;
+          for (let i = 1; i < polygon.length; i++) {
+            if (this.pointInRing(lon, lat, polygon[i])) {
+              inHole = true;
+              break;
+            }
+          }
+          if (!inHole) return true;
+        }
+        return false;
+      },
+
+      pointInRing(lon, lat, ring) {
+        let inside = false;
+        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+          const [xi, yi] = ring[i], [xj, yj] = ring[j];
+          if (((yi > lat) !== (yj > lat)) && lon < (xj - xi) * (lat - yi) / (yj - yi + 1e-10) + xi) {
+            inside = !inside;
+          }
+        }
+        return inside;
+      },
+
+      renderBasinOutlines(ctx, viewport) {
+        const basins = window.BASIN_DATA?.basins || [];
+        const base = this.getBaseScale();
+        const { width, height, offsetX, offsetY } = viewport;
+        const style = this.getCurrentMapStyle();
+
+        const leftLon = (-width / 2 - offsetX) / base;
+        const rightLon = (width / 2 - offsetX) / base;
+        const firstSeg = Math.floor(leftLon / 360);
+        const lastSeg = Math.ceil(rightLon / 360);
+
+        ctx.strokeStyle = style.basinStroke;
+        ctx.lineWidth = 0.3;
+
+        for (let seg = firstSeg; seg <= lastSeg; seg++) {
+          const lonOffset = seg * 360;
+          for (const basin of basins) {
+            const rings = basin.rings || [];
+            for (const ring of rings) {
+              if (ring.length < 3) continue;
+              const path = new Path2D();
+              for (let i = 0; i < ring.length; i++) {
+                const [lon, lat] = ring[i];
+                const x = width / 2 + (lon + lonOffset) * base + offsetX;
+                const y = height / 2 - lat * base + offsetY;
+                if (i === 0) path.moveTo(x, y);
+                else path.lineTo(x, y);
+              }
+              ctx.stroke(path);
+            }
+          }
+        }
+      },
+
+      renderBasinsLayer(ctx, viewport) {
+        this.renderBasinOutlines(ctx, viewport);
+        this.renderBasinsInteractive(ctx, viewport);
+      },
+
+      renderBasinsInteractive(ctx, viewport) {
+        const basins = window.BASIN_DATA?.basins || [];
+        const base = this.getBaseScale();
+        const { width, height, offsetX, offsetY } = viewport;
+
+        const leftLon = (-width / 2 - offsetX) / base;
+        const rightLon = (width / 2 - offsetX) / base;
+        const firstSeg = Math.floor(leftLon / 360);
+        const lastSeg = Math.ceil(rightLon / 360);
+
+        for (const basin of basins) {
+          const isHovered = this.hoveredFeatureId === basin.id;
+          const isSelected = this.selectedFeature?.id === basin.id;
+
+          // Only render hover/selection highlight
+          if (!isHovered && !isSelected) continue;
+
+          const rings = basin.rings || [];
+          ctx.fillStyle = isSelected ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.15)';
+          ctx.strokeStyle = isSelected ? '#2563eb' : '#3b82f6';
+          ctx.lineWidth = isSelected ? 2 : 1;
+
+          for (let seg = firstSeg; seg <= lastSeg; seg++) {
+            const lonOffset = seg * 360;
+            for (const ring of rings) {
+              if (ring.length < 3) continue;
+              const path = new Path2D();
+              for (let i = 0; i < ring.length; i++) {
+                const [lon, lat] = ring[i];
+                const x = width / 2 + (lon + lonOffset) * base + offsetX;
+                const y = height / 2 - lat * base + offsetY;
+                if (i === 0) path.moveTo(x, y);
+                else path.lineTo(x, y);
+              }
+              ctx.fill(path);
+              ctx.stroke(path);
+            }
+          }
+        }
+      },
+
+      hitTestBasins(lon, lat) {
+        const basins = window.BASIN_DATA?.basins || [];
+        const seg = Math.round(lon / 360);
+        let best = null, bestArea = Infinity;
+
+        for (const basin of basins) {
+          const minLon = basin.bbox[0] + seg * 360;
+          const maxLon = basin.bbox[2] + seg * 360;
+
+          if (lon >= minLon && lon <= maxLon &&
+              lat >= basin.bbox[1] && lat <= basin.bbox[3]) {
+            const testLon = lon - seg * 360;
+            const rings = basin.rings || [];
+            if (this.pointInPolygon(testLon, lat, rings) && basin.areaKm2 < bestArea) {
+              best = basin;
+              bestArea = basin.areaKm2;
+            }
+          }
+        }
+        return best;
+      },
+
+      pointInPolygon(lon, lat, rings) {
+        let inside = false;
+        for (const ring of rings) {
+          for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            const [xi, yi] = ring[i], [xj, yj] = ring[j];
+            if (((yi > lat) !== (yj > lat)) && lon < (xj - xi) * (lat - yi) / (yj - yi + 1e-10) + xi) {
+              inside = !inside;
+            }
+          }
+        }
+        return inside;
+      },
+
+      showBasinInspector(basin) {
+        const content = `
+          <h2 style="margin:0 0 12px;font-size:18px;font-weight:600">${this.escape(basin.name)}</h2>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px">
+            <div style="background:#f8fafc;padding:12px;border-radius:6px">
+              <div style="font-size:18px;font-weight:600">${Math.round(basin.areaKm2).toLocaleString()}</div>
+              <div style="font-size:11px;color:#64748b">Area km2</div>
+            </div>
+            <div style="background:#f8fafc;padding:12px;border-radius:6px">
+              <div style="font-size:18px;font-weight:600">${this.escape(this.getRegionName(basin.region))}</div>
+              <div style="font-size:11px;color:#64748b">Region</div>
+            </div>
+          </div>
+        `;
+        this.showInspector(basin.name, content);
+      },
+
+      showCountryInspector(country) {
+        const content = `
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px">
+            <div style="background:#f8fafc;padding:12px;border-radius:6px">
+              <div style="font-size:18px;font-weight:600">${this.escape(country.isoA3 || country.id)}</div>
+              <div style="font-size:11px;color:#64748b">ISO A3</div>
+            </div>
+            <div style="background:#f8fafc;padding:12px;border-radius:6px">
+              <div style="font-size:18px;font-weight:600">${Math.round(country.areaKm2).toLocaleString()}</div>
+              <div style="font-size:11px;color:#64748b">Area km2</div>
+            </div>
+            <div style="background:#f8fafc;padding:12px;border-radius:6px">
+              <div style="font-size:18px;font-weight:600">${this.escape(country.continent || 'Unknown')}</div>
+              <div style="font-size:11px;color:#64748b">Continent</div>
+            </div>
+            <div style="background:#f8fafc;padding:12px;border-radius:6px">
+              <div style="font-size:18px;font-weight:600">${country.polygonCount}</div>
+              <div style="font-size:11px;color:#64748b">Territory parts</div>
+            </div>
+          </div>
+          <div style="color:#64748b;font-size:12px;line-height:1.5">
+            Natural Earth 110m country polygon. Multi-part countries are selected and highlighted as one feature.
+          </div>
+        `;
+        this.showInspector(country.name, content);
+      },
+
+      getRegionName(regionCode) {
+        const names = {
+          AF: 'Africa',
+          AR: 'Arctic',
+          AS: 'Asia',
+          AU: 'Australia and Oceania',
+          EU: 'Europe',
+          GR: 'Greenland',
+          NA: 'North America',
+          SA: 'South America',
+          SI: 'Siberia'
+        };
+        return names[regionCode] || regionCode || 'Unknown';
+      },
+
+      escape(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      },
+
+      hitTest(x, y) {
+        const { lon, lat } = this.screenToGeo(x, y);
+        const layers = this.layerManager.getInteractiveLayers();
+
+        for (let i = layers.length - 1; i >= 0; i--) {
+          const layer = layers[i];
+          if (layer.hitTest) {
+            const feature = layer.hitTest(lon, lat, this.viewport, layer);
+            if (feature) return { feature, layer };
+          }
+        }
+        return null;
+      },
+
+      async fetchModules() {
+        this.modules = this.staticModules;
+        this.updateModuleList();
+      },
+
+      async loadDefaultModules() {
+        const defaults = this.modules.filter(module => module.defaultLoad);
+        for (const module of defaults) {
+          if (this.moduleLoader.isLoaded(module.id)) continue;
+          try {
+            const manifest = await this.fetchModuleManifest(module);
+            await this.loadModuleFromManifest(manifest);
+          } catch (error) {
+            console.error(`Default module "${module.id}" failed to load`, error);
+            this.toast(`Default module failed: ${module.name || module.id}`);
+          }
+        }
+        this.updateModuleList();
+        this.draw();
+      },
+
+      async loadUrlModules() {
+        const params = new URLSearchParams(window.location.search);
+        const urls = [
+          ...params.getAll('module'),
+          ...params.getAll('moduleUrl'),
+          ...params.getAll('manifest')
+        ].filter(Boolean);
+        if (!urls.length) return;
+
+        for (const url of urls) {
+          try {
+            const manifest = await this.fetchRemoteManifest(url);
+            await this.importModuleManifest(manifest);
+          } catch (error) {
+            console.error('URL module failed', error);
+            this.toast(`URL module failed: ${error.message}`);
+          }
+        }
+        this.updateModuleList();
+        this.draw();
+      },
+
+      updateModuleList() {
+        const el = document.getElementById('moduleList');
+        el.innerHTML = this.modules.map(m => {
+          const loaded = this.moduleLoader.isLoaded(m.id);
+          return `<div class="module-item ${loaded ? 'loaded' : ''}" data-id="${m.id}">
+            <span class="module-name">${m.name}</span>
+            ${loaded ? '<button class="module-remove-btn" title="Remove module" aria-label="Remove module"></button>' : ''}
+          </div>`;
+        }).join('');
+        el.querySelectorAll('.module-item').forEach(item => {
+          item.onclick = () => this.toggleModule(item.dataset.id);
+          const removeBtn = item.querySelector('.module-remove-btn');
+          if (removeBtn) {
+            removeBtn.onclick = async (event) => {
+              event.stopPropagation();
+              if (await this.removeModule(item.dataset.id)) {
+                this.updateModuleList();
+                this.draw();
+              }
+            };
+          }
+        });
+      },
+
+      async toggleModule(id) {
+        if (this.moduleLoader.isLoaded(id)) {
+          this.unloadModule(id);
+        } else {
+          try {
+            const manifest = await this.fetchModuleManifest(this.modules.find(m => m.id === id) || id);
+            await this.loadModuleFromManifest(manifest);
+            this.toast('Module loaded');
+          } catch (e) { this.toast('Failed: ' + e.message); }
+        }
+        this.updateModuleList();
+        this.draw();
+      },
+
+      unloadModule(id) {
+        const module = this.moduleLoader.get(id);
+        module?.onUnload?.();
+        if (module?.getLayerIds) {
+          module.getLayerIds().forEach(lid => this.layerManager.removeLayer(lid));
+        }
+        this.moduleLoader.modules.delete(id);
+        if (this.selectedLayer?.moduleId === id) {
+          document.getElementById('inspectorPanel').classList.remove('visible');
+        }
+        this.toast('Module unloaded');
+      },
+
+      async removeModule(id) {
+        const moduleRef = this.modules.find(m => m.id === id);
+        const name = moduleRef?.name || id;
+        const confirmed = await this.showConfirm({
+          title: 'Remove Module',
+          message: `Remove module "${name}"?`,
+          detail: 'This will unload the module, clear its map styling and legend, and remove it from the module list.',
+          actionText: 'Remove'
+        });
+        if (!confirmed) return false;
+
+        if (this.moduleLoader.isLoaded(id)) {
+          this.unloadModule(id);
+        }
+        this.modules = this.modules.filter(m => m.id !== id);
+        if (this.selectedLayer?.moduleId === id) this.selectedLayer = null;
+        this.toast(`Module removed: ${name}`);
+        return true;
+      },
+
+      showConfirm({ title, message, detail = '', actionText = 'Confirm' }) {
+        if (this.pendingConfirm) this.resolveConfirm(false);
+        document.getElementById('confirmTitle').textContent = title || 'Confirm';
+        document.getElementById('confirmMessage').textContent = message || '';
+        document.getElementById('confirmDetail').textContent = detail || '';
+        document.getElementById('btnConfirmAction').textContent = actionText;
+        document.getElementById('confirmModal').classList.add('visible');
+
+        return new Promise((resolve) => {
+          this.pendingConfirm = resolve;
+        });
+      },
+
+      resolveConfirm(value) {
+        document.getElementById('confirmModal').classList.remove('visible');
+        const resolve = this.pendingConfirm;
+        this.pendingConfirm = null;
+        if (resolve) resolve(value);
+      },
+
+      async fetchModuleManifest(moduleRef) {
+        const module = typeof moduleRef === 'string'
+          ? (this.modules.find(m => m.id === moduleRef) || { id: moduleRef })
+          : moduleRef;
+        const id = module.id;
+
+        if (module.manifestUrl) {
+          const response = await fetch(module.manifestUrl);
+          if (!response.ok) throw new Error(`Remote module manifest unavailable: ${response.status}`);
+          const manifest = await response.json();
+          return {
+            ...manifest,
+            basePath: manifest.basePath || new URL('.', response.url).href,
+            manifestUrl: module.manifestUrl
+          };
+        }
+
+        const staticUrl = `./modules/${encodeURIComponent(id)}/module.json`;
+        try {
+          const response = await fetch(staticUrl);
+          if (!response.ok) throw new Error(`Module manifest not found: ${id}`);
+          return {
+            ...(await response.json()),
+            basePath: `./modules/${id}/`
+          };
+        } catch (staticError) {
+          try {
+            const response = await fetch(`/api/modules/${encodeURIComponent(id)}`);
+            if (!response.ok) throw new Error(`Module API unavailable: ${response.status}`);
+            return response.json();
+          } catch (apiError) {
+            throw new Error(`Module manifest failed: ${staticError.message}; API fallback failed: ${apiError.message}`);
+          }
+        }
+      },
+
+      async loadModuleFromManifest(manifest) {
+        const normalized = this.normalizeModuleManifest(manifest);
+        if (!this.moduleLoader.getManifest(normalized.id)) {
+          await this.loadModuleScript(normalized);
+          const moduleClass = window[normalized.className];
+          if (!moduleClass) throw new Error(`Module class not found: ${normalized.className}`);
+          this.moduleLoader.register(normalized, moduleClass);
+        }
+        await this.moduleLoader.load(normalized.id, this);
+      },
+
+      normalizeModuleManifest(manifest) {
+        const basePath = manifest.basePath || `./modules/${manifest.id}/`;
+        return {
+          ...manifest,
+          basePath,
+          entry: manifest.entry || './index.js',
+          className: manifest.className
+        };
+      },
+
+      loadModuleScript(manifest) {
+        return new Promise((resolve, reject) => {
+          if (!manifest.className) {
+            reject(new Error('Module manifest requires className'));
+            return;
+          }
+          if (window[manifest.className]) {
+            resolve();
+            return;
+          }
+          const script = document.createElement('script');
+          const entryUrl = this.resolveModuleAsset(manifest, manifest.entry);
+          const version = manifest.assetVersion || manifest.version ? `v=${encodeURIComponent(manifest.assetVersion || manifest.version)}` : '';
+          script.src = version ? `${entryUrl}${entryUrl.includes('?') ? '&' : '?'}${version}` : entryUrl;
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error(`Failed to load module entry: ${script.src}`));
+          document.body.appendChild(script);
+        });
+      },
+
+      resolveModuleAsset(manifest, relativePath) {
+        if (/^https?:\/\//i.test(relativePath) || relativePath.startsWith('/')) return relativePath;
+        return manifest.basePath + relativePath.replace(/^\.\//, '');
+      },
+
+      updateLayerList() {
+        const el = document.getElementById('layerList');
+        const layers = this.layerManager.getLayers();
+        const basemapLayer = layers.find(l => l.id === 'basemap');
+        const outlinesBasinsLayer = layers.find(l => l.id === 'outlines-basins');
+        const countryOutlinesLayer = layers.find(l => l.id === 'outlines-countries');
+
+        let html = '';
+
+        html += this.renderLayerGroup({
+          id: 'map-display-group',
+          title: 'Theme',
+          contentClass: 'map-display-options',
+          content: this.renderThemeLayerControls()
+        });
+
+        // Outlines
+        if (basemapLayer) {
+          html += this.renderLayerGroup({
+            id: 'outlines-group',
+            title: 'Outlines',
+            content: this.renderOutlineLayerControls(basemapLayer, outlinesBasinsLayer, countryOutlinesLayer)
+          });
+        }
+
+        // Other layers
+        layers.filter(l => !['basemap', 'outlines-basins', 'outlines-countries'].includes(l.id)).forEach(l => {
+          html += `
+            <div class="layer-item" data-id="${l.id}">
+              <input type="checkbox" class="layer-checkbox" ${l.visible ? 'checked' : ''}>
+              <span class="layer-name">${l.name}</span>
+              <div class="layer-actions"><button class="layer-btn layer-remove" title="Remove layer" aria-label="Remove layer"></button></div>
+            </div>
+          `;
+        });
+
+        el.innerHTML = html;
+
+        el.querySelectorAll('input[name="theme-style"]').forEach(input => {
+          input.onchange = (e) => {
+            if (!e.target.checked) return;
+            this.setThemeStyle(e.target.value);
+          };
+        });
+
+        const imageryToggle = el.querySelector('input[name="imagery-toggle"]');
+        if (imageryToggle) {
+          imageryToggle.onchange = (e) => this.setImageryEnabled(e.target.checked);
+        }
+
+        // Bind events for expandable layers (click on name to expand/collapse)
+        el.querySelectorAll('.layer-expandable').forEach(item => {
+          item.onclick = (e) => {
+            if (e.target.classList.contains('layer-checkbox')) return;
+            item.classList.toggle('expanded');
+          };
+          const cb = item.querySelector('.layer-checkbox');
+          if (cb) {
+            cb.onchange = (e) => {
+              if (item.dataset.id === 'outlines-group') {
+                this.layerManager.setVisibility('basemap', e.target.checked);
+              }
+              this.draw();
+            };
+          }
+        });
+
+        // Other layer items
+        el.querySelectorAll('.layer-item').forEach(item => {
+          const lid = item.dataset.id;
+          const cb = item.querySelector('.layer-checkbox');
+          if (cb) {
+            cb.onchange = (e) => {
+              if (lid === 'outlines-group') {
+                this.layerManager.setVisibility('basemap', e.target.checked);
+              } else {
+                this.layerManager.setVisibility(lid, e.target.checked);
+              }
+              this.draw();
+            };
+          }
+          const removeBtn = item.querySelector('.layer-remove');
+          if (removeBtn) {
+            removeBtn.onclick = () => {
+              this.layerManager.removeLayer(lid);
+              this.draw();
+            };
+          }
+        });
+
+        // Sublayers
+        el.querySelectorAll('.layer-sublayer').forEach(sub => {
+          const cb = sub.querySelector('.layer-checkbox');
+          if (!cb) return;
+          const setSublayerVisibility = (checked) => {
+            const subid = sub.dataset.subid;
+            if (subid === 'land') {
+              this.layerManager.setVisibility('basemap', checked);
+            } else if (subid === 'basins') {
+              this.layerManager.setVisibility('outlines-basins', checked);
+            } else if (subid === 'countries') {
+              this.layerManager.setVisibility('outlines-countries', checked);
+            }
+            this.draw();
+          };
+          sub.onclick = () => {
+            cb.checked = !cb.checked;
+            setSublayerVisibility(cb.checked);
+          };
+          cb.onclick = (e) => {
+            e.stopPropagation();
+            setSublayerVisibility(cb.checked);
+          };
+        });
+
+        document.getElementById('statusFeatures').textContent = `${layers.length} layers`;
+      },
+
+      renderLayerGroup({ id, title, content, contentClass = '' }) {
+        return `
+          <div class="layer-expandable expanded" data-id="${this.escape(id)}">
+            <span class="layer-name">${this.escape(title)}</span>
+          </div>
+          <div class="layer-sublayers ${contentClass}">
+            ${content}
+          </div>
+        `;
+      },
+
+      renderThemeLayerControls() {
+        const themeOptions = Object.entries(this.mapStyles).map(([id, style]) => `
+          <label class="layer-sublayer">
+            <input type="radio" name="theme-style" value="${this.escape(id)}" ${this.themeStyle === id ? 'checked' : ''}>
+            <span class="layer-name">${this.escape(style.label)}</span>
+          </label>
+        `).join('');
+
+        return `
+          ${themeOptions}
+          <label class="layer-sublayer">
+            <input type="checkbox" name="imagery-toggle" ${this.imageryEnabled ? 'checked' : ''}>
+            <span class="layer-name">Imagery</span>
+          </label>
+        `;
+      },
+
+      renderOutlineLayerControls(basemapLayer, outlinesBasinsLayer, countryOutlinesLayer) {
+        return `
+          <div class="layer-sublayer" data-subid="land">
+            <input type="checkbox" class="layer-checkbox" ${basemapLayer.visible ? 'checked' : ''}>
+            <span class="layer-name">Land</span>
+          </div>
+          <div class="layer-sublayer" data-subid="basins">
+            <input type="checkbox" class="layer-checkbox" ${outlinesBasinsLayer?.visible ? 'checked' : ''}>
+            <span class="layer-name">Basins</span>
+          </div>
+          <div class="layer-sublayer" data-subid="countries">
+            <input type="checkbox" class="layer-checkbox" ${countryOutlinesLayer?.visible ? 'checked' : ''}>
+            <span class="layer-name">Countries</span>
+          </div>
+        `;
+      },
+
+      registerLegend(id, legend) {
+        this.legends.set(id, legend);
+        this.updateLegendList();
+      },
+
+      unregisterLegend(id) {
+        this.legends.delete(id);
+        this.updateLegendList();
+      },
+
+      updateLegendList() {
+        const el = document.getElementById('legendList');
+        if (!el) return;
+
+        if (!this.legends.size) {
+          el.innerHTML = '<div class="legend-empty">No active module legends.</div>';
+          return;
+        }
+
+        el.innerHTML = Array.from(this.legends.entries()).map(([id, legend]) => `
+          <div class="legend-card" data-id="${this.escape(id)}">
+            <div class="legend-title">${this.escape(legend.title || id)}</div>
+            ${legend.html || ""}
+          </div>
+        `).join('');
+      },
+
+      showInspector(title, content) {
+        document.getElementById('inspectorTitle').textContent = title;
+        document.getElementById('inspectorBody').innerHTML = content;
+        document.getElementById('inspectorPanel').classList.add('visible');
+      },
+
+      toast(msg) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.classList.add('visible');
+        setTimeout(() => el.classList.remove('visible'), 2000);
+      }
+    };
+
+    // Initialize
+    App.init();
+    </script>
+
+  </body>
+</html>
+
