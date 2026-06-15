@@ -1,0 +1,46 @@
+{
+  "id": "epsilon-change",
+  "name": "Epsilon Change",
+  "version": "0.1.0",
+  "assetVersion": "2026-06-15-tereon-module",
+  "description": "Catchment-scale cross-fitted epsilon distribution shifts before and after 1990.",
+  "author": "Spatial Research Team",
+  "icon": "activity",
+  "basePath": "https://grups666.github.io/LSTM_epsilon/",
+  "entry": "./modules/epsilon-change/index.js",
+  "className": "EpsilonChangeModule",
+  "importKind": "module-manifest",
+  "defaultLoad": false,
+  "datasets": [
+    {
+      "id": "epsilon-catchment-distributions",
+      "file": "./modules/epsilon-change/data/epsilon-catchment-distributions.json"
+    }
+  ],
+  "provides": {
+    "layers": [
+      {
+        "id": "epsilon-catchments",
+        "name": "Catchment epsilon change",
+        "type": "vector",
+        "interactive": true
+      }
+    ],
+    "panels": [
+      {
+        "id": "epsilon-catchment-inspector",
+        "name": "Epsilon catchment inspector",
+        "position": "right",
+        "trigger": "feature:click",
+        "condition": { "layer": "epsilon-catchments", "module": "epsilon-change" }
+      }
+    ],
+    "dataProducts": [
+      {
+        "id": "epsilon-distribution-statistics",
+        "type": "cross-fitted-inference-summary",
+        "description": "Per-catchment pre/post epsilon density, CDF, and summary statistics under all-, low-, and high-flow regimes."
+      }
+    ]
+  }
+}
