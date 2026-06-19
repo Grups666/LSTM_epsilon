@@ -186,28 +186,31 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.metricCard("Precip.", `${this.formatNumber(basin.Prec_mm, 1)} mm`)}
         ${this.metricCard("Temp.", `${this.formatNumber(basin.Temp_C, 1)} C`)}
       </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+      ${this.categoryBanner(basin)}
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
         ${this.metricCard("All", this.formatPct(basin.all_relative_delta_pct), basin.all_relative_delta_pct)}
         ${this.metricCard("Low", this.formatPct(basin.low_relative_delta_pct), basin.low_relative_delta_pct)}
         ${this.metricCard("High", this.formatPct(basin.high_relative_delta_pct), basin.high_relative_delta_pct)}
-        ${this.categoryCard(basin)}
+      </div>
+    `;
+
+    const cdfPreview = `
+      <div
+        class="epsilon-curve-preview"
+        data-gcin="${this.escape(basin.GCIN)}"
+        data-regime="all"
+        title="Open CDF panels"
+        style="display:grid;grid-template-columns:1fr;gap:8px;margin:2px 0 16px;cursor:pointer"
+      >
+        ${this.renderCombinedCdfSvg(curves)}
+        <div class="epsilon-preview-hint">Open CDF panels</div>
       </div>
     `;
 
     const sections = this.displayRegimes.map((regime) => `
-      <section style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0">
+      <section style="margin-top:10px;padding-top:12px;border-top:1px solid #e2e8f0">
         <h3 style="margin:0 0 8px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#64748b">${this.regimeLabel(regime)}</h3>
         ${this.renderStatsTable(basin, regime)}
-        <div
-          class="epsilon-curve-preview"
-          data-gcin="${this.escape(basin.GCIN)}"
-          data-regime="${this.escape(regime)}"
-          title="Open all CDF panels"
-          style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px;cursor:pointer"
-        >
-          ${this.renderCurveSvg(curves[regime], "cdf")}
-          <div class="epsilon-preview-hint">Open CDF panels</div>
-        </div>
       </section>
     `).join("");
 
@@ -216,6 +219,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         Epsilon is the modeled daily ratio GQ/Q. This panel compares the inferred epsilon distribution before and after 1990.
       </p>
       ${cards}
+      ${cdfPreview}
       ${sections}
     `);
     this.bindCurvePreviews();
@@ -233,15 +237,15 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     `;
   }
 
-  categoryCard(basin) {
+  categoryBanner(basin) {
     const color = this.categoryColor(basin);
     return `
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px">
-        <div style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#0f172a">
-          <span style="width:13px;height:13px;border-radius:50%;background:${color};border:1px solid rgba(15,23,42,.24)"></span>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#0f172a;line-height:1.35">
+          <span style="width:15px;height:15px;border-radius:50%;background:${color};border:1px solid rgba(15,23,42,.24);flex:0 0 auto"></span>
           <span>${this.escape(this.categoryLabel(basin))}</span>
         </div>
-        <div style="font-size:11px;color:#64748b;margin-top:5px">Low / high class</div>
+        <div style="font-size:11px;color:#64748b;margin-top:5px">Bivariate class from low-flow and high-flow relative epsilon change.</div>
       </div>
     `;
   }
@@ -253,9 +257,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">Low-flow x high-flow classes</div>
         <div style="display:grid;grid-template-columns:56px repeat(3,1fr);gap:5px;align-items:stretch;font-size:10px;color:#475569">
           <div></div>
-          ${states.map((state) => `<div style="text-align:center">${this.stateLabel(state)} high</div>`).join("")}
+          ${states.map((state) => `<div style="text-align:center">High ${this.stateLabel(state)}</div>`).join("")}
           ${states.map((low) => `
-            <div style="display:flex;align-items:center;justify-content:flex-end;padding-right:4px">${this.stateLabel(low)} low</div>
+            <div style="display:flex;align-items:center;justify-content:flex-end;padding-right:4px">Low ${this.stateLabel(low)}</div>
             ${states.map((high) => {
               const key = `${low}_${high}`;
               return `
@@ -298,15 +302,23 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const low = basin.low_change_state;
     const high = basin.high_change_state;
     if (!low || !high) return "insufficient";
-    return `L ${this.stateLabel(low)} / H ${this.stateLabel(high)}`;
+    return `Low-flow ${this.stateLabel(low)} / high-flow ${this.stateLabel(high)}`;
   }
 
   stateLabel(state) {
     return {
-      decrease: "decrease",
+      decrease: "lower",
       stable: "stable",
-      increase: "increase"
+      increase: "higher"
     }[state] || "insufficient";
+  }
+
+  stateShortLabel(state) {
+    return {
+      decrease: "low",
+      stable: "stb",
+      increase: "high"
+    }[state] || "NA";
   }
 
   categoryColor(basin) {
@@ -360,30 +372,45 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     `;
   }
 
-  renderCurveSvg(curve, mode) {
-    if (!curve?.x?.length) return `<div style="font-size:11px;color:#64748b">No ${mode} data.</div>`;
+  renderCombinedCdfSvg(curves) {
     const width = 300;
-    const height = 122;
-    const margin = { left: 34, right: 8, top: 16, bottom: 22 };
-    const plotW = width - margin.left - margin.right;
-    const plotH = height - margin.top - margin.bottom;
-    const x = curve.x.map(Number);
-    const pre = mode === "density" ? curve.preDensity.map(Number) : curve.preCdf.map(Number);
-    const post = mode === "density" ? curve.postDensity.map(Number) : curve.postCdf.map(Number);
-    const maxX = Math.max(...x, 1e-12);
-    const maxY = mode === "density" ? Math.max(...pre, ...post, 1e-12) : 1;
-    const sx = (value) => margin.left + (value / maxX) * plotW;
-    const sy = (value) => margin.top + plotH - (value / maxY) * plotH;
-    const path = (values) => x.map((value, index) => `${index ? "L" : "M"}${sx(value).toFixed(1)},${sy(values[index] || 0).toFixed(1)}`).join(" ");
-    const label = mode === "density" ? "Density" : "CDF";
+    const rowHeight = 86;
+    const height = rowHeight * this.displayRegimes.length + 18;
+    const margin = { left: 34, right: 10, top: 20, bottom: 18 };
+    const rows = this.displayRegimes.map((regime, rowIndex) => {
+      const curve = curves?.[regime];
+      if (!curve?.x?.length) {
+        const y = 18 + rowIndex * rowHeight;
+        return `<text x="${margin.left}" y="${y + 28}" fill="#94a3b8" font-size="10">No ${this.regimeShortLabel(regime)} data</text>`;
+      }
+      const x = curve.x.map(Number);
+      const pre = curve.preCdf.map(Number);
+      const post = curve.postCdf.map(Number);
+      const minX = Math.min(...x);
+      const maxX = Math.max(...x, minX + 1e-12);
+      const plotTop = margin.top + rowIndex * rowHeight;
+      const plotBottom = plotTop + rowHeight - 26;
+      const plotW = width - margin.left - margin.right;
+      const plotH = plotBottom - plotTop;
+      const sx = (value) => margin.left + ((value - minX) / Math.max(1e-12, maxX - minX)) * plotW;
+      const sy = (value) => plotBottom - value * plotH;
+      const path = (values) => x.map((value, index) => `${index ? "L" : "M"}${sx(value).toFixed(1)},${sy(values[index] || 0).toFixed(1)}`).join(" ");
+      return `
+        <line x1="${margin.left}" y1="${plotBottom}" x2="${width - margin.right}" y2="${plotBottom}" stroke="#dbe3ef"/>
+        <line x1="${margin.left}" y1="${plotTop}" x2="${margin.left}" y2="${plotBottom}" stroke="#dbe3ef"/>
+        <text x="${margin.left}" y="${plotTop - 5}" fill="#0f172a" font-size="10" font-weight="700">${this.regimeShortLabel(regime)}</text>
+        <text x="${width - margin.right}" y="${plotTop - 5}" fill="#64748b" font-size="9" text-anchor="end">${this.formatSmall(minX)}-${this.formatSmall(maxX)}</text>
+        <path d="${path(pre)}" fill="none" stroke="#2563eb" stroke-width="1.6"/>
+        <path d="${path(post)}" fill="none" stroke="#b84235" stroke-width="1.6"/>
+      `;
+    }).join("");
     return `
       <svg viewBox="0 0 ${width} ${height}" style="display:block;width:100%;height:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;pointer-events:none">
-        <line x1="${margin.left}" y1="${margin.top + plotH}" x2="${width - margin.right}" y2="${margin.top + plotH}" stroke="#cbd5e1"/>
-        <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + plotH}" stroke="#cbd5e1"/>
-        <text x="${margin.left}" y="11" fill="#64748b" font-size="10">${label}</text>
-        <text x="${width - margin.right}" y="${height - 6}" fill="#64748b" font-size="9" text-anchor="end">epsilon</text>
-        <path d="${path(pre)}" fill="none" stroke="#2563eb" stroke-width="1.8"/>
-        <path d="${path(post)}" fill="none" stroke="#b84235" stroke-width="1.8"/>
+        <text x="${width - 76}" y="12" fill="#64748b" font-size="9">Pre</text>
+        <text x="${width - 31}" y="12" fill="#64748b" font-size="9">Post</text>
+        <rect x="${width - 96}" y="6" width="14" height="3" fill="#2563eb"/>
+        <rect x="${width - 54}" y="6" width="14" height="3" fill="#b84235"/>
+        ${rows}
       </svg>
     `;
   }
@@ -502,10 +529,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const rect = canvas.getBoundingClientRect();
     const plot = this.distributionPlot(rect.width, rect.height);
     const x = curve.x.map(Number);
-    const maxX = Math.max(...x, 1e-12);
+    const minX = Math.min(...x);
+    const maxX = Math.max(...x, minX + 1e-12);
     const px = event.clientX - rect.left;
     const ratio = Math.max(0, Math.min(1, (px - plot.left) / Math.max(1, plot.right - plot.left)));
-    const target = ratio * maxX;
+    const target = minX + ratio * (maxX - minX);
     let closest = 0;
     let closestDistance = Infinity;
     for (let i = 0; i < x.length; i++) {
@@ -550,9 +578,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const x = curve.x.map(Number);
     const pre = curve.preCdf.map(Number);
     const post = curve.postCdf.map(Number);
-    const maxX = Math.max(...x, 1e-12);
+    const minX = Math.min(...x);
+    const maxX = Math.max(...x, minX + 1e-12);
     const maxY = 1;
-    const xAt = (value) => plot.left + (value / maxX) * (plot.right - plot.left);
+    const xAt = (value) => plot.left + ((value - minX) / Math.max(1e-12, maxX - minX)) * (plot.right - plot.left);
     const yAt = (value) => plot.bottom - (value / maxY) * (plot.bottom - plot.top);
 
     ctx.clearRect(0, 0, width, height);
@@ -579,7 +608,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       ctx.moveTo(xx, plot.top);
       ctx.lineTo(xx, plot.bottom);
       ctx.stroke();
-      const value = (i / 4) * maxX;
+      const value = minX + (i / 4) * (maxX - minX);
       ctx.fillStyle = "#94a3b8";
       ctx.font = "10px sans-serif";
       ctx.textAlign = i === 0 ? "left" : i === 4 ? "right" : "center";
@@ -602,12 +631,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     ctx.fillText(`${this.regimeShortLabel(regime)} CDF`, plot.left, 18);
     ctx.fillStyle = "#64748b";
     ctx.font = "11px sans-serif";
-    ctx.fillText("Pre", plot.left + 82, 18);
-    ctx.fillText("Post", plot.left + 132, 18);
+    ctx.textAlign = "left";
+    ctx.fillText("Pre", plot.right - 82, 18);
+    ctx.fillText("Post", plot.right - 34, 18);
     ctx.fillStyle = "#2563eb";
-    ctx.fillRect(plot.left + 62, 11, 14, 3);
+    ctx.fillRect(plot.right - 102, 11, 14, 3);
     ctx.fillStyle = "#b84235";
-    ctx.fillRect(plot.left + 110, 11, 14, 3);
+    ctx.fillRect(plot.right - 56, 11, 14, 3);
     ctx.textAlign = "right";
     ctx.fillStyle = "#64748b";
     ctx.fillText("epsilon", plot.right, height - 8);
@@ -690,9 +720,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       html: `
         <div style="display:grid;grid-template-columns:44px repeat(3,1fr);gap:4px;align-items:center;font-size:9px;color:#64748b">
           <div></div>
-          ${states.map((state) => `<div style="text-align:center">${this.stateLabel(state).slice(0,3)} H</div>`).join("")}
+          ${states.map((state) => `<div style="text-align:center">H ${this.stateShortLabel(state)}</div>`).join("")}
           ${states.map((low) => `
-            <div style="text-align:right;padding-right:3px">${this.stateLabel(low).slice(0,3)} L</div>
+            <div style="text-align:right;padding-right:3px">L ${this.stateShortLabel(low)}</div>
             ${states.map((high) => `
               <div title="low ${this.stateLabel(low)} / high ${this.stateLabel(high)}" style="height:18px;border-radius:3px;background:${this.categoryColorByStates(low, high)};border:1px solid rgba(15,23,42,.16)"></div>
             `).join("")}
