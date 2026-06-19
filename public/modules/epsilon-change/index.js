@@ -17,6 +17,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.legendId = `${manifest.id || "epsilon-change"}-legend`;
     this.distributionModal = null;
     this.activeDistribution = null;
+    this.stableThresholdPct = 5;
+    this.displayRegimes = ["all", "low", "high"];
     this.handleModalPointer = (event) => this.onDistributionPointer(event);
     this.handleFeatureClick = (payload) => {
       if (payload.layer?.id !== this.layerId || payload.layer?.moduleId !== this.manifest.id) return;
@@ -35,7 +37,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         id: String(basin.GCIN),
         lon: Number(basin.lon),
         lat: Number(basin.lat),
-        area_km2: Number(basin.area_km2 || 0)
+        area_km2: Number(basin.area_km2 || 0),
+        low_change_state: this.changeState(basin.low_relative_delta_pct),
+        high_change_state: this.changeState(basin.high_relative_delta_pct)
       }));
     this.byId = new Map(this.basins.map((basin) => [basin.id, basin]));
     this.addLayer();
@@ -95,8 +99,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const rightLon = (width / 2 - offsetX) / base;
     const firstSeg = Math.floor(leftLon / 360);
     const lastSeg = Math.ceil(rightLon / 360);
-    const maxAbs = 35;
-
     for (let seg = firstSeg; seg <= lastSeg; seg++) {
       const lonOffset = seg * 360;
       for (const basin of this.basins) {
@@ -109,7 +111,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         const radius = selected ? 6.5 : hovered ? this.pointRadius(basin, viewport) + 2.2 : this.pointRadius(basin, viewport);
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.colorFor(Number(basin.all_relative_delta_pct), maxAbs);
+        ctx.fillStyle = this.categoryColor(basin);
         ctx.globalAlpha = selected ? 0.98 : 0.72;
         ctx.fill();
         ctx.globalAlpha = 1;
@@ -154,21 +156,21 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   showOverview() {
     const all = this.basins.map((basin) => Number(basin.all_relative_delta_pct)).filter(Number.isFinite);
     const low = this.basins.map((basin) => Number(basin.low_relative_delta_pct)).filter(Number.isFinite);
-    const mid = this.basins.map((basin) => Number(basin.mid_relative_delta_pct)).filter(Number.isFinite);
     const high = this.basins.map((basin) => Number(basin.high_relative_delta_pct)).filter(Number.isFinite);
+    const counts = this.categoryCounts();
     const content = `
       <p style="margin:0 0 14px;color:#64748b;font-size:12px;line-height:1.6">
-        Cross-fitted daily epsilon inference summarized by catchment. Points are catchment centroids; color shows all-recession relative epsilon change from 1982-1990 to 1991-2019.
+        Cross-fitted daily epsilon inference summarized by catchment. Points are catchment centroids; color classifies each catchment by low-flow and high-flow epsilon change after 1990.
       </p>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">
         ${this.metricCard("Catchments", this.basins.length.toLocaleString())}
         ${this.metricCard("All-recession mean", this.formatPct(this.mean(all)), this.mean(all))}
         ${this.metricCard("Low-flow mean", this.formatPct(this.mean(low)), this.mean(low))}
-        ${this.metricCard("Mid-flow mean", this.formatPct(this.mean(mid)), this.mean(mid))}
         ${this.metricCard("High-flow mean", this.formatPct(this.mean(high)), this.mean(high))}
       </div>
+      ${this.renderCategoryMatrix(counts)}
       <div style="font-size:12px;color:#475569;line-height:1.65">
-        Low-flow epsilon uses recession days with Q_obs at or below each catchment's Q10. Mid-flow uses Q10 to Q90. High-flow uses days at or above Q90.
+        Stable means relative epsilon change within +/-${this.stableThresholdPct}%. Low-flow epsilon uses recession days with Q_obs at or below each catchment's Q10; high-flow uses days at or above Q90.
       </div>
     `;
     this.app.showInspector?.("Epsilon Change", content);
@@ -187,12 +189,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
         ${this.metricCard("All", this.formatPct(basin.all_relative_delta_pct), basin.all_relative_delta_pct)}
         ${this.metricCard("Low", this.formatPct(basin.low_relative_delta_pct), basin.low_relative_delta_pct)}
-        ${this.metricCard("Mid", this.formatPct(basin.mid_relative_delta_pct), basin.mid_relative_delta_pct)}
         ${this.metricCard("High", this.formatPct(basin.high_relative_delta_pct), basin.high_relative_delta_pct)}
+        ${this.categoryCard(basin)}
       </div>
     `;
 
-    const sections = ["all", "low", "mid", "high"].map((regime) => `
+    const sections = this.displayRegimes.map((regime) => `
       <section style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0">
         <h3 style="margin:0 0 8px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#64748b">${this.regimeLabel(regime)}</h3>
         ${this.renderStatsTable(basin, regime)}
@@ -200,11 +202,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           class="epsilon-curve-preview"
           data-gcin="${this.escape(basin.GCIN)}"
           data-regime="${this.escape(regime)}"
-          title="Open CDF"
+          title="Open all CDF panels"
           style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px;cursor:pointer"
         >
           ${this.renderCurveSvg(curves[regime], "cdf")}
-          <div class="epsilon-preview-hint">Open CDF</div>
+          <div class="epsilon-preview-hint">Open CDF panels</div>
         </div>
       </section>
     `).join("");
@@ -231,10 +233,108 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     `;
   }
 
+  categoryCard(basin) {
+    const color = this.categoryColor(basin);
+    return `
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px">
+        <div style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#0f172a">
+          <span style="width:13px;height:13px;border-radius:50%;background:${color};border:1px solid rgba(15,23,42,.24)"></span>
+          <span>${this.escape(this.categoryLabel(basin))}</span>
+        </div>
+        <div style="font-size:11px;color:#64748b;margin-top:5px">Low / high class</div>
+      </div>
+    `;
+  }
+
+  renderCategoryMatrix(counts) {
+    const states = ["decrease", "stable", "increase"];
+    return `
+      <div style="margin:0 0 14px">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">Low-flow x high-flow classes</div>
+        <div style="display:grid;grid-template-columns:56px repeat(3,1fr);gap:5px;align-items:stretch;font-size:10px;color:#475569">
+          <div></div>
+          ${states.map((state) => `<div style="text-align:center">${this.stateLabel(state)} high</div>`).join("")}
+          ${states.map((low) => `
+            <div style="display:flex;align-items:center;justify-content:flex-end;padding-right:4px">${this.stateLabel(low)} low</div>
+            ${states.map((high) => {
+              const key = `${low}_${high}`;
+              return `
+                <div style="min-height:34px;border-radius:4px;background:${this.categoryColorByStates(low, high)};border:1px solid rgba(15,23,42,.16);display:flex;align-items:center;justify-content:center;color:${this.categoryTextColor(low, high)};font-weight:700">
+                  ${counts[key] || 0}
+                </div>
+              `;
+            }).join("")}
+          `).join("")}
+        </div>
+        <div style="font-size:11px;color:#64748b;margin-top:7px">${counts.insufficient || 0} catchments have insufficient low/high information for this bivariate class.</div>
+      </div>
+    `;
+  }
+
+  categoryCounts() {
+    const counts = { insufficient: 0 };
+    for (const basin of this.basins) {
+      const low = basin.low_change_state;
+      const high = basin.high_change_state;
+      if (!low || !high) {
+        counts.insufficient += 1;
+      } else {
+        const key = `${low}_${high}`;
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    }
+    return counts;
+  }
+
+  changeState(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return null;
+    if (number < -this.stableThresholdPct) return "decrease";
+    if (number > this.stableThresholdPct) return "increase";
+    return "stable";
+  }
+
+  categoryLabel(basin) {
+    const low = basin.low_change_state;
+    const high = basin.high_change_state;
+    if (!low || !high) return "insufficient";
+    return `L ${this.stateLabel(low)} / H ${this.stateLabel(high)}`;
+  }
+
+  stateLabel(state) {
+    return {
+      decrease: "decrease",
+      stable: "stable",
+      increase: "increase"
+    }[state] || "insufficient";
+  }
+
+  categoryColor(basin) {
+    return this.categoryColorByStates(basin.low_change_state, basin.high_change_state);
+  }
+
+  categoryColorByStates(low, high) {
+    const colors = {
+      decrease_decrease: "#1e3a8a",
+      decrease_stable: "#3b82f6",
+      decrease_increase: "#22c1d6",
+      stable_decrease: "#64748b",
+      stable_stable: "#cbd5e1",
+      stable_increase: "#d97706",
+      increase_decrease: "#7c3aed",
+      increase_stable: "#ef4444",
+      increase_increase: "#7f1d1d"
+    };
+    return colors[`${low}_${high}`] || "#d8dee8";
+  }
+
+  categoryTextColor(low, high) {
+    return low === "stable" && high === "stable" ? "#334155" : "#ffffff";
+  }
+
   renderStatsTable(basin, regime) {
     const rows = [
       ["Mean", basin[`${regime}_pre_mean`], basin[`${regime}_post_mean`]],
-      ["Median", basin[`${regime}_pre_q50`], basin[`${regime}_post_q50`]],
       ["IQR", `${this.formatSmall(basin[`${regime}_pre_q25`])}-${this.formatSmall(basin[`${regime}_pre_q75`])}`, `${this.formatSmall(basin[`${regime}_post_q25`])}-${this.formatSmall(basin[`${regime}_post_q75`])}`],
       ["N", basin[`${regime}_pre_n`], basin[`${regime}_post_n`]]
     ];
@@ -318,13 +418,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     style.textContent = `
       .epsilon-modal{position:fixed;inset:0;z-index:420;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.36);padding:26px}
       .epsilon-modal.visible{display:flex}
-      .epsilon-dialog{width:min(1060px,calc(100vw - 52px));height:min(560px,calc(100vh - 52px));background:#fff;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.28);display:flex;flex-direction:column;overflow:hidden}
+      .epsilon-dialog{width:min(1060px,calc(100vw - 52px));height:min(760px,calc(100vh - 52px));background:#fff;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.28);display:flex;flex-direction:column;overflow:hidden}
       .epsilon-dialog-header{height:58px;padding:0 18px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px}
       .epsilon-dialog-title{font-size:15px;font-weight:700;color:#0f172a}
       .epsilon-dialog-subtitle{font-size:11px;color:#64748b;margin-top:3px}
       .epsilon-close{width:30px;height:30px;border:0;background:transparent;border-radius:4px;cursor:pointer;font-size:22px;color:#64748b;line-height:1}
       .epsilon-close:hover{background:#f1f5f9;color:#0f172a}
-      .epsilon-chart-area{flex:1;min-height:0;padding:14px 18px 18px;display:grid;grid-template-rows:1fr;gap:12px}
+      .epsilon-chart-area{flex:1;min-height:0;padding:14px 18px 18px;display:grid;grid-template-rows:repeat(3,1fr);gap:12px}
       .epsilon-chart-card{position:relative;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;overflow:hidden}
       .epsilon-chart-card canvas{display:block;width:100%;height:100%}
       .epsilon-readout{position:absolute;right:14px;bottom:42px;min-width:176px;padding:7px 9px;border:1px solid #dbe3ef;border-radius:6px;background:rgba(255,255,255,.92);font-size:11px;color:#334155;line-height:1.42;box-shadow:0 8px 20px rgba(15,23,42,.08);pointer-events:none}
@@ -346,10 +446,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           <button class="epsilon-close" id="epsilon-modal-close" type="button" aria-label="Close">x</button>
         </div>
         <div class="epsilon-chart-area">
-          <div class="epsilon-chart-card cdf">
-            <canvas id="epsilon-cdf-canvas"></canvas>
-            <div class="epsilon-readout" id="epsilon-cdf-readout"></div>
-          </div>
+          ${this.displayRegimes.map((regime) => `
+            <div class="epsilon-chart-card cdf" data-regime="${regime}">
+              <canvas id="epsilon-cdf-canvas-${regime}" data-regime="${regime}"></canvas>
+              <div class="epsilon-readout" id="epsilon-cdf-readout-${regime}"></div>
+            </div>
+          `).join("")}
         </div>
       </div>
     `;
@@ -362,8 +464,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       canvas.addEventListener("mousemove", this.handleModalPointer);
       canvas.addEventListener("mouseleave", () => {
         if (!this.activeDistribution) return;
-        this.activeDistribution.hoverIndex = null;
-        this.activeDistribution.hoverEpsilon = null;
+        const regime = canvas.dataset.regime || "all";
+        delete this.activeDistribution.hover[regime];
         this.drawDistributionModal();
       });
     });
@@ -372,13 +474,16 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   openDistributionModal(gcin, regime) {
     const basin = this.byId.get(String(gcin));
-    const curve = this.data.curves?.[String(gcin)]?.[regime];
-    if (!basin || !curve?.x?.length) return;
+    const curves = this.data.curves?.[String(gcin)] || {};
+    if (!basin || !this.displayRegimes.some((name) => curves[name]?.x?.length)) return;
     this.ensureDistributionModal();
-    this.activeDistribution = { basin, regime, curve, hoverIndex: null, hoverEpsilon: null };
-    this.distributionModal.querySelector("#epsilon-modal-title").textContent = `GCIN ${basin.GCIN} - ${this.regimeLabel(regime)}`;
+    this.activeDistribution = { basin, curves, hover: {} };
+    if (regime && curves[regime]?.x?.length) {
+      this.activeDistribution.initialRegime = regime;
+    }
+    this.distributionModal.querySelector("#epsilon-modal-title").textContent = `GCIN ${basin.GCIN} - CDF panels`;
     this.distributionModal.querySelector("#epsilon-modal-subtitle").textContent =
-      "Pre 1982-1990 vs post 1991-2019; move the cursor across the CDF to read matched values.";
+      "Pre 1982-1990 vs post 1991-2019; rows show all recession, low-flow, and high-flow epsilon distributions.";
     this.distributionModal.classList.add("visible");
     this.drawDistributionModal();
   }
@@ -391,9 +496,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   onDistributionPointer(event) {
     if (!this.activeDistribution) return;
     const canvas = event.currentTarget;
+    const regime = canvas.dataset.regime || "all";
+    const curve = this.activeDistribution.curves?.[regime];
+    if (!curve?.x?.length) return;
     const rect = canvas.getBoundingClientRect();
     const plot = this.distributionPlot(rect.width, rect.height);
-    const x = this.activeDistribution.curve.x.map(Number);
+    const x = curve.x.map(Number);
     const maxX = Math.max(...x, 1e-12);
     const px = event.clientX - rect.left;
     const ratio = Math.max(0, Math.min(1, (px - plot.left) / Math.max(1, plot.right - plot.left)));
@@ -407,22 +515,28 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         closestDistance = distance;
       }
     }
-    this.activeDistribution.hoverIndex = closest;
-    this.activeDistribution.hoverEpsilon = target;
+    this.activeDistribution.hover[regime] = { index: closest, epsilon: target };
     this.drawDistributionModal();
   }
 
   drawDistributionModal() {
     if (!this.activeDistribution) return;
-    this.drawDistributionCanvas(
-      this.distributionModal.querySelector("#epsilon-cdf-canvas"),
-      this.distributionModal.querySelector("#epsilon-cdf-readout"),
-      "cdf"
-    );
+    for (const regime of this.displayRegimes) {
+      this.drawDistributionCanvas(
+        this.distributionModal.querySelector(`#epsilon-cdf-canvas-${regime}`),
+        this.distributionModal.querySelector(`#epsilon-cdf-readout-${regime}`),
+        regime
+      );
+    }
   }
 
-  drawDistributionCanvas(canvas, readout, mode) {
-    const { basin, regime, curve, hoverIndex, hoverEpsilon } = this.activeDistribution;
+  drawDistributionCanvas(canvas, readout, regime) {
+    const { basin, curves, hover } = this.activeDistribution;
+    const curve = curves?.[regime];
+    if (!canvas || !readout || !curve?.x?.length) return;
+    const hoverState = hover?.[regime] || {};
+    const hoverIndex = hoverState.index;
+    const hoverEpsilon = hoverState.epsilon;
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.max(1, Math.round(rect.width * dpr));
@@ -434,10 +548,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const height = rect.height;
     const plot = this.distributionPlot(width, height);
     const x = curve.x.map(Number);
-    const pre = mode === "density" ? curve.preDensity.map(Number) : curve.preCdf.map(Number);
-    const post = mode === "density" ? curve.postDensity.map(Number) : curve.postCdf.map(Number);
+    const pre = curve.preCdf.map(Number);
+    const post = curve.postCdf.map(Number);
     const maxX = Math.max(...x, 1e-12);
-    const maxY = mode === "density" ? Math.max(...pre, ...post, 1e-12) : 1;
+    const maxY = 1;
     const xAt = (value) => plot.left + (value / maxX) * (plot.right - plot.left);
     const yAt = (value) => plot.bottom - (value / maxY) * (plot.bottom - plot.top);
 
@@ -485,7 +599,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     ctx.fillStyle = "#0f172a";
     ctx.font = "600 13px sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(mode === "density" ? "Density" : "CDF", plot.left, 18);
+    ctx.fillText(`${this.regimeShortLabel(regime)} CDF`, plot.left, 18);
     ctx.fillStyle = "#64748b";
     ctx.font = "11px sans-serif";
     ctx.fillText("Pre", plot.left + 82, 18);
@@ -520,7 +634,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       }
       const delta = Number(basin[`${regime}_relative_delta_pct`]);
       readout.innerHTML = `
-        <strong>${mode === "density" ? "Density" : "CDF"}</strong><br>
+        <strong>${this.regimeShortLabel(regime)} CDF</strong><br>
         epsilon: ${this.formatSmall(epsilon)}<br>
         pre: ${this.formatSmall(preValue)}<br>
         post: ${this.formatSmall(postValue)}<br>
@@ -570,15 +684,25 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   ensureLegend() {
+    const states = ["decrease", "stable", "increase"];
     this.app.registerLegend?.(this.legendId, {
-      title: "Epsilon relative change",
+      title: "Low x high epsilon class",
       html: `
-        <div style="display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;font-size:11px;color:#64748b">
-          <span>Decrease</span>
-          <span style="height:10px;border-radius:999px;background:linear-gradient(90deg,#2563eb,#f1e8c9,#b84235)"></span>
-          <span>Increase</span>
+        <div style="display:grid;grid-template-columns:44px repeat(3,1fr);gap:4px;align-items:center;font-size:9px;color:#64748b">
+          <div></div>
+          ${states.map((state) => `<div style="text-align:center">${this.stateLabel(state).slice(0,3)} H</div>`).join("")}
+          ${states.map((low) => `
+            <div style="text-align:right;padding-right:3px">${this.stateLabel(low).slice(0,3)} L</div>
+            ${states.map((high) => `
+              <div title="low ${this.stateLabel(low)} / high ${this.stateLabel(high)}" style="height:18px;border-radius:3px;background:${this.categoryColorByStates(low, high)};border:1px solid rgba(15,23,42,.16)"></div>
+            `).join("")}
+          `).join("")}
         </div>
-        <div style="font-size:11px;color:#64748b;margin-top:8px">Color uses all-recession relative epsilon change, clipped for display at +/-35%.</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:#64748b;margin-top:8px">
+          <span style="width:12px;height:12px;border-radius:50%;background:#d8dee8;border:1px solid rgba(15,23,42,.16)"></span>
+          <span>Insufficient low/high data</span>
+        </div>
+        <div style="font-size:10px;color:#64748b;margin-top:8px">Stable: relative change within +/-${this.stableThresholdPct}%.</div>
       `
     });
   }
@@ -630,9 +754,16 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     return {
       all: "All recession days",
       low: "Low flow (Q <= Q10)",
-      mid: "Mid flow (Q10 < Q < Q90)",
       high: "High flow (Q >= Q90)"
     }[regime] || regime;
+  }
+
+  regimeShortLabel(regime) {
+    return {
+      all: "All recession",
+      low: "Low flow",
+      high: "High flow"
+    }[regime] || this.regimeLabel(regime);
   }
 
   escape(value) {

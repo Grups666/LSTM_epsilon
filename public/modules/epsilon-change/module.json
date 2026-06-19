@@ -2,8 +2,8 @@
   "id": "epsilon-change",
   "name": "Epsilon Change",
   "version": "0.1.0",
-  "assetVersion": "2026-06-19-cdf-only",
-  "description": "Catchment-scale cross-fitted epsilon distribution shifts before and after 1990.",
+  "assetVersion": "2026-06-20-bivariate-class-cdf",
+  "description": "Catchment-scale low-flow and high-flow epsilon change classes before and after 1990.",
   "author": "Spatial Research Team",
   "icon": "activity",
   "entry": "./index.js",
@@ -38,7 +38,7 @@
       {
         "id": "epsilon-distribution-statistics",
         "type": "cross-fitted-inference-summary",
-        "description": "Per-catchment pre/post epsilon density, CDF, and summary statistics under all-, low-, mid-, and high-flow regimes."
+        "description": "Per-catchment pre/post epsilon CDF and summary statistics under all-, low-, and high-flow regimes."
       }
     ]
   }
