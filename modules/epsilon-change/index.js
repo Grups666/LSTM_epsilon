@@ -200,12 +200,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           class="epsilon-curve-preview"
           data-gcin="${this.escape(basin.GCIN)}"
           data-regime="${this.escape(regime)}"
-          title="Open density and CDF"
+          title="Open CDF"
           style="display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px;cursor:pointer"
         >
-          ${this.renderCurveSvg(curves[regime], "density")}
           ${this.renderCurveSvg(curves[regime], "cdf")}
-          <div class="epsilon-preview-hint">Open density and CDF</div>
+          <div class="epsilon-preview-hint">Open CDF</div>
         </div>
       </section>
     `).join("");
@@ -319,17 +318,17 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     style.textContent = `
       .epsilon-modal{position:fixed;inset:0;z-index:420;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.36);padding:26px}
       .epsilon-modal.visible{display:flex}
-      .epsilon-dialog{width:min(1060px,calc(100vw - 52px));height:min(760px,calc(100vh - 52px));background:#fff;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.28);display:flex;flex-direction:column;overflow:hidden}
+      .epsilon-dialog{width:min(1060px,calc(100vw - 52px));height:min(560px,calc(100vh - 52px));background:#fff;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.28);display:flex;flex-direction:column;overflow:hidden}
       .epsilon-dialog-header{height:58px;padding:0 18px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px}
       .epsilon-dialog-title{font-size:15px;font-weight:700;color:#0f172a}
       .epsilon-dialog-subtitle{font-size:11px;color:#64748b;margin-top:3px}
       .epsilon-close{width:30px;height:30px;border:0;background:transparent;border-radius:4px;cursor:pointer;font-size:22px;color:#64748b;line-height:1}
       .epsilon-close:hover{background:#f1f5f9;color:#0f172a}
-      .epsilon-chart-area{flex:1;min-height:0;padding:14px 18px 18px;display:grid;grid-template-rows:1fr 1fr;gap:12px}
+      .epsilon-chart-area{flex:1;min-height:0;padding:14px 18px 18px;display:grid;grid-template-rows:1fr;gap:12px}
       .epsilon-chart-card{position:relative;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;overflow:hidden}
       .epsilon-chart-card canvas{display:block;width:100%;height:100%}
-      .epsilon-readout{position:absolute;right:12px;top:10px;min-width:210px;padding:8px 10px;border:1px solid #dbe3ef;border-radius:6px;background:rgba(255,255,255,.94);font-size:11px;color:#334155;line-height:1.45;box-shadow:0 8px 20px rgba(15,23,42,.08);pointer-events:none}
-      .epsilon-chart-card.cdf .epsilon-readout{top:auto;bottom:12px}
+      .epsilon-readout{position:absolute;right:14px;bottom:42px;min-width:176px;padding:7px 9px;border:1px solid #dbe3ef;border-radius:6px;background:rgba(255,255,255,.92);font-size:11px;color:#334155;line-height:1.42;box-shadow:0 8px 20px rgba(15,23,42,.08);pointer-events:none}
+      .epsilon-readout:empty{display:none}
       .epsilon-readout strong{color:#0f172a}
     `;
     document.head.appendChild(style);
@@ -342,15 +341,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         <div class="epsilon-dialog-header">
           <div>
             <div class="epsilon-dialog-title" id="epsilon-modal-title">Epsilon distribution</div>
-            <div class="epsilon-dialog-subtitle" id="epsilon-modal-subtitle">Density and CDF</div>
+            <div class="epsilon-dialog-subtitle" id="epsilon-modal-subtitle">CDF</div>
           </div>
           <button class="epsilon-close" id="epsilon-modal-close" type="button" aria-label="Close">x</button>
         </div>
         <div class="epsilon-chart-area">
-          <div class="epsilon-chart-card density">
-            <canvas id="epsilon-density-canvas"></canvas>
-            <div class="epsilon-readout" id="epsilon-density-readout"></div>
-          </div>
           <div class="epsilon-chart-card cdf">
             <canvas id="epsilon-cdf-canvas"></canvas>
             <div class="epsilon-readout" id="epsilon-cdf-readout"></div>
@@ -368,6 +363,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       canvas.addEventListener("mouseleave", () => {
         if (!this.activeDistribution) return;
         this.activeDistribution.hoverIndex = null;
+        this.activeDistribution.hoverEpsilon = null;
         this.drawDistributionModal();
       });
     });
@@ -379,10 +375,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const curve = this.data.curves?.[String(gcin)]?.[regime];
     if (!basin || !curve?.x?.length) return;
     this.ensureDistributionModal();
-    this.activeDistribution = { basin, regime, curve, hoverIndex: null };
+    this.activeDistribution = { basin, regime, curve, hoverIndex: null, hoverEpsilon: null };
     this.distributionModal.querySelector("#epsilon-modal-title").textContent = `GCIN ${basin.GCIN} - ${this.regimeLabel(regime)}`;
     this.distributionModal.querySelector("#epsilon-modal-subtitle").textContent =
-      "Pre 1982-1990 vs post 1991-2019; move the cursor across either panel to read matched density and CDF values.";
+      "Pre 1982-1990 vs post 1991-2019; move the cursor across the CDF to read matched values.";
     this.distributionModal.classList.add("visible");
     this.drawDistributionModal();
   }
@@ -397,20 +393,27 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const canvas = event.currentTarget;
     const rect = canvas.getBoundingClientRect();
     const plot = this.distributionPlot(rect.width, rect.height);
-    const x = event.clientX - rect.left;
-    const ratio = Math.max(0, Math.min(1, (x - plot.left) / Math.max(1, plot.right - plot.left)));
-    const n = this.activeDistribution.curve.x.length;
-    this.activeDistribution.hoverIndex = Math.max(0, Math.min(n - 1, Math.round(ratio * (n - 1))));
+    const x = this.activeDistribution.curve.x.map(Number);
+    const maxX = Math.max(...x, 1e-12);
+    const px = event.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, (px - plot.left) / Math.max(1, plot.right - plot.left)));
+    const target = ratio * maxX;
+    let closest = 0;
+    let closestDistance = Infinity;
+    for (let i = 0; i < x.length; i++) {
+      const distance = Math.abs(x[i] - target);
+      if (distance < closestDistance) {
+        closest = i;
+        closestDistance = distance;
+      }
+    }
+    this.activeDistribution.hoverIndex = closest;
+    this.activeDistribution.hoverEpsilon = target;
     this.drawDistributionModal();
   }
 
   drawDistributionModal() {
     if (!this.activeDistribution) return;
-    this.drawDistributionCanvas(
-      this.distributionModal.querySelector("#epsilon-density-canvas"),
-      this.distributionModal.querySelector("#epsilon-density-readout"),
-      "density"
-    );
     this.drawDistributionCanvas(
       this.distributionModal.querySelector("#epsilon-cdf-canvas"),
       this.distributionModal.querySelector("#epsilon-cdf-readout"),
@@ -419,7 +422,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   drawDistributionCanvas(canvas, readout, mode) {
-    const { basin, regime, curve, hoverIndex } = this.activeDistribution;
+    const { basin, regime, curve, hoverIndex, hoverEpsilon } = this.activeDistribution;
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.max(1, Math.round(rect.width * dpr));
@@ -462,6 +465,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       ctx.moveTo(xx, plot.top);
       ctx.lineTo(xx, plot.bottom);
       ctx.stroke();
+      const value = (i / 4) * maxX;
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "10px sans-serif";
+      ctx.textAlign = i === 0 ? "left" : i === 4 ? "right" : "center";
+      ctx.fillText(this.formatSmall(value), xx, plot.bottom + 16);
     }
 
     ctx.strokeStyle = "#cbd5e1";
@@ -488,18 +496,15 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     ctx.fillRect(plot.left + 110, 11, 14, 3);
     ctx.textAlign = "right";
     ctx.fillStyle = "#64748b";
-    ctx.fillText("epsilon", plot.right, height - 10);
-    ctx.fillText(this.formatSmall(maxX), plot.right, plot.bottom + 16);
-    ctx.textAlign = "left";
-    ctx.fillText("0", plot.left, plot.bottom + 16);
+    ctx.fillText("epsilon", plot.right, height - 8);
 
-    const idx = hoverIndex == null ? Math.floor(x.length / 2) : hoverIndex;
-    const epsilon = x[idx];
-    const px = xAt(epsilon);
-    const preValue = pre[idx] || 0;
-    const postValue = post[idx] || 0;
-
-    if (hoverIndex != null) {
+    if (hoverIndex == null) {
+      readout.innerHTML = "";
+    } else {
+      const epsilon = Number.isFinite(Number(hoverEpsilon)) ? Number(hoverEpsilon) : x[hoverIndex];
+      const px = xAt(epsilon);
+      const preValue = this.interpolateCurve(x, pre, epsilon);
+      const postValue = this.interpolateCurve(x, post, epsilon);
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = "#475569";
       ctx.beginPath();
@@ -513,16 +518,15 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ctx.arc(px, yAt(value), 4, 0, Math.PI * 2);
         ctx.fill();
       }
+      const delta = Number(basin[`${regime}_relative_delta_pct`]);
+      readout.innerHTML = `
+        <strong>${mode === "density" ? "Density" : "CDF"}</strong><br>
+        epsilon: ${this.formatSmall(epsilon)}<br>
+        pre: ${this.formatSmall(preValue)}<br>
+        post: ${this.formatSmall(postValue)}<br>
+        regime delta: ${this.formatPct(delta)}
+      `;
     }
-
-    const delta = Number(basin[`${regime}_relative_delta_pct`]);
-    readout.innerHTML = `
-      <strong>${mode === "density" ? "Density" : "CDF"}</strong><br>
-      epsilon: ${this.formatSmall(epsilon)}<br>
-      pre: ${this.formatSmall(preValue)}<br>
-      post: ${this.formatSmall(postValue)}<br>
-      regime delta: ${this.formatPct(delta)}
-    `;
   }
 
   drawLine(ctx, x, values, xAt, yAt, color) {
@@ -538,12 +542,30 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     ctx.stroke();
   }
 
+  interpolateCurve(x, values, target) {
+    if (!x.length) return 0;
+    if (target <= x[0]) return Number(values[0] || 0);
+    const last = x.length - 1;
+    if (target >= x[last]) return Number(values[last] || 0);
+    for (let i = 1; i < x.length; i++) {
+      if (target <= x[i]) {
+        const x0 = x[i - 1];
+        const x1 = x[i];
+        const y0 = Number(values[i - 1] || 0);
+        const y1 = Number(values[i] || 0);
+        const ratio = x1 === x0 ? 0 : (target - x0) / (x1 - x0);
+        return y0 + ratio * (y1 - y0);
+      }
+    }
+    return Number(values[last] || 0);
+  }
+
   distributionPlot(width, height) {
     return {
       left: 64,
       right: width - 32,
       top: 34,
-      bottom: height - 34
+      bottom: height - 46
     };
   }
 
