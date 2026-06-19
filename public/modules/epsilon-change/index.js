@@ -154,19 +154,21 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   showOverview() {
     const all = this.basins.map((basin) => Number(basin.all_relative_delta_pct)).filter(Number.isFinite);
     const low = this.basins.map((basin) => Number(basin.low_relative_delta_pct)).filter(Number.isFinite);
+    const mid = this.basins.map((basin) => Number(basin.mid_relative_delta_pct)).filter(Number.isFinite);
     const high = this.basins.map((basin) => Number(basin.high_relative_delta_pct)).filter(Number.isFinite);
     const content = `
       <p style="margin:0 0 14px;color:#64748b;font-size:12px;line-height:1.6">
-        Cross-fitted daily epsilon inference summarized by catchment. Points are catchment centroids; color shows all-flow relative epsilon change from 1982-1990 to 1991-2019.
+        Cross-fitted daily epsilon inference summarized by catchment. Points are catchment centroids; color shows all-recession relative epsilon change from 1982-1990 to 1991-2019.
       </p>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">
         ${this.metricCard("Catchments", this.basins.length.toLocaleString())}
-        ${this.metricCard("All-flow mean", this.formatPct(this.mean(all)), this.mean(all))}
+        ${this.metricCard("All-recession mean", this.formatPct(this.mean(all)), this.mean(all))}
         ${this.metricCard("Low-flow mean", this.formatPct(this.mean(low)), this.mean(low))}
+        ${this.metricCard("Mid-flow mean", this.formatPct(this.mean(mid)), this.mean(mid))}
         ${this.metricCard("High-flow mean", this.formatPct(this.mean(high)), this.mean(high))}
       </div>
       <div style="font-size:12px;color:#475569;line-height:1.65">
-        Low-flow epsilon is evaluated on days with Q_obs at or below each catchment's 10th percentile. High-flow epsilon uses days at or above the 90th percentile.
+        Low-flow epsilon uses recession days with Q_obs at or below each catchment's Q10. Mid-flow uses Q10 to Q90. High-flow uses days at or above Q90.
       </div>
     `;
     this.app.showInspector?.("Epsilon Change", content);
@@ -182,14 +184,15 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.metricCard("Precip.", `${this.formatNumber(basin.Prec_mm, 1)} mm`)}
         ${this.metricCard("Temp.", `${this.formatNumber(basin.Temp_C, 1)} C`)}
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
         ${this.metricCard("All", this.formatPct(basin.all_relative_delta_pct), basin.all_relative_delta_pct)}
         ${this.metricCard("Low", this.formatPct(basin.low_relative_delta_pct), basin.low_relative_delta_pct)}
+        ${this.metricCard("Mid", this.formatPct(basin.mid_relative_delta_pct), basin.mid_relative_delta_pct)}
         ${this.metricCard("High", this.formatPct(basin.high_relative_delta_pct), basin.high_relative_delta_pct)}
       </div>
     `;
 
-    const sections = ["all", "low", "high"].map((regime) => `
+    const sections = ["all", "low", "mid", "high"].map((regime) => `
       <section style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0">
         <h3 style="margin:0 0 8px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#64748b">${this.regimeLabel(regime)}</h3>
         ${this.renderStatsTable(basin, regime)}
@@ -553,7 +556,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           <span style="height:10px;border-radius:999px;background:linear-gradient(90deg,#2563eb,#f1e8c9,#b84235)"></span>
           <span>Increase</span>
         </div>
-        <div style="font-size:11px;color:#64748b;margin-top:8px">Color uses all-flow relative epsilon change, clipped for display at +/-35%.</div>
+        <div style="font-size:11px;color:#64748b;margin-top:8px">Color uses all-recession relative epsilon change, clipped for display at +/-35%.</div>
       `
     });
   }
@@ -603,9 +606,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   regimeLabel(regime) {
     return {
-      all: "All days",
-      low: "Low flow (Q <= p10)",
-      high: "High flow (Q >= p90)"
+      all: "All recession days",
+      low: "Low flow (Q <= Q10)",
+      mid: "Mid flow (Q10 < Q < Q90)",
+      high: "High flow (Q >= Q90)"
     }[regime] || regime;
   }
 

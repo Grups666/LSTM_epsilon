@@ -2,7 +2,7 @@
   "id": "epsilon-change",
   "name": "Epsilon Change",
   "version": "0.1.0",
-  "assetVersion": "2026-06-15-tereon-module",
+  "assetVersion": "2026-06-19-production-epsilon",
   "description": "Catchment-scale cross-fitted epsilon distribution shifts before and after 1990.",
   "author": "Spatial Research Team",
   "icon": "activity",
@@ -39,7 +39,7 @@
       {
         "id": "epsilon-distribution-statistics",
         "type": "cross-fitted-inference-summary",
-        "description": "Per-catchment pre/post epsilon density, CDF, and summary statistics under all-, low-, and high-flow regimes."
+        "description": "Per-catchment pre/post epsilon density, CDF, and summary statistics under all-, low-, mid-, and high-flow regimes."
       }
     ]
   }
