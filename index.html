@@ -2427,8 +2427,17 @@
 
       async loadModuleFromManifest(manifest) {
         const normalized = this.normalizeModuleManifest(manifest);
-        if (!this.moduleLoader.getManifest(normalized.id)) {
-          await this.loadModuleScript(normalized);
+        const registered = this.moduleLoader.getManifest(normalized.id);
+        const registeredVersion = registered?.assetVersion || registered?.version || '';
+        const nextVersion = normalized.assetVersion || normalized.version || '';
+        const shouldReload = !registered || registeredVersion !== nextVersion;
+        if (shouldReload) {
+          if (this.moduleLoader.isLoaded(normalized.id)) {
+            this.unloadModule(normalized.id);
+          }
+          this.moduleLoader.modules.delete(normalized.id);
+          this.moduleLoader.manifests?.delete?.(normalized.id);
+          await this.loadModuleScript(normalized, true);
           const moduleClass = window[normalized.className];
           if (!moduleClass) throw new Error(`Module class not found: ${normalized.className}`);
           this.moduleLoader.register(normalized, moduleClass);
@@ -2446,13 +2455,13 @@
         };
       },
 
-      loadModuleScript(manifest) {
+      loadModuleScript(manifest, forceReload = false) {
         return new Promise((resolve, reject) => {
           if (!manifest.className) {
             reject(new Error('Module manifest requires className'));
             return;
           }
-          if (window[manifest.className]) {
+          if (window[manifest.className] && !forceReload) {
             resolve();
             return;
           }
