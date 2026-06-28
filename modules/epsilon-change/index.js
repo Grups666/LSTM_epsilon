@@ -22,6 +22,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.overviewModal = null;
     this.distributionModal = null;
     this.activeDistribution = null;
+    this.themeObserver = null;
     this.stableThresholdPct = 5;
     this.displayRegimes = ["all", "low", "high"];
     this.handleModalPointer = (event) => this.onDistributionPointer(event);
@@ -35,6 +36,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       if (payload.layerId !== this.overviewLayerId) return;
       if (payload.visible) this.showOverview();
       else this.closeOverview();
+    };
+    this.handleThemeChange = () => {
+      if (this.selected) this.showInspector(this.selected);
+      if (this.overviewModal?.classList.contains("visible")) this.showOverview();
+      if (this.distributionModal?.classList.contains("visible")) this.drawDistributionModal();
     };
   }
 
@@ -59,6 +65,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.showOverview();
     Foundation.eventBus.on(Foundation.Events.FEATURE_CLICK, this.handleFeatureClick);
     Foundation.eventBus.on(Foundation.Events.LAYER_TOGGLE, this.handleLayerToggle);
+    this.themeObserver = new MutationObserver(this.handleThemeChange);
+    this.themeObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     this.app.draw?.();
   }
 
@@ -68,6 +76,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.app.unregisterLegend?.(this.legendId);
     Foundation.eventBus.off(Foundation.Events.FEATURE_CLICK, this.handleFeatureClick);
     Foundation.eventBus.off(Foundation.Events.LAYER_TOGGLE, this.handleLayerToggle);
+    this.themeObserver?.disconnect();
+    this.themeObserver = null;
     this.selected = null;
     this.destroyModals();
   }
@@ -374,12 +384,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   metricCard(label, value, signedValue = null) {
     const color = Number.isFinite(Number(signedValue))
-      ? Number(signedValue) < 0 ? "#2563eb" : "#b84235"
-      : "#0f172a";
+      ? ` style="color:${Number(signedValue) < 0 ? "#2563eb" : "#b84235"}"`
+      : "";
     return `
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px">
-        <div style="font-size:17px;font-weight:700;color:${color}">${this.escape(value)}</div>
-        <div style="font-size:11px;color:#64748b;margin-top:3px">${this.escape(label)}</div>
+      <div class="epsilon-metric-card">
+        <div class="epsilon-metric-value"${color}>${this.escape(value)}</div>
+        <div class="epsilon-metric-label">${this.escape(label)}</div>
       </div>
     `;
   }
@@ -659,6 +669,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   renderCombinedCdfSvg(curves) {
+    const theme = this.themeColors();
     const width = 300;
     const rowHeight = 86;
     const height = rowHeight * this.displayRegimes.length + 18;
@@ -682,16 +693,16 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       const sy = (value) => plotBottom - value * plotH;
       const path = (values) => x.map((value, index) => `${index ? "L" : "M"}${sx(value).toFixed(1)},${sy(values[index] || 0).toFixed(1)}`).join(" ");
       return `
-        <line x1="${margin.left}" y1="${plotBottom}" x2="${width - margin.right}" y2="${plotBottom}" stroke="#dbe3ef"/>
-        <line x1="${margin.left}" y1="${plotTop}" x2="${margin.left}" y2="${plotBottom}" stroke="#dbe3ef"/>
-        <text x="${margin.left}" y="${plotTop - 5}" fill="#0f172a" font-size="10" font-weight="700">${this.regimeShortLabel(regime)}</text>
-        <text x="${width - margin.right}" y="${plotTop - 5}" fill="#64748b" font-size="9" text-anchor="end">${this.formatSmall(minX)}-${this.formatSmall(maxX)}</text>
+        <line x1="${margin.left}" y1="${plotBottom}" x2="${width - margin.right}" y2="${plotBottom}" stroke="${theme.axis}"/>
+        <line x1="${margin.left}" y1="${plotTop}" x2="${margin.left}" y2="${plotBottom}" stroke="${theme.axis}"/>
+        <text x="${margin.left}" y="${plotTop - 5}" fill="${theme.text}" font-size="10" font-weight="700">${this.regimeShortLabel(regime)}</text>
+        <text x="${width - margin.right}" y="${plotTop - 5}" fill="${theme.muted}" font-size="9" text-anchor="end">${this.formatSmall(minX)}-${this.formatSmall(maxX)}</text>
         <path d="${path(pre)}" fill="none" stroke="#2563eb" stroke-width="1.6"/>
         <path d="${path(post)}" fill="none" stroke="#b84235" stroke-width="1.6"/>
       `;
     }).join("");
     return `
-      <svg viewBox="0 0 ${width} ${height}" style="display:block;width:100%;height:auto;background:#f8fafc;pointer-events:none">
+      <svg viewBox="0 0 ${width} ${height}" style="display:block;width:100%;height:auto;background:${theme.card};pointer-events:none">
         ${rows}
       </svg>
     `;
@@ -713,6 +724,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     style.textContent = `
       .epsilon-curve-preview{box-sizing:border-box;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#f8fafc;transition:border-color .16s ease,box-shadow .16s ease}
       .epsilon-curve-preview:hover{border-color:#60a5fa!important;box-shadow:0 0 0 1px rgba(96,165,250,.28)}
+      .epsilon-metric-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px}
+      .epsilon-metric-value{font-size:17px;font-weight:700;color:#0f172a}
+      .epsilon-metric-label{font-size:11px;color:#64748b;margin-top:3px}
       .epsilon-overview-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:150;pointer-events:none}
       .epsilon-overview-modal.visible{display:flex}
       .epsilon-overview-dialog{width:min(820px,calc(100vw - 64px));max-height:min(760px,calc(100vh - 64px));background:rgba(255,255,255,.96);border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
@@ -742,6 +756,27 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-method-grid h4{margin:0 0 5px;font-size:12px;color:#0f172a}
       .epsilon-method-grid p{margin:0;font-size:11.5px;line-height:1.55;color:#475569}
       .epsilon-method-grid code{font-family:Consolas,monospace;font-size:11px;color:#0f172a;background:#eef2f7;border-radius:3px;padding:1px 3px}
+      body.theme-dark .epsilon-curve-preview{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-overview-dialog{background:rgba(15,23,42,.97);border-color:#263449;box-shadow:0 22px 58px rgba(0,0,0,.48)}
+      body.theme-dark .epsilon-overview-header{border-bottom-color:#263449}
+      body.theme-dark .epsilon-overview-title,
+      body.theme-dark .epsilon-overview-body h3,
+      body.theme-dark .epsilon-workflow-title,
+      body.theme-dark .epsilon-method-grid h4,
+      body.theme-dark .epsilon-metric-value{color:#e5edf7}
+      body.theme-dark .epsilon-overview-body,
+      body.theme-dark .epsilon-overview-lead,
+      body.theme-dark .epsilon-overview-note,
+      body.theme-dark .epsilon-workflow-text,
+      body.theme-dark .epsilon-method-grid p,
+      body.theme-dark .epsilon-metric-label{color:#94a3b8}
+      body.theme-dark .epsilon-overview-body section + section{border-top-color:#263449}
+      body.theme-dark .epsilon-overview-close:hover{background:#1e293b;color:#f8fafc}
+      body.theme-dark .epsilon-metric-card,
+      body.theme-dark .epsilon-workflow-step,
+      body.theme-dark .epsilon-method-grid>div{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-workflow-step::after{background:#334155}
+      body.theme-dark .epsilon-method-grid code{background:#1e293b;color:#e5edf7}
       @media (max-width:760px){.epsilon-overview-metrics,.epsilon-method-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.epsilon-workflow{grid-template-columns:1fr}.epsilon-workflow-step::after{display:none}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}}
     `;
     document.head.appendChild(style);
@@ -770,6 +805,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         .epsilon-readout{position:absolute;right:42px;bottom:52px;width:138px;padding:7px 9px;border:1px solid #dbe3ef;border-radius:6px;background:rgba(255,255,255,.92);font-size:11px;color:#334155;line-height:1.42;box-shadow:0 8px 20px rgba(15,23,42,.08);pointer-events:none}
         .epsilon-readout:empty{display:none}
         .epsilon-readout strong{color:#0f172a}
+        body.theme-dark .epsilon-dialog{background:#0f172a;box-shadow:0 22px 58px rgba(0,0,0,.52)}
+        body.theme-dark .epsilon-dialog-header{border-bottom-color:#263449}
+        body.theme-dark .epsilon-dialog-title{color:#e5edf7}
+        body.theme-dark .epsilon-dialog-subtitle{color:#94a3b8}
+        body.theme-dark .epsilon-close:hover{background:#1e293b;color:#f8fafc}
+        body.theme-dark .epsilon-chart-card{background:#111827;border-color:#263449}
+        body.theme-dark .epsilon-readout{background:rgba(15,23,42,.94);border-color:#334155;color:#cbd5e1;box-shadow:0 8px 20px rgba(0,0,0,.25)}
+        body.theme-dark .epsilon-readout strong{color:#f8fafc}
       `;
       document.head.appendChild(style);
     }
@@ -895,14 +938,15 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const minX = Math.min(...x);
     const maxX = Math.max(...x, minX + 1e-12);
     const maxY = 1;
+    const theme = this.themeColors();
     const xAt = (value) => plot.left + ((value - minX) / Math.max(1e-12, maxX - minX)) * (plot.right - plot.left);
     const yAt = (value) => plot.bottom - (value / maxY) * (plot.bottom - plot.top);
 
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = "#f8fafc";
+    ctx.fillStyle = theme.card;
     ctx.fillRect(0, 0, width, height);
 
-    ctx.strokeStyle = "#e2e8f0";
+    ctx.strokeStyle = theme.grid;
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
       const y = plot.top + (i / 4) * (plot.bottom - plot.top);
@@ -911,7 +955,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       ctx.lineTo(plot.right, y);
       ctx.stroke();
       const value = maxY - (i / 4) * maxY;
-      ctx.fillStyle = "#94a3b8";
+      ctx.fillStyle = theme.tick;
       ctx.font = "10px sans-serif";
       ctx.textAlign = "right";
       ctx.fillText(this.formatSmall(value), plot.left - 8, y + 3);
@@ -923,13 +967,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       ctx.lineTo(xx, plot.bottom);
       ctx.stroke();
       const value = minX + (i / 4) * (maxX - minX);
-      ctx.fillStyle = "#94a3b8";
+      ctx.fillStyle = theme.tick;
       ctx.font = "10px sans-serif";
       ctx.textAlign = i === 0 ? "left" : i === 4 ? "right" : "center";
       ctx.fillText(this.formatSmall(value), xx, plot.bottom + 16);
     }
 
-    ctx.strokeStyle = "#cbd5e1";
+    ctx.strokeStyle = theme.axis;
     ctx.beginPath();
     ctx.moveTo(plot.left, plot.top);
     ctx.lineTo(plot.left, plot.bottom);
@@ -939,11 +983,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.drawLine(ctx, x, pre, xAt, yAt, "#2563eb");
     this.drawLine(ctx, x, post, xAt, yAt, "#b84235");
 
-    ctx.fillStyle = "#0f172a";
+    ctx.fillStyle = theme.text;
     ctx.font = "600 13px sans-serif";
     ctx.textAlign = "left";
     ctx.fillText(`${this.regimeShortLabel(regime)} CDF`, plot.left, 18);
-    ctx.fillStyle = "#64748b";
+    ctx.fillStyle = theme.muted;
     ctx.font = "11px sans-serif";
     ctx.textAlign = "left";
     ctx.fillText("Pre", plot.right - 82, 18);
@@ -953,7 +997,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     ctx.fillStyle = "#b84235";
     ctx.fillRect(plot.right - 56, 11, 14, 3);
     ctx.textAlign = "right";
-    ctx.fillStyle = "#64748b";
+    ctx.fillStyle = theme.muted;
     ctx.fillText("epsilon", plot.right, height - 8);
 
     if (hoverIndex == null) {
@@ -964,7 +1008,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       const preValue = this.interpolateCurve(x, pre, epsilon);
       const postValue = this.interpolateCurve(x, post, epsilon);
       ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = "#475569";
+      ctx.strokeStyle = theme.cursor;
       ctx.beginPath();
       ctx.moveTo(px, plot.top);
       ctx.lineTo(px, plot.bottom);
@@ -1076,6 +1120,33 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   mean(values) {
     return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : NaN;
+  }
+
+  isDarkMode() {
+    return document.body.classList.contains("theme-dark");
+  }
+
+  themeColors() {
+    if (this.isDarkMode()) {
+      return {
+        card: "#111827",
+        grid: "#263449",
+        axis: "#334155",
+        text: "#e5edf7",
+        muted: "#94a3b8",
+        tick: "#8aa0ba",
+        cursor: "#cbd5e1"
+      };
+    }
+    return {
+      card: "#f8fafc",
+      grid: "#e2e8f0",
+      axis: "#cbd5e1",
+      text: "#0f172a",
+      muted: "#64748b",
+      tick: "#94a3b8",
+      cursor: "#475569"
+    };
   }
 
   median(values) {
