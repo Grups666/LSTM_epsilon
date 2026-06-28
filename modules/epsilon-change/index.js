@@ -183,6 +183,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   showInspector(basin) {
     const title = `GCIN ${basin.GCIN}`;
     const curves = this.data.curves?.[String(basin.GCIN)] || {};
+    const sourceId = Number.isFinite(Number(basin.force_code))
+      ? `<div style="margin:-4px 0 12px;font-size:11px;color:#64748b">Legacy force code: <strong style="color:#334155">${this.escape(basin.force_code)}</strong></div>`
+      : "";
     const cards = `
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">
         ${this.metricCard("Area", `${this.formatNumber(basin.area_km2, 1)} km2`)}
@@ -221,6 +224,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <p style="margin:0 0 14px;color:#64748b;font-size:12px;line-height:1.6">
         Epsilon is the modeled daily ratio GQ/Q. This panel compares the inferred epsilon distribution before and after 1990.
       </p>
+      ${sourceId}
       ${cards}
       ${cdfPreview}
       ${sections}
@@ -533,10 +537,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     }).join("");
     return `
       <svg viewBox="0 0 ${width} ${height}" style="display:block;width:100%;height:auto;background:#f8fafc;pointer-events:none">
-        <text x="${width - 76}" y="12" fill="#64748b" font-size="9">Pre</text>
-        <text x="${width - 31}" y="12" fill="#64748b" font-size="9">Post</text>
-        <rect x="${width - 96}" y="6" width="14" height="3" fill="#2563eb"/>
-        <rect x="${width - 54}" y="6" width="14" height="3" fill="#b84235"/>
         ${rows}
       </svg>
     `;
@@ -853,16 +853,19 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       return;
     }
     const states = ["decrease", "stable", "increase"];
+    const counts = this.categoryCounts();
     this.app.registerLegend?.(this.legendId, {
       title: "Low x high epsilon class",
       html: `
-        <div style="display:grid;grid-template-columns:44px repeat(3,1fr);gap:4px;align-items:center;font-size:9px;color:#64748b">
+        <div style="display:grid;grid-template-columns:38px repeat(3,48px);gap:5px;align-items:center;justify-content:center;font-size:9px;color:#64748b">
           <div></div>
           ${states.map((state) => `<div style="text-align:center">H ${this.stateShortLabel(state)}</div>`).join("")}
           ${states.map((low) => `
-            <div style="text-align:right;padding-right:3px">L ${this.stateShortLabel(low)}</div>
+            <div style="text-align:right;padding-right:4px">L ${this.stateShortLabel(low)}</div>
             ${states.map((high) => `
-              <div title="low ${this.stateLabel(low)} / high ${this.stateLabel(high)}" style="height:18px;border-radius:3px;background:${this.categoryColorByStates(low, high)};border:1px solid rgba(15,23,42,.16)"></div>
+              <div title="low ${this.stateLabel(low)} / high ${this.stateLabel(high)}" style="height:28px;border-radius:4px;background:${this.categoryColorByStates(low, high)};border:1px solid rgba(15,23,42,.16);display:flex;align-items:center;justify-content:center;color:${this.categoryTextColor(low, high)};font-weight:700;font-size:10px">
+                ${counts[`${low}_${high}`] || 0}
+              </div>
             `).join("")}
           `).join("")}
         </div>
