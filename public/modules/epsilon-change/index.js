@@ -201,16 +201,17 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <section>
         <h3>Data and inference</h3>
         <p>
-          The map summarizes catchment-level daily epsilon, defined as the inferred daily GQ/Q ratio. 
-          Streamflow comes from the matched legacy forcing records; meteorological forcing is aligned to the catchments and evaluated on recession days.
+          The map summarizes catchment-level daily epsilon, defined as the inferred daily GQ/Q ratio. Streamflow comes from the matched legacy Event_Typology forcing records. Meteorological forcing and land-state variables come from ERA5-Land daily catchment reductions, so each row is a catchment-day time series record rather than a gridded raster.
         </p>
         <p>
-          Pre-change is 1982-1990 and post-change is 1991-2019. Low-flow and high-flow regimes are defined within each catchment using its own Q10 and Q90 streamflow thresholds.
+          Pre-change is 1950-1990 and post-change is 1991-2019. Low-flow and high-flow regimes are defined within each catchment using its own Q10 and Q90 streamflow thresholds.
         </p>
         <p>
-          Epsilon was inferred with the physics-informed LSTM-epsilon workflow, then summarized by pre/post CDFs and relative changes for all recession days, low flow, and high flow.
+          Epsilon was inferred with the Ara-style physics-informed LSTM-epsilon workflow. The model directly predicts epsilon inside the recession differential equation; it does not first predict GQ and then divide by Q.
         </p>
       </section>
+      ${this.renderWorkflowDiagram()}
+      ${this.renderMethodDetails()}
     `;
     this.overviewModal.classList.add("visible");
   }
@@ -249,6 +250,75 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       this.app.updateLayerList?.();
     };
     document.body.appendChild(this.overviewModal);
+  }
+
+  renderWorkflowDiagram() {
+    const steps = [
+      ["Legacy streamflow", "Observed Q by matched catchment"],
+      ["ERA5-Land forcing", "Daily catchment precipitation, temperature, PET, soil moisture"],
+      ["Recession filter", "Declining-flow sequences, first day dropped, cold days removed"],
+      ["LSTM-epsilon", "365-day context plus static attributes"],
+      ["Physics solver", "AET term and recession equation constrain Q path"],
+      ["Epsilon contrast", "Pre/post CDFs, Q10 low flow, Q90 high flow"]
+    ];
+    return `
+      <section>
+        <h3>Workflow</h3>
+        <div class="epsilon-workflow">
+          ${steps.map(([title, text], index) => `
+            <div class="epsilon-workflow-step">
+              <div class="epsilon-workflow-index">${index + 1}</div>
+              <div>
+                <div class="epsilon-workflow-title">${this.escape(title)}</div>
+                <div class="epsilon-workflow-text">${this.escape(text)}</div>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  renderMethodDetails() {
+    return `
+      <section>
+        <h3>Model and analysis details</h3>
+        <div class="epsilon-method-grid">
+          <div>
+            <h4>Inputs</h4>
+            <p>Daily dynamic inputs are precipitation, temperature, PET and root-zone soil moisture. Static catchment attributes include location, area, long-term precipitation, temperature, PET, AET, aridity, soil moisture summaries, radiation and precipitation-event frequencies.</p>
+          </div>
+          <div>
+            <h4>Recession mask</h4>
+            <p>Training and inference are restricted to recession days. A valid recession has at least four declining days, the first decline day is dropped, a decreasing-rate filter is applied, and days with mean temperature at or below 0 C are removed as a snow proxy.</p>
+          </div>
+          <div>
+            <h4>Physics-informed LSTM</h4>
+            <p>The model reads a 365-day context window and outputs daily epsilon, q_base, alpha, LP and gamma. AET is computed inside the model from PET and soil moisture using bounded LP/gamma parameters.</p>
+          </div>
+          <div>
+            <h4>Recession equation</h4>
+            <p><code>dQ/dt = -epsilon * Q^2 - epsilon * alpha * AET * Q</code>. The solved recession streamflow path is supervised against observed streamflow; epsilon is therefore inferred directly inside the physical equation.</p>
+          </div>
+          <div>
+            <h4>Training run</h4>
+            <p>The production run uses five cross-fitted folds, 150 epochs, batch size 256, hidden size 256, one LSTM layer, dropout 0.4, sequence length 365 and learning rate 1e-4.</p>
+          </div>
+          <div>
+            <h4>Loss</h4>
+            <p>The objective combines path error, right-hand-side tendency consistency, epsilon smoothness and reset-flow alignment: <code>L = 25 L_path + 10 L_rhs + 0.1 L_smooth + 5 L_q0</code>.</p>
+          </div>
+          <div>
+            <h4>Flow regimes</h4>
+            <p>Low flow is Qobs <= each catchment's recession-day Q10. High flow is Qobs >= each catchment's recession-day Q90. These thresholds are catchment-specific, not pooled globally.</p>
+          </div>
+          <div>
+            <h4>Displayed result</h4>
+            <p>The map shows 1,149 catchments with cross-fitted daily recession epsilon summaries. The bivariate class combines low-flow and high-flow relative epsilon change; stable means within +/-${this.stableThresholdPct}%.</p>
+          </div>
+        </div>
+      </section>
+    `;
   }
 
   showInspector(basin) {
@@ -359,26 +429,41 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   renderCategoryMatrix(counts) {
-    const states = ["decrease", "stable", "increase"];
     return `
       <div style="margin:0 0 14px">
         <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">Low-flow x high-flow classes</div>
-        <div style="display:grid;grid-template-columns:56px repeat(3,1fr);gap:5px;align-items:stretch;font-size:10px;color:#475569">
-          <div></div>
-          ${states.map((state) => `<div style="text-align:center">High ${this.stateLabel(state)}</div>`).join("")}
-          ${states.map((low) => `
-            <div style="display:flex;align-items:center;justify-content:flex-end;padding-right:4px">Low ${this.stateLabel(low)}</div>
-            ${states.map((high) => {
-              const key = `${low}_${high}`;
-              return `
-                <div style="min-height:34px;border-radius:4px;background:${this.categoryColorByStates(low, high)};border:1px solid rgba(15,23,42,.16);display:flex;align-items:center;justify-content:center;color:${this.categoryTextColor(low, high)};font-weight:700">
-                  ${counts[key] || 0}
-                </div>
-              `;
-            }).join("")}
+        ${this.renderBivariateMatrix(counts, false)}
+        <div style="font-size:11px;color:#64748b;margin-top:7px">${counts.insufficient || 0} catchments have insufficient low/high information for this bivariate class.</div>
+      </div>
+    `;
+  }
+
+  renderBivariateMatrix(counts, compact = true) {
+    const states = ["decrease", "stable", "increase"];
+    const cell = compact ? 48 : 72;
+    const gap = compact ? 5 : 7;
+    const rowHeight = compact ? 28 : 38;
+    const fontSize = compact ? 10 : 12;
+    const labelLeft = compact ? -38 : -58;
+    const labelWidth = compact ? 32 : 50;
+    const headerPrefix = compact ? "H " : "High ";
+    const rowPrefix = compact ? "L " : "Low ";
+    const matrixWidth = cell * 3 + gap * 2;
+    return `
+      <div style="position:relative;width:${matrixWidth}px;margin:0 auto;font-size:${compact ? 9 : 11}px;color:#64748b">
+        <div style="display:grid;grid-template-columns:repeat(3,${cell}px);gap:${gap}px;margin-left:0;margin-bottom:${gap}px">
+          ${states.map((state) => `<div style="text-align:center">${headerPrefix}${this.stateShortLabel(state)}</div>`).join("")}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,${cell}px);gap:${gap}px">
+          ${states.map((low, rowIndex) => `
+            <div style="position:absolute;left:${labelLeft}px;top:${(compact ? 17 : 22) + rowIndex * (rowHeight + gap)}px;width:${labelWidth}px;text-align:right">${rowPrefix}${this.stateShortLabel(low)}</div>
+            ${states.map((high) => `
+              <div title="low ${this.stateLabel(low)} / high ${this.stateLabel(high)}" style="height:${rowHeight}px;border-radius:4px;background:${this.categoryColorByStates(low, high)};border:1px solid rgba(15,23,42,.16);display:flex;align-items:center;justify-content:center;color:${this.categoryTextColor(low, high)};font-weight:700;font-size:${fontSize}px">
+                ${counts[`${low}_${high}`] || 0}
+              </div>
+            `).join("")}
           `).join("")}
         </div>
-        <div style="font-size:11px;color:#64748b;margin-top:7px">${counts.insufficient || 0} catchments have insufficient low/high information for this bivariate class.</div>
       </div>
     `;
   }
@@ -647,7 +732,19 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-lead{color:#475569}
       .epsilon-overview-note{font-size:12px;color:#475569;margin-top:10px}
       .epsilon-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
-      @media (max-width:760px){.epsilon-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}}
+      .epsilon-workflow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+      .epsilon-workflow-step{position:relative;min-height:96px;border:1px solid #dbe3ef;border-radius:6px;background:#f8fafc;padding:12px 12px 12px 42px}
+      .epsilon-workflow-step::after{content:"";position:absolute;right:-10px;top:50%;width:10px;height:1px;background:#cbd5e1}
+      .epsilon-workflow-step:nth-child(3)::after,.epsilon-workflow-step:nth-child(6)::after{display:none}
+      .epsilon-workflow-index{position:absolute;left:12px;top:12px;width:20px;height:20px;border-radius:50%;background:#1d4ed8;color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+      .epsilon-workflow-title{font-size:12px;font-weight:750;color:#0f172a;margin-bottom:5px}
+      .epsilon-workflow-text{font-size:11px;color:#64748b;line-height:1.45}
+      .epsilon-method-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+      .epsilon-method-grid>div{border:1px solid #dbe3ef;border-radius:6px;background:#f8fafc;padding:11px}
+      .epsilon-method-grid h4{margin:0 0 5px;font-size:12px;color:#0f172a}
+      .epsilon-method-grid p{margin:0;font-size:11.5px;line-height:1.55;color:#475569}
+      .epsilon-method-grid code{font-family:Consolas,monospace;font-size:11px;color:#0f172a;background:#eef2f7;border-radius:3px;padding:1px 3px}
+      @media (max-width:760px){.epsilon-overview-metrics,.epsilon-method-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.epsilon-workflow{grid-template-columns:1fr}.epsilon-workflow-step::after{display:none}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}}
     `;
     document.head.appendChild(style);
   }
@@ -729,7 +826,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     }
     this.distributionModal.querySelector("#epsilon-modal-title").textContent = `GCIN ${basin.GCIN} - CDF panels`;
     this.distributionModal.querySelector("#epsilon-modal-subtitle").textContent =
-      "Pre 1982-1990 vs post 1991-2019; rows show all recession, low-flow, and high-flow epsilon distributions.";
+      "Pre 1950-1990 vs post 1991-2019; rows show all recession, low-flow, and high-flow epsilon distributions.";
     this.distributionModal.classList.add("visible");
     this.drawDistributionModal();
   }
@@ -947,23 +1044,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       });
       return;
     }
-    const states = ["decrease", "stable", "increase"];
     const counts = this.categoryCounts();
     this.app.registerLegend?.(this.legendId, {
       title: "Low x high epsilon class",
       html: `
-        <div style="display:grid;grid-template-columns:38px repeat(3,48px);gap:5px;align-items:center;justify-content:center;font-size:9px;color:#64748b">
-          <div></div>
-          ${states.map((state) => `<div style="text-align:center">H ${this.stateShortLabel(state)}</div>`).join("")}
-          ${states.map((low) => `
-            <div style="text-align:right;padding-right:4px">L ${this.stateShortLabel(low)}</div>
-            ${states.map((high) => `
-              <div title="low ${this.stateLabel(low)} / high ${this.stateLabel(high)}" style="height:28px;border-radius:4px;background:${this.categoryColorByStates(low, high)};border:1px solid rgba(15,23,42,.16);display:flex;align-items:center;justify-content:center;color:${this.categoryTextColor(low, high)};font-weight:700;font-size:10px">
-                ${counts[`${low}_${high}`] || 0}
-              </div>
-            `).join("")}
-          `).join("")}
-        </div>
+        ${this.renderBivariateMatrix(counts, true)}
         <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:#64748b;margin-top:8px">
           <span style="width:12px;height:12px;border-radius:50%;background:#d8dee8;border:1px solid rgba(15,23,42,.16)"></span>
           <span>Insufficient low/high data</span>
