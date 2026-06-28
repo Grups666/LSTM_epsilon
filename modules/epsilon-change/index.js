@@ -818,7 +818,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       return `
         <line x1="${margin.left}" y1="${plotBottom}" x2="${width - margin.right}" y2="${plotBottom}" stroke="${theme.axis}"/>
         <line x1="${margin.left}" y1="${plotTop}" x2="${margin.left}" y2="${plotBottom}" stroke="${theme.axis}"/>
-        <text x="${margin.left}" y="${plotTop - 5}" fill="${theme.text}" font-size="10" font-weight="700">${this.regimeShortLabel(regime)}</text>
+        <text x="${margin.left}" y="${plotTop - 5}" fill="${theme.text}" font-size="10" font-weight="400">${this.regimeShortLabel(regime)}</text>
         <text x="${width - margin.right}" y="${plotTop - 5}" fill="${theme.muted}" font-size="9" text-anchor="end">${this.formatSmall(minX)}-${this.formatSmall(maxX)}</text>
         <path d="${path(pre)}" fill="none" stroke="#2563eb" stroke-width="1.6"/>
         <path d="${path(post)}" fill="none" stroke="#b84235" stroke-width="1.6"/>
@@ -845,8 +845,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const style = document.createElement("style");
     style.id = "epsilon-preview-styles";
     style.textContent = `
-      .epsilon-curve-preview{box-sizing:border-box;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#f8fafc;transition:border-color .16s ease,box-shadow .16s ease}
-      .epsilon-curve-preview:hover{border-color:#60a5fa!important;box-shadow:0 0 0 1px rgba(96,165,250,.28)}
+      .epsilon-curve-preview{box-sizing:border-box;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#fbfdff;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
+      .epsilon-curve-preview:hover{background:#eef7ff;border-color:#60a5fa!important;box-shadow:0 0 0 1px rgba(96,165,250,.26),0 0 18px rgba(96,165,250,.18)}
       .epsilon-metric-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px}
       .epsilon-metric-value{font-size:17px;font-weight:700;color:#0f172a}
       .epsilon-metric-label{font-size:11px;color:#64748b;margin-top:3px}
@@ -889,6 +889,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-svg-muted{fill:#64748b;font-size:10.5px}
       .epsilon-svg-equation{fill:#0f172a;font-size:15px;font-family:Consolas,monospace;font-weight:700}
       body.theme-dark .epsilon-curve-preview{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-curve-preview:hover{background:#10213a;border-color:#3b82f6!important;box-shadow:0 0 0 1px rgba(59,130,246,.28),0 0 18px rgba(59,130,246,.18)}
       body.theme-dark .epsilon-overview-dialog{background:rgba(15,23,42,.97);border-color:#263449;box-shadow:0 22px 58px rgba(0,0,0,.48)}
       body.theme-dark .epsilon-overview-header{border-bottom-color:#263449}
       body.theme-dark .epsilon-overview-title,
@@ -1126,7 +1127,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.drawLine(ctx, x, post, xAt, yAt, "#b84235");
 
     ctx.fillStyle = theme.text;
-    ctx.font = "600 13px sans-serif";
+    ctx.font = "13px sans-serif";
     ctx.textAlign = "left";
     ctx.fillText(`${this.regimeShortLabel(regime)} CDF`, plot.left, 18);
     ctx.fillStyle = theme.muted;
