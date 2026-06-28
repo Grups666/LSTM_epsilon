@@ -13,7 +13,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.basins = [];
     this.byId = new Map();
     this.selected = null;
-    this.layerId = "epsilon-catchments";
+    this.viewMode = manifest.viewMode || "bivariate";
+    this.focusRegime = manifest.focusRegime || null;
+    this.dataFile = manifest.dataFile || manifest.datasets?.[0]?.file || "./data/epsilon-catchment-distributions.json";
+    this.layerId = `${manifest.id || "epsilon-change"}-catchments`;
     this.legendId = `${manifest.id || "epsilon-change"}-legend`;
     this.distributionModal = null;
     this.activeDistribution = null;
@@ -29,7 +32,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   async onLoad() {
-    this.data = await this.fetchJson(this.resolve("./data/epsilon-catchment-distributions.json"));
+    this.data = await this.fetchJson(this.resolve(this.dataFile));
     this.basins = (this.data.basins || [])
       .filter((basin) => Number.isFinite(Number(basin.lon)) && Number.isFinite(Number(basin.lat)))
       .map((basin) => ({
@@ -41,6 +44,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         low_change_state: this.changeState(basin.low_relative_delta_pct),
         high_change_state: this.changeState(basin.high_relative_delta_pct)
       }));
+    this.colorScaleExtent = this.computeContinuousExtent();
     this.byId = new Map(this.basins.map((basin) => [basin.id, basin]));
     this.addLayer();
     this.ensurePreviewStyles();
@@ -76,7 +80,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   addLayer() {
     this.app.layerManager.addLayer({
       id: this.layerId,
-      name: "Epsilon change",
+      name: this.layerName(),
       type: "vector",
       visible: true,
       interactive: true,
@@ -111,7 +115,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         const radius = selected ? 6.5 : hovered ? this.pointRadius(basin, viewport) + 2.2 : this.pointRadius(basin, viewport);
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.categoryColor(basin);
+        ctx.fillStyle = this.basinColor(basin);
         ctx.globalAlpha = selected ? 0.98 : 0.72;
         ctx.fill();
         ctx.globalAlpha = 1;
@@ -160,7 +164,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const counts = this.categoryCounts();
     const content = `
       <p style="margin:0 0 14px;color:#64748b;font-size:12px;line-height:1.6">
-        Cross-fitted daily epsilon inference summarized by catchment. Points are catchment centroids; color classifies each catchment by low-flow and high-flow epsilon change after 1990.
+        ${this.escape(this.overviewText())}
       </p>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">
         ${this.metricCard("Catchments", this.basins.length.toLocaleString())}
@@ -168,12 +172,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.metricCard("Low-flow mean", this.formatPct(this.mean(low)), this.mean(low))}
         ${this.metricCard("High-flow mean", this.formatPct(this.mean(high)), this.mean(high))}
       </div>
-      ${this.renderCategoryMatrix(counts)}
+      ${this.renderOverviewLegend(counts)}
       <div style="font-size:12px;color:#475569;line-height:1.65">
-        Stable means relative epsilon change within +/-${this.stableThresholdPct}%. Low-flow epsilon uses recession days with Q_obs at or below each catchment's Q10; high-flow uses days at or above Q90.
+        ${this.escape(this.legendNote())}
       </div>
     `;
-    this.app.showInspector?.("Epsilon Change", content);
+    this.app.showInspector?.(this.moduleTitle(), content);
   }
 
   showInspector(basin) {
@@ -237,14 +241,44 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   categoryBanner(basin) {
-    const color = this.categoryColor(basin);
+    const color = this.basinColor(basin);
     return `
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#0f172a;line-height:1.35">
           <span style="width:15px;height:15px;border-radius:50%;background:${color};border:1px solid rgba(15,23,42,.24);flex:0 0 auto"></span>
-          <span>${this.escape(this.categoryLabel(basin))}</span>
+          <span>${this.escape(this.basinLabel(basin))}</span>
         </div>
-        <div style="font-size:11px;color:#64748b;margin-top:5px">Bivariate class from low-flow and high-flow relative epsilon change.</div>
+        <div style="font-size:11px;color:#64748b;margin-top:5px">${this.escape(this.basinLabelSubtitle())}</div>
+      </div>
+    `;
+  }
+
+  renderOverviewLegend(counts) {
+    if (this.viewMode === "low" || this.viewMode === "high") {
+      return this.renderContinuousOverviewLegend();
+    }
+    return this.renderCategoryMatrix(counts);
+  }
+
+  renderContinuousOverviewLegend() {
+    const regime = this.focusRegime || this.viewMode;
+    const values = this.basins
+      .map((basin) => Number(basin[`${regime}_relative_delta_pct`]))
+      .filter(Number.isFinite);
+    const mean = this.mean(values);
+    const median = this.median(values);
+    const negativeShare = values.length
+      ? values.filter((value) => value < 0).length / values.length * 100
+      : NaN;
+    return `
+      <div style="margin:0 0 14px">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">${this.escape(this.focusTitle())} relative epsilon change</div>
+        ${this.renderContinuousLegendBar()}
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px">
+          ${this.metricCard("Mean", this.formatPct(mean), mean)}
+          ${this.metricCard("Median", this.formatPct(median), median)}
+          ${this.metricCard("Decrease share", this.formatPct(negativeShare), -negativeShare)}
+        </div>
       </div>
     `;
   }
@@ -297,11 +331,65 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     return "stable";
   }
 
+  layerName() {
+    if (this.viewMode === "low") return "Low-flow epsilon change";
+    if (this.viewMode === "high") return "High-flow epsilon change";
+    return "Catchment epsilon change";
+  }
+
+  moduleTitle() {
+    if (this.viewMode === "low") return "Epsilon Change (Low Flow)";
+    if (this.viewMode === "high") return "Epsilon Change (High Flow)";
+    return "Epsilon Change";
+  }
+
+  focusTitle() {
+    if (this.focusRegime === "low" || this.viewMode === "low") return "Low-flow";
+    if (this.focusRegime === "high" || this.viewMode === "high") return "High-flow";
+    return "All-recession";
+  }
+
+  overviewText() {
+    if (this.viewMode === "low") {
+      return "Cross-fitted daily epsilon inference summarized by catchment. Points are catchment centroids colored by continuous low-flow relative epsilon change after 1990.";
+    }
+    if (this.viewMode === "high") {
+      return "Cross-fitted daily epsilon inference summarized by catchment. Points are catchment centroids colored by continuous high-flow relative epsilon change after 1990.";
+    }
+    return "Cross-fitted daily epsilon inference summarized by catchment. Points are catchment centroids; color classifies each catchment by low-flow and high-flow epsilon change after 1990.";
+  }
+
+  legendNote() {
+    if (this.viewMode === "low") {
+      return "Low-flow epsilon uses recession days with Q_obs at or below each catchment's Q10. Cyan-blue indicates lower post-1990 epsilon, neutral gray indicates little change, and magenta indicates higher post-1990 epsilon.";
+    }
+    if (this.viewMode === "high") {
+      return "High-flow epsilon uses recession days with Q_obs at or above each catchment's Q90. Cyan-blue indicates lower post-1990 epsilon, neutral gray indicates little change, and magenta indicates higher post-1990 epsilon.";
+    }
+    return `Stable means relative epsilon change within +/-${this.stableThresholdPct}%. Low-flow epsilon uses recession days with Q_obs at or below each catchment's Q10; high-flow uses days at or above Q90.`;
+  }
+
   categoryLabel(basin) {
     const low = basin.low_change_state;
     const high = basin.high_change_state;
     if (!low || !high) return "insufficient";
     return `Low-flow ${this.stateLabel(low)} / high-flow ${this.stateLabel(high)}`;
+  }
+
+  basinLabel(basin) {
+    if (this.viewMode === "low" || this.viewMode === "high") {
+      const regime = this.focusRegime || this.viewMode;
+      const value = Number(basin[`${regime}_relative_delta_pct`]);
+      return `${this.focusTitle()} epsilon change: ${this.formatPct(value)}`;
+    }
+    return this.categoryLabel(basin);
+  }
+
+  basinLabelSubtitle() {
+    if (this.viewMode === "low" || this.viewMode === "high") {
+      return "Continuous color scale from post-1990 relative epsilon change.";
+    }
+    return "Bivariate class from low-flow and high-flow relative epsilon change.";
   }
 
   stateLabel(state) {
@@ -320,8 +408,48 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     }[state] || "NA";
   }
 
-  categoryColor(basin) {
+  basinColor(basin) {
+    if (this.viewMode === "low" || this.viewMode === "high") {
+      const regime = this.focusRegime || this.viewMode;
+      return this.continuousColor(Number(basin[`${regime}_relative_delta_pct`]));
+    }
     return this.categoryColorByStates(basin.low_change_state, basin.high_change_state);
+  }
+
+  computeContinuousExtent() {
+    const regime = this.focusRegime || this.viewMode;
+    if (!(regime === "low" || regime === "high")) return 50;
+    const values = this.basins
+      .map((basin) => Number(basin[`${regime}_relative_delta_pct`]))
+      .filter(Number.isFinite)
+      .map(Math.abs)
+      .sort((a, b) => a - b);
+    if (!values.length) return 50;
+    const p95 = values[Math.min(values.length - 1, Math.floor(values.length * 0.95))];
+    return Math.max(10, Math.min(80, p95 || 50));
+  }
+
+  continuousColor(value) {
+    if (!Number.isFinite(value)) return "#d8dee8";
+    const extent = this.colorScaleExtent || 50;
+    const t = Math.max(-1, Math.min(1, value / extent));
+    if (Math.abs(t) < 0.02) return "#cbd5e1";
+    if (t < 0) return this.mix("#00d7ff", "#cbd5e1", t + 1);
+    return this.mix("#cbd5e1", "#ff3bbd", t);
+  }
+
+  renderContinuousLegendBar() {
+    const extent = this.colorScaleExtent || 50;
+    return `
+      <div style="border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;padding:10px">
+        <div style="height:12px;border-radius:999px;background:linear-gradient(90deg,#00d7ff 0%,#cbd5e1 50%,#ff3bbd 100%);border:1px solid rgba(15,23,42,.12)"></div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#64748b;margin-top:6px">
+          <span>${this.formatPct(-extent)}</span>
+          <span>0%</span>
+          <span>${this.formatPct(extent)}</span>
+        </div>
+      </div>
+    `;
   }
 
   categoryColorByStates(low, high) {
@@ -710,6 +838,20 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   ensureLegend() {
+    if (this.viewMode === "low" || this.viewMode === "high") {
+      this.app.registerLegend?.(this.legendId, {
+        title: `${this.focusTitle()} epsilon change`,
+        html: `
+          ${this.renderContinuousLegendBar()}
+          <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:#64748b;margin-top:8px">
+            <span style="width:12px;height:12px;border-radius:50%;background:#d8dee8;border:1px solid rgba(15,23,42,.16)"></span>
+            <span>Insufficient ${this.focusTitle().toLowerCase()} data</span>
+          </div>
+          <div style="font-size:10px;color:#64748b;margin-top:8px">Relative epsilon change after 1990; values are clipped to the displayed scale.</div>
+        `
+      });
+      return;
+    }
     const states = ["decrease", "stable", "increase"];
     this.app.registerLegend?.(this.legendId, {
       title: "Low x high epsilon class",
@@ -753,6 +895,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   mean(values) {
     return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : NaN;
+  }
+
+  median(values) {
+    if (!values.length) return NaN;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
   }
 
   formatPct(value) {

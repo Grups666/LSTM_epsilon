@@ -1,0 +1,40 @@
+{
+  "id": "epsilon-change-low",
+  "name": "Epsilon Change (Low Flow)",
+  "version": "0.1.0",
+  "assetVersion": "2026-06-28-low-high-continuous",
+  "description": "Catchment-scale continuous low-flow epsilon change before and after 1990.",
+  "author": "Spatial Research Team",
+  "icon": "activity",
+  "entry": "../epsilon-change/index.js",
+  "className": "EpsilonChangeModule",
+  "importKind": "module-manifest",
+  "defaultLoad": false,
+  "viewMode": "low",
+  "focusRegime": "low",
+  "datasets": [
+    {
+      "id": "epsilon-catchment-distributions",
+      "file": "../epsilon-change/data/epsilon-catchment-distributions.json"
+    }
+  ],
+  "provides": {
+    "layers": [
+      {
+        "id": "epsilon-change-low-catchments",
+        "name": "Low-flow epsilon change",
+        "type": "vector",
+        "interactive": true
+      }
+    ],
+    "panels": [
+      {
+        "id": "epsilon-low-flow-catchment-inspector",
+        "name": "Low-flow epsilon catchment inspector",
+        "position": "right",
+        "trigger": "feature:click",
+        "condition": { "layer": "epsilon-change-low-catchments", "module": "epsilon-change-low" }
+      }
+    ]
+  }
+}
