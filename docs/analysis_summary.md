@@ -2,55 +2,26 @@
 
 Version: `v0.1.0`
 
-## Research Question
+This repository publishes the Tereon-based catchment epsilon explorer and the reproducible analysis materials for the 1950-2019 ERA5-Land plus legacy streamflow experiment.
 
-This analysis asks whether catchment-scale recession epsilon changed around 1990. Epsilon is inferred directly as a daily latent coefficient in a physics-informed recession equation.
+Primary documentation:
 
-The public module visualizes cross-fitted epsilon changes for `4,290` catchments with valid pre/post all-recession summaries.
+- [Reader-facing summary](../paper_repo/docs/SUMMARY.md)
+- [Technical methods](../paper_repo/docs/TECHNICAL_METHODS.md)
 
-## Periods
+Public explorer data:
 
-- Pre-change period: 1982-1990
-- Post-change period: 1991-2019
+```text
+public/modules/epsilon-change/data/epsilon-catchment-distributions.json
+```
 
-## Flow Regimes
+Current public explorer scope:
 
-Flow regimes are defined separately within each catchment from observed recession-day streamflow:
+```text
+pre-change:  1950-1990
+post-change: 1991-2019
+catchments:  1,149
+regimes:     all recession days, low flow, high flow
+```
 
-- All recession days
-- Low flow: `Q_obs <= catchment Q10`
-- Mid flow: `catchment Q10 < Q_obs < catchment Q90`
-- High flow: `Q_obs >= catchment Q90`
-
-## Main Results
-
-Across all valid catchments, epsilon increased on average after 1990, while the median shift was much smaller:
-
-- Mean delta epsilon: `7.395e-02`
-- Median delta epsilon: `7.832e-03`
-- Share of catchments with negative all-recession delta: `27.7%`
-
-Flow-regime summaries show positive mean shifts in all three regimes:
-
-- Low-flow mean delta epsilon: `5.704e-02`
-- Mid-flow mean delta epsilon: `6.871e-02`
-- High-flow mean delta epsilon: `3.729e-02`
-
-The relative mean changes are `10.4%` for low flow and `11.7%` for high flow. The spatial and distribution views show a heterogeneous response: many catchments shift only slightly, while a subset contributes larger positive or negative changes.
-
-## Visualization Module
-
-The Tereon module provides:
-
-- a global catchment point layer colored by all-recession relative epsilon change;
-- a right-side catchment inspector after clicking a catchment;
-- pre/post density and CDF previews for all-, low-, mid-, and high-flow regimes;
-- an expanded density/CDF modal with synchronized cursor readouts.
-
-The module data are stored in:
-
-`public/modules/epsilon-change/data/epsilon-catchment-distributions.json`
-
-## Notes
-
-This repository contains public-facing visualization and summary material only. Internal meeting records, private processing notes, model checkpoints, and temporary analysis outputs are not included.
+Private processing outputs, model checkpoints, credentials, meeting notes, and internal logs are excluded from this repository.

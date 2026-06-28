@@ -1,0 +1,124 @@
+experiment_name: epsilon_era5land_legacy_1950_2019
+seed: 20260627
+
+paths:
+  daily_dir: _private/processed/epsilon_training_daily_era5land_legacy_qobs_parquet
+  physics_daily_dir: _private/processed/epsilon_physics_daily_era5land_legacy_qobs_parquet
+  static_attributes: _private/processed/epsilon_model_inputs_era5land_legacy/static_attributes.parquet
+  lp_gamma: _private/processed/epsilon_model_inputs/lp_gamma_fit_summary.parquet
+  output_dir: _private/results/epsilon_era5land_legacy_1950_2019
+
+data:
+  start_year: 1950
+  end_year: 2019
+  pre_window: [1950-01-01, 1990-12-31]
+  post_window: [1991-01-01, 2019-12-31]
+  forcing_columns:
+    - t2m
+    - d2m
+    - u10
+    - v10
+    - sp
+    - skt
+    - swvl1
+    - swvl2
+    - swvl3
+    - swvl4
+    - lai_hv
+    - lai_lv
+    - tp
+    - ssr
+    - str
+    - aet
+  target_column: qobs_streamflow_mm
+  static_columns:
+    - longitude
+    - latitude
+    - area_km2
+    - Prec_mm
+    - Temp_C
+    - PET_mm
+    - AET_mm
+    - P_AET_mm
+    - Aridity
+    - mean_sm_rootzone
+    - max_soil_moisture
+    - Porosity
+    - Annual_Mean_Moisture_Index
+    - Seasonality_of_Moisture_Index
+    - mean_net_radiation_mj_m2_day
+    - swvl1_mean
+    - swvl2_mean
+    - swvl3_mean
+    - swvl4_mean
+    - wet_days_ratio_1mm
+    - wet_days_ratio_5mm
+    - high_prec_freq_10mm
+    - high_prec_dur_10mm
+    - low_prec_freq_1mm
+    - low_prec_dur_1mm
+
+splits:
+  n_folds: 5
+  validation_fold_offset: 1
+  stratify_columns:
+    - latitude
+    - Aridity
+    - area_km2
+    - Prec_mm
+    - Temp_C
+
+recession:
+  min_decline_days: 4
+  drop_first_decline_day: true
+  decreasing_rate: true
+  cold_temperature_filter_C: 0.0
+  snow_mask_csv:
+  snow_free_threshold: 25.0
+
+physics:
+  rho: 365
+  bufftime: 365
+  train_frac: 0.6
+  dynamic_columns:
+    - precipitation_mmd
+    - temperature_C
+    - pet_mmd
+    - SM_%
+  target_column: streamflow_mmd
+  bounds:
+    alpha: [0.0, 1.0]
+    lp: [0.1, 1.0]
+    gamma: [0.1, 5.0]
+    lp_pad: 0.01
+    gamma_pad: 0.01
+
+model:
+  sequence_length: 365
+  hidden_size: 256
+  num_layers: 1
+  dropout: 0.4
+  n_mul: 10
+  epsilon_min: 0.0
+  epsilon_max: 5.0
+
+training:
+  loss: physics_informed_epsilon_core
+  batch_size: 256
+  epochs: 150
+  learning_rate: 0.0001
+  lambda_path: 25.0
+  lambda_rhs: 10.0
+  lambda_smooth: 0.1
+  lambda_q0: 5.0
+  huber_delta: 0.5
+  save_every: 10
+  num_workers: 0
+  mixed_precision: false
+
+smoke:
+  years: [1950, 1951, 1952, 1953, 1954, 1955]
+  max_catchments: 32
+  epochs: 2
+  batch_size: 8
+  iters_per_epoch: 2

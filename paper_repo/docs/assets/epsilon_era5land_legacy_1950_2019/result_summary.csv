@@ -1,0 +1,15 @@
+,value
+n_catchments,1158.0
+n_valid_delta,1149.0
+mean_delta_epsilon,-0.007657715349617836
+median_delta_epsilon,-0.001915574073791504
+negative_delta_share,0.6053540587219344
+n_recession_simulation_days,5012615.0
+pooled_nse_all,0.3005724927247362
+pooled_kge_all,0.4487580389210962
+median_catchment_nse_all,-0.005102344621010113
+median_catchment_kge_all,0.09436709208171512
+p10_catchment_nse_all,-0.4423818451674616
+p90_catchment_nse_all,0.21347390777106562
+p10_catchment_kge_all,-0.3012177877223716
+p90_catchment_kge_all,0.40263075578759216
