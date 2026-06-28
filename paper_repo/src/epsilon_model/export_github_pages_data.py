@@ -114,7 +114,11 @@ def density_curve(pre: np.ndarray, post: np.ndarray, bins: int) -> dict[str, lis
 
 
 def build_payload(sim: pd.DataFrame, static_path: Path, bins: int, cfg: dict, run_label: str) -> dict[str, object]:
-    static = pd.read_parquet(static_path, columns=["GCIN", "longitude", "latitude", "area_km2", "Prec_mm", "Temp_C", "Aridity"])
+    static_columns = ["GCIN", "force_code", "longitude", "latitude", "area_km2", "Prec_mm", "Temp_C", "Aridity"]
+    try:
+        static = pd.read_parquet(static_path, columns=static_columns)
+    except Exception:
+        static = pd.read_parquet(static_path, columns=[c for c in static_columns if c != "force_code"])
     static["GCIN"] = pd.to_numeric(static["GCIN"], errors="coerce").astype("Int64")
     static = static.set_index("GCIN")
 
@@ -127,6 +131,7 @@ def build_payload(sim: pd.DataFrame, static_path: Path, bins: int, cfg: dict, ru
         row = static.loc[gcin]
         basin: dict[str, object] = {
             "GCIN": int(gcin),
+            "force_code": int(row["force_code"]) if "force_code" in static.columns and pd.notna(row["force_code"]) else None,
             "lon": finite_or_none(row["longitude"]),
             "lat": finite_or_none(row["latitude"]),
             "area_km2": finite_or_none(row["area_km2"]),
