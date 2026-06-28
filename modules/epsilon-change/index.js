@@ -108,7 +108,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       id: this.overviewLayerId,
       name: "Overview",
       type: "overlay",
-      visible: true,
+      visible: false,
       interactive: false,
       moduleId: this.manifest.id,
       metadata: { removable: false },
@@ -237,7 +237,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         <div class="epsilon-overview-header">
           <div>
             <div class="epsilon-overview-title">Overview</div>
-            <div class="epsilon-overview-subtitle">${this.escape(this.moduleTitle())}</div>
           </div>
           <button class="epsilon-overview-close" type="button" aria-label="Close"></button>
         </div>
@@ -719,7 +718,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-dialog{width:min(820px,calc(100vw - 64px));max-height:min(760px,calc(100vh - 64px));background:rgba(255,255,255,.96);border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
       .epsilon-overview-header{height:58px;padding:0 18px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px}
       .epsilon-overview-title{font-size:18px;font-weight:750;color:#0f172a;letter-spacing:0}
-      .epsilon-overview-subtitle{font-size:11px;color:#64748b;margin-top:3px}
       .epsilon-overview-close{width:32px;height:32px;border:0;background:transparent;color:#64748b;font-size:0;line-height:1;cursor:pointer;border-radius:6px;position:relative;padding:0}
       .epsilon-overview-close:hover{background:#eef2f7;color:#0f172a}
       .epsilon-overview-close::before,.epsilon-overview-close::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:1.5px;border-radius:999px;background:currentColor;transform-origin:center}
