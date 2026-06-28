@@ -17,7 +17,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.focusRegime = manifest.focusRegime || null;
     this.dataFile = manifest.dataFile || manifest.datasets?.[0]?.file || "./data/epsilon-catchment-distributions.json";
     this.layerId = `${manifest.id || "epsilon-change"}-catchments`;
+    this.overviewLayerId = `${manifest.id || "epsilon-change"}-overview`;
     this.legendId = `${manifest.id || "epsilon-change"}-legend`;
+    this.overviewModal = null;
     this.distributionModal = null;
     this.activeDistribution = null;
     this.stableThresholdPct = 5;
@@ -28,6 +30,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       this.selected = payload.feature;
       this.showInspector(payload.feature);
       this.app.draw?.();
+    };
+    this.handleLayerToggle = (payload) => {
+      if (payload.layerId !== this.overviewLayerId) return;
+      if (payload.visible) this.showOverview();
+      else this.closeOverview();
     };
   }
 
@@ -51,19 +58,23 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.ensureLegend();
     this.showOverview();
     Foundation.eventBus.on(Foundation.Events.FEATURE_CLICK, this.handleFeatureClick);
+    Foundation.eventBus.on(Foundation.Events.LAYER_TOGGLE, this.handleLayerToggle);
     this.app.draw?.();
   }
 
   onUnload() {
     this.app.layerManager.removeLayer(this.layerId);
+    this.app.layerManager.removeLayer(this.overviewLayerId);
     this.app.unregisterLegend?.(this.legendId);
     Foundation.eventBus.off(Foundation.Events.FEATURE_CLICK, this.handleFeatureClick);
+    Foundation.eventBus.off(Foundation.Events.LAYER_TOGGLE, this.handleLayerToggle);
     this.selected = null;
+    this.closeOverview();
     this.closeDistributionModal();
   }
 
   getLayerIds() {
-    return [this.layerId];
+    return [this.layerId, this.overviewLayerId];
   }
 
   resolve(path) {
@@ -92,6 +103,15 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       },
       renderer: (ctx, _layer, viewport) => this.render(ctx, viewport),
       hitTest: (lon, lat, viewport) => this.hitTest(lon, lat, viewport)
+    });
+    this.app.layerManager.addLayer({
+      id: this.overviewLayerId,
+      name: "Overview",
+      type: "overlay",
+      visible: true,
+      interactive: false,
+      moduleId: this.manifest.id,
+      renderer: () => {}
     });
     this.app.updateLayerList?.();
   }
@@ -162,22 +182,64 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const low = this.basins.map((basin) => Number(basin.low_relative_delta_pct)).filter(Number.isFinite);
     const high = this.basins.map((basin) => Number(basin.high_relative_delta_pct)).filter(Number.isFinite);
     const counts = this.categoryCounts();
-    const content = `
-      <p style="margin:0 0 14px;color:#64748b;font-size:12px;line-height:1.6">
-        ${this.escape(this.overviewText())}
-      </p>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">
-        ${this.metricCard("Catchments", this.basins.length.toLocaleString())}
-        ${this.metricCard("All-recession mean", this.formatPct(this.mean(all)), this.mean(all))}
-        ${this.metricCard("Low-flow mean", this.formatPct(this.mean(low)), this.mean(low))}
-        ${this.metricCard("High-flow mean", this.formatPct(this.mean(high)), this.mean(high))}
-      </div>
-      ${this.renderOverviewLegend(counts)}
-      <div style="font-size:12px;color:#475569;line-height:1.65">
-        ${this.escape(this.legendNote())}
+    const layer = this.app.layerManager.getLayer?.(this.overviewLayerId);
+    if (layer && !layer.visible) return;
+    this.ensureOverviewModal();
+    this.overviewModal.querySelector(".epsilon-overview-body").innerHTML = `
+      <section>
+        <p class="epsilon-overview-lead">${this.escape(this.overviewText())}</p>
+        <div class="epsilon-overview-metrics">
+          ${this.metricCard("Catchments", this.basins.length.toLocaleString())}
+          ${this.metricCard("All-recession mean", this.formatPct(this.mean(all)), this.mean(all))}
+          ${this.metricCard("Low-flow mean", this.formatPct(this.mean(low)), this.mean(low))}
+          ${this.metricCard("High-flow mean", this.formatPct(this.mean(high)), this.mean(high))}
+        </div>
+        ${this.renderOverviewLegend(counts)}
+        <p class="epsilon-overview-note">${this.escape(this.legendNote())}</p>
+      </section>
+      <section>
+        <h3>Data and inference</h3>
+        <p>
+          The map summarizes catchment-level daily epsilon, defined as the inferred daily GQ/Q ratio. 
+          Streamflow comes from the matched legacy forcing records; meteorological forcing is aligned to the catchments and evaluated on recession days.
+        </p>
+        <p>
+          Pre-change is 1982-1990 and post-change is 1991-2019. Low-flow and high-flow regimes are defined within each catchment using its own Q10 and Q90 streamflow thresholds.
+        </p>
+        <p>
+          Epsilon was inferred with the physics-informed LSTM-epsilon workflow, then summarized by pre/post CDFs and relative changes for all recession days, low flow, and high flow.
+        </p>
+      </section>
+    `;
+    this.overviewModal.classList.add("visible");
+  }
+
+  closeOverview() {
+    this.overviewModal?.classList.remove("visible");
+  }
+
+  ensureOverviewModal() {
+    if (this.overviewModal) return;
+    this.overviewModal = document.createElement("div");
+    this.overviewModal.className = "epsilon-overview-modal";
+    this.overviewModal.innerHTML = `
+      <div class="epsilon-overview-dialog" role="dialog" aria-label="Overview">
+        <div class="epsilon-overview-header">
+          <div>
+            <div class="epsilon-overview-title">Overview</div>
+            <div class="epsilon-overview-subtitle">${this.escape(this.moduleTitle())}</div>
+          </div>
+          <button class="epsilon-overview-close" type="button" aria-label="Close">x</button>
+        </div>
+        <div class="epsilon-overview-body"></div>
       </div>
     `;
-    this.app.showInspector?.(this.moduleTitle(), content);
+    this.overviewModal.querySelector(".epsilon-overview-close").onclick = () => {
+      this.app.layerManager.setVisibility(this.overviewLayerId, false);
+      this.closeOverview();
+      this.app.updateLayerList?.();
+    };
+    document.body.appendChild(this.overviewModal);
   }
 
   showInspector(basin) {
@@ -581,6 +643,22 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-readout{position:absolute;right:42px;bottom:52px;width:138px;padding:7px 9px;border:1px solid #dbe3ef;border-radius:6px;background:rgba(255,255,255,.92);font-size:11px;color:#334155;line-height:1.42;box-shadow:0 8px 20px rgba(15,23,42,.08);pointer-events:none}
       .epsilon-readout:empty{display:none}
       .epsilon-readout strong{color:#0f172a}
+      .epsilon-overview-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:150;pointer-events:none}
+      .epsilon-overview-modal.visible{display:flex}
+      .epsilon-overview-dialog{width:min(820px,calc(100vw - 64px));max-height:min(760px,calc(100vh - 64px));background:rgba(255,255,255,.96);border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
+      .epsilon-overview-header{height:58px;padding:0 18px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px}
+      .epsilon-overview-title{font-size:18px;font-weight:750;color:#0f172a;letter-spacing:0}
+      .epsilon-overview-subtitle{font-size:11px;color:#64748b;margin-top:3px}
+      .epsilon-overview-close{width:32px;height:32px;border:0;background:transparent;color:#64748b;font-size:22px;line-height:1;cursor:pointer;border-radius:6px}
+      .epsilon-overview-close:hover{background:#eef2f7;color:#0f172a}
+      .epsilon-overview-body{padding:18px;overflow:auto;color:#334155;font-size:13px;line-height:1.65}
+      .epsilon-overview-body section + section{margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0}
+      .epsilon-overview-body h3{margin:0 0 8px;font-size:13px;color:#0f172a;letter-spacing:.03em;text-transform:uppercase}
+      .epsilon-overview-body p{margin:0 0 10px}
+      .epsilon-overview-lead{color:#475569}
+      .epsilon-overview-note{font-size:12px;color:#475569;margin-top:10px}
+      .epsilon-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
+      @media (max-width:760px){.epsilon-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}}
     `;
     document.head.appendChild(style);
 

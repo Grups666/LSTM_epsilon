@@ -2329,6 +2329,13 @@
           this.unloadModule(id);
         } else {
           try {
+            if (this.isExclusiveModule(id)) {
+              for (const module of this.modules) {
+                if (module.id !== id && this.isExclusiveModule(module.id) && this.moduleLoader.isLoaded(module.id)) {
+                  this.unloadModule(module.id, { quiet: true });
+                }
+              }
+            }
             const manifest = await this.fetchModuleManifest(this.modules.find(m => m.id === id) || id);
             await this.loadModuleFromManifest(manifest);
             this.toast('Module loaded');
@@ -2338,7 +2345,11 @@
         this.draw();
       },
 
-      unloadModule(id) {
+      isExclusiveModule(id) {
+        return ['epsilon-change', 'epsilon-change-low', 'epsilon-change-high'].includes(id);
+      },
+
+      unloadModule(id, options = {}) {
         const module = this.moduleLoader.get(id);
         module?.onUnload?.();
         if (module?.getLayerIds) {
@@ -2348,7 +2359,7 @@
         if (this.selectedLayer?.moduleId === id) {
           document.getElementById('inspectorPanel').classList.remove('visible');
         }
-        this.toast('Module unloaded');
+        if (!options.quiet) this.toast('Module unloaded');
       },
 
       async removeModule(id) {
@@ -2553,19 +2564,32 @@
         el.querySelectorAll('.layer-item').forEach(item => {
           const lid = item.dataset.id;
           const cb = item.querySelector('.layer-checkbox');
+          const setLayerVisibility = (checked) => {
+            if (lid === 'outlines-group') {
+              this.layerManager.setVisibility('basemap', checked);
+            } else {
+              this.layerManager.setVisibility(lid, checked);
+            }
+            this.draw();
+          };
           if (cb) {
             cb.onchange = (e) => {
-              if (lid === 'outlines-group') {
-                this.layerManager.setVisibility('basemap', e.target.checked);
-              } else {
-                this.layerManager.setVisibility(lid, e.target.checked);
-              }
-              this.draw();
+              setLayerVisibility(e.target.checked);
+            };
+            cb.onclick = (e) => {
+              e.stopPropagation();
             };
           }
+          item.onclick = (e) => {
+            if (e.target.closest('.layer-actions')) return;
+            if (!cb || e.target === cb) return;
+            cb.checked = !cb.checked;
+            setLayerVisibility(cb.checked);
+          };
           const removeBtn = item.querySelector('.layer-remove');
           if (removeBtn) {
-            removeBtn.onclick = () => {
+            removeBtn.onclick = (e) => {
+              e.stopPropagation();
               this.layerManager.removeLayer(lid);
               this.draw();
             };
