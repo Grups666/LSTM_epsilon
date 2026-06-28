@@ -69,8 +69,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     Foundation.eventBus.off(Foundation.Events.FEATURE_CLICK, this.handleFeatureClick);
     Foundation.eventBus.off(Foundation.Events.LAYER_TOGGLE, this.handleLayerToggle);
     this.selected = null;
-    this.closeOverview();
-    this.closeDistributionModal();
+    this.destroyModals();
   }
 
   getLayerIds() {
@@ -98,6 +97,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       moduleId: this.manifest.id,
       groupPath: ["epsilon"],
       metadata: {
+        removable: false,
         periods: this.data?.meta?.periods,
         regimes: this.data?.meta?.regimes
       },
@@ -111,6 +111,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       visible: true,
       interactive: false,
       moduleId: this.manifest.id,
+      metadata: { removable: false },
       renderer: () => {}
     });
     this.app.updateLayerList?.();
@@ -216,6 +217,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   closeOverview() {
     this.overviewModal?.classList.remove("visible");
+  }
+
+  destroyModals() {
+    this.activeDistribution = null;
+    this.overviewModal?.remove();
+    this.distributionModal?.remove();
+    this.overviewModal = null;
+    this.distributionModal = null;
   }
 
   ensureOverviewModal() {
@@ -620,29 +629,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     style.textContent = `
       .epsilon-curve-preview{box-sizing:border-box;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#f8fafc;transition:border-color .16s ease,box-shadow .16s ease}
       .epsilon-curve-preview:hover{border-color:#60a5fa!important;box-shadow:0 0 0 1px rgba(96,165,250,.28)}
-    `;
-    document.head.appendChild(style);
-  }
-
-  ensureDistributionModal() {
-    if (this.distributionModal) return;
-
-    const style = document.createElement("style");
-    style.textContent = `
-      .epsilon-modal{position:fixed;inset:0;z-index:420;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.36);padding:26px}
-      .epsilon-modal.visible{display:flex}
-      .epsilon-dialog{width:min(1060px,calc(100vw - 52px));height:min(760px,calc(100vh - 52px));background:#fff;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.28);display:flex;flex-direction:column;overflow:hidden}
-      .epsilon-dialog-header{height:58px;padding:0 18px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px}
-      .epsilon-dialog-title{font-size:15px;font-weight:700;color:#0f172a}
-      .epsilon-dialog-subtitle{font-size:11px;color:#64748b;margin-top:3px}
-      .epsilon-close{width:30px;height:30px;border:0;background:transparent;border-radius:4px;cursor:pointer;font-size:22px;color:#64748b;line-height:1}
-      .epsilon-close:hover{background:#f1f5f9;color:#0f172a}
-      .epsilon-chart-area{flex:1;min-height:0;padding:14px 18px 18px;display:grid;grid-template-rows:repeat(3,1fr);gap:12px}
-      .epsilon-chart-card{position:relative;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;overflow:hidden}
-      .epsilon-chart-card canvas{display:block;width:100%;height:100%}
-      .epsilon-readout{position:absolute;right:42px;bottom:52px;width:138px;padding:7px 9px;border:1px solid #dbe3ef;border-radius:6px;background:rgba(255,255,255,.92);font-size:11px;color:#334155;line-height:1.42;box-shadow:0 8px 20px rgba(15,23,42,.08);pointer-events:none}
-      .epsilon-readout:empty{display:none}
-      .epsilon-readout strong{color:#0f172a}
       .epsilon-overview-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:150;pointer-events:none}
       .epsilon-overview-modal.visible{display:flex}
       .epsilon-overview-dialog{width:min(820px,calc(100vw - 64px));max-height:min(760px,calc(100vh - 64px));background:rgba(255,255,255,.96);border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
@@ -661,6 +647,31 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       @media (max-width:760px){.epsilon-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}}
     `;
     document.head.appendChild(style);
+  }
+
+  ensureDistributionModal() {
+    if (this.distributionModal) return;
+    if (!document.getElementById("epsilon-distribution-styles")) {
+      const style = document.createElement("style");
+      style.id = "epsilon-distribution-styles";
+      style.textContent = `
+        .epsilon-modal{position:fixed;inset:0;z-index:420;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.36);padding:26px}
+        .epsilon-modal.visible{display:flex}
+        .epsilon-dialog{width:min(1060px,calc(100vw - 52px));height:min(760px,calc(100vh - 52px));background:#fff;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.28);display:flex;flex-direction:column;overflow:hidden}
+        .epsilon-dialog-header{height:58px;padding:0 18px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px}
+        .epsilon-dialog-title{font-size:15px;font-weight:700;color:#0f172a}
+        .epsilon-dialog-subtitle{font-size:11px;color:#64748b;margin-top:3px}
+        .epsilon-close{width:30px;height:30px;border:0;background:transparent;border-radius:4px;cursor:pointer;font-size:22px;color:#64748b;line-height:1}
+        .epsilon-close:hover{background:#f1f5f9;color:#0f172a}
+        .epsilon-chart-area{flex:1;min-height:0;padding:14px 18px 18px;display:grid;grid-template-rows:repeat(3,1fr);gap:12px}
+        .epsilon-chart-card{position:relative;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;overflow:hidden}
+        .epsilon-chart-card canvas{display:block;width:100%;height:100%}
+        .epsilon-readout{position:absolute;right:42px;bottom:52px;width:138px;padding:7px 9px;border:1px solid #dbe3ef;border-radius:6px;background:rgba(255,255,255,.92);font-size:11px;color:#334155;line-height:1.42;box-shadow:0 8px 20px rgba(15,23,42,.08);pointer-events:none}
+        .epsilon-readout:empty{display:none}
+        .epsilon-readout strong{color:#0f172a}
+      `;
+      document.head.appendChild(style);
+    }
 
     const modal = document.createElement("div");
     modal.className = "epsilon-modal";
