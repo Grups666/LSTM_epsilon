@@ -18,6 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-root", type=Path)
     parser.add_argument("--run-label", type=str, default="full_crossfit_era5land_legacy_1950_2019")
     parser.add_argument("--static", type=Path)
+    parser.add_argument("--qobs-coverage", type=Path, default=Path("_private/processed/legacy_forcings/timeseries_matched_extended_qobs_coverage_by_gcin.csv"))
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--bins", type=int, default=48)
     return parser.parse_args()
@@ -113,7 +114,17 @@ def density_curve(pre: np.ndarray, post: np.ndarray, bins: int) -> dict[str, lis
     }
 
 
-def build_payload(sim: pd.DataFrame, static_path: Path, bins: int, cfg: dict, run_label: str) -> dict[str, object]:
+def read_qobs_coverage(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+    coverage = pd.read_csv(path)
+    if "GCIN" not in coverage.columns:
+        return pd.DataFrame()
+    coverage["GCIN"] = pd.to_numeric(coverage["GCIN"], errors="coerce").astype("Int64")
+    return coverage.set_index("GCIN")
+
+
+def build_payload(sim: pd.DataFrame, static_path: Path, qobs_coverage_path: Path, bins: int, cfg: dict, run_label: str) -> dict[str, object]:
     static_columns = ["GCIN", "force_code", "longitude", "latitude", "area_km2", "Prec_mm", "Temp_C", "Aridity"]
     try:
         static = pd.read_parquet(static_path, columns=static_columns)
@@ -121,6 +132,7 @@ def build_payload(sim: pd.DataFrame, static_path: Path, bins: int, cfg: dict, ru
         static = pd.read_parquet(static_path, columns=[c for c in static_columns if c != "force_code"])
     static["GCIN"] = pd.to_numeric(static["GCIN"], errors="coerce").astype("Int64")
     static = static.set_index("GCIN")
+    qobs_coverage = read_qobs_coverage(qobs_coverage_path)
 
     basins = []
     curves: dict[str, dict[str, object]] = {}
@@ -139,6 +151,12 @@ def build_payload(sim: pd.DataFrame, static_path: Path, bins: int, cfg: dict, ru
             "Temp_C": finite_or_none(row["Temp_C"]),
             "Aridity": finite_or_none(row["Aridity"]),
         }
+        if not qobs_coverage.empty and gcin in qobs_coverage.index:
+            cov = qobs_coverage.loc[gcin]
+            basin["qobs_start"] = None if pd.isna(cov.get("first_valid_date")) else str(cov.get("first_valid_date"))
+            basin["qobs_end"] = None if pd.isna(cov.get("last_valid_date")) else str(cov.get("last_valid_date"))
+            basin["qobs_valid_days"] = int(cov.get("valid_days")) if pd.notna(cov.get("valid_days")) else None
+            basin["qobs_sources"] = None if pd.isna(cov.get("sources")) else str(cov.get("sources"))
         if basin["lon"] is None or basin["lat"] is None:
             continue
 
@@ -214,7 +232,7 @@ def main() -> None:
     static = args.static or Path(cfg["paths"]["static_attributes"])
     sim = read_simulations(run_root)
     sim = label_regimes(label_periods(sim, cfg))
-    payload = build_payload(sim, static, args.bins, cfg, args.run_label)
+    payload = build_payload(sim, static, args.qobs_coverage, args.bins, cfg, args.run_label)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, separators=(",", ":"), allow_nan=False), encoding="utf-8")
     print(f"wrote {args.out} with {payload['meta']['nCatchments']:,} catchments")

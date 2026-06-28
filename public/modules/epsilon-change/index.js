@@ -437,9 +437,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   showInspector(basin) {
     const title = `GCIN ${basin.GCIN}`;
     const curves = this.data.curves?.[String(basin.GCIN)] || {};
-    const sourceId = Number.isFinite(Number(basin.force_code))
-      ? `<div style="margin:-4px 0 12px;font-size:11px;color:#64748b">Legacy force code: <strong style="color:#334155">${this.escape(basin.force_code)}</strong></div>`
-      : "";
+    const streamflowRecord = this.streamflowRecordHtml(basin);
     const cards = `
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">
         ${this.metricCard("Area", `${this.formatNumber(basin.area_km2, 1)} km2`)}
@@ -478,12 +476,33 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <p style="margin:0 0 14px;color:#64748b;font-size:12px;line-height:1.6">
         Epsilon is the modeled daily ratio GQ/Q. This panel compares the inferred epsilon distribution before and after 1990.
       </p>
-      ${sourceId}
       ${cards}
+      ${streamflowRecord}
       ${cdfPreview}
       ${sections}
     `);
     this.bindCurvePreviews();
+  }
+
+  streamflowRecordHtml(basin) {
+    const start = this.formatYearMonth(basin.qobs_start);
+    const end = this.formatYearMonth(basin.qobs_end);
+    if (!start || !end) return "";
+    const validDays = Number.isFinite(Number(basin.qobs_valid_days))
+      ? ` <span class="epsilon-record-muted">(${this.formatInteger(basin.qobs_valid_days)} valid days)</span>`
+      : "";
+    return `
+      <div class="epsilon-streamflow-record">
+        <span>Streamflow record</span>
+        <strong>${this.escape(start)} to ${this.escape(end)}</strong>${validDays}
+      </div>
+    `;
+  }
+
+  formatYearMonth(value) {
+    if (!value || typeof value !== "string") return "";
+    const match = value.match(/^(\d{4})-(\d{2})/);
+    return match ? `${match[1]}-${match[2]}` : "";
   }
 
   metricCard(label, value, signedValue = null) {
@@ -831,6 +850,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-metric-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px}
       .epsilon-metric-value{font-size:17px;font-weight:700;color:#0f172a}
       .epsilon-metric-label{font-size:11px;color:#64748b;margin-top:3px}
+      .epsilon-streamflow-record{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:-4px 0 14px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;font-size:11px;color:#64748b}
+      .epsilon-streamflow-record strong{font-size:12px;color:#0f172a}
+      .epsilon-record-muted{color:#64748b}
       .epsilon-overview-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:150;pointer-events:none}
       .epsilon-overview-modal.visible{display:flex}
       .epsilon-overview-dialog{width:min(940px,calc(100vw - 64px));max-height:min(800px,calc(100vh - 64px));background:rgba(255,255,255,.96);border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
@@ -885,7 +907,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-overview-body section + section{border-top-color:#263449}
       body.theme-dark .epsilon-overview-close:hover{background:#1e293b;color:#f8fafc}
       body.theme-dark .epsilon-metric-card,
+      body.theme-dark .epsilon-streamflow-record,
       body.theme-dark .epsilon-story-figure{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-streamflow-record strong{color:#e5edf7}
+      body.theme-dark .epsilon-streamflow-record,
+      body.theme-dark .epsilon-record-muted{color:#94a3b8}
       body.theme-dark .epsilon-story-index{box-shadow:0 0 0 5px rgba(15,23,42,.97)}
       body.theme-dark .epsilon-svg-box,
       body.theme-dark .epsilon-svg-formula{fill:#0f172a;stroke:#334155}
@@ -1280,6 +1306,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   formatNumber(value, digits = 2) {
     const number = Number(value);
     return Number.isFinite(number) ? number.toFixed(digits) : "NA";
+  }
+
+  formatInteger(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.round(number).toLocaleString("en-US") : "";
   }
 
   formatSmall(value) {
