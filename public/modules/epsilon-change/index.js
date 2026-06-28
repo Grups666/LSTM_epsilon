@@ -856,8 +856,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:150;pointer-events:none}
       .epsilon-overview-modal.visible{display:flex}
       .epsilon-overview-dialog{width:min(940px,calc(100vw - 64px));max-height:min(800px,calc(100vh - 64px));background:rgba(255,255,255,.96);border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
-      .epsilon-overview-header{height:58px;padding:0 18px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px}
-      .epsilon-overview-title{font-size:18px;font-weight:750;color:#0f172a;letter-spacing:0}
+      .epsilon-overview-header{height:58px;min-height:58px;flex:0 0 58px;padding:0 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px;background:#f8fafc}
+      .epsilon-overview-title{font-size:14px;font-weight:700;color:#0f172a;letter-spacing:0}
       .epsilon-overview-close{width:32px;height:32px;border:0;background:transparent;color:#64748b;font-size:0;line-height:1;cursor:pointer;border-radius:6px;position:relative;padding:0}
       .epsilon-overview-close:hover{background:#eef2f7;color:#0f172a}
       .epsilon-overview-close::before,.epsilon-overview-close::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:1.5px;border-radius:999px;background:currentColor;transform-origin:center}
@@ -891,7 +891,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-curve-preview{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-curve-preview:hover{background:#10213a;border-color:#3b82f6!important;box-shadow:0 0 0 1px rgba(59,130,246,.28),0 0 18px rgba(59,130,246,.18)}
       body.theme-dark .epsilon-overview-dialog{background:rgba(15,23,42,.97);border-color:#263449;box-shadow:0 22px 58px rgba(0,0,0,.48)}
-      body.theme-dark .epsilon-overview-header{border-bottom-color:#263449}
+      body.theme-dark .epsilon-overview-header{background:#111c2f;border-bottom-color:#263449}
       body.theme-dark .epsilon-overview-title,
       body.theme-dark .epsilon-overview-body h3,
       body.theme-dark .epsilon-story-copy h4,
