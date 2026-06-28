@@ -199,11 +199,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         class="epsilon-curve-preview"
         data-gcin="${this.escape(basin.GCIN)}"
         data-regime="all"
-        title="Open CDF panels"
-        style="display:grid;grid-template-columns:1fr;gap:8px;margin:2px 0 16px;cursor:pointer"
+        aria-label="Open CDF panels"
+        style="display:block;margin:2px 0 16px;cursor:pointer"
       >
         ${this.renderCombinedCdfSvg(curves)}
-        <div class="epsilon-preview-hint">Open CDF panels</div>
       </div>
     `;
 
@@ -405,7 +404,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       `;
     }).join("");
     return `
-      <svg viewBox="0 0 ${width} ${height}" style="display:block;width:100%;height:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;pointer-events:none">
+      <svg viewBox="0 0 ${width} ${height}" style="display:block;width:100%;height:auto;background:#f8fafc;pointer-events:none">
         <text x="${width - 76}" y="12" fill="#64748b" font-size="9">Pre</text>
         <text x="${width - 31}" y="12" fill="#64748b" font-size="9">Post</text>
         <rect x="${width - 96}" y="6" width="14" height="3" fill="#2563eb"/>
@@ -429,11 +428,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const style = document.createElement("style");
     style.id = "epsilon-preview-styles";
     style.textContent = `
-      .epsilon-curve-preview{border:1px solid transparent;border-radius:6px;padding:6px;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .16s ease}
-      .epsilon-curve-preview:hover{border-color:#93c5fd!important;background:#eff6ff!important;box-shadow:0 10px 22px rgba(37,99,235,.12);transform:translateY(-1px)}
-      .epsilon-curve-preview:hover svg{border-color:#93c5fd!important;background:#f8fbff!important}
-      .epsilon-preview-hint{font-size:10px;color:#64748b;text-align:right;transition:color .16s ease,font-weight .16s ease}
-      .epsilon-curve-preview:hover .epsilon-preview-hint{color:#1d4ed8!important;font-weight:700}
+      .epsilon-curve-preview{box-sizing:border-box;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#f8fafc;transition:border-color .16s ease,box-shadow .16s ease}
+      .epsilon-curve-preview:hover{border-color:#60a5fa!important;box-shadow:0 0 0 1px rgba(96,165,250,.28)}
     `;
     document.head.appendChild(style);
   }
