@@ -220,8 +220,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           Epsilon was inferred with the Ara-style physics-informed LSTM-epsilon workflow. The model directly predicts epsilon inside the recession differential equation; it does not first predict GQ and then divide by Q.
         </p>
       </section>
-      ${this.renderWorkflowDiagram()}
-      ${this.renderMethodDetails()}
+      ${this.renderMethodStory()}
     `;
     this.overviewModal.classList.add("visible");
   }
@@ -261,72 +260,177 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     document.body.appendChild(this.overviewModal);
   }
 
-  renderWorkflowDiagram() {
-    const steps = [
-      ["Legacy streamflow", "Observed Q by matched catchment"],
-      ["ERA5-Land forcing", "Daily catchment precipitation, temperature, PET, soil moisture"],
-      ["Recession filter", "Declining-flow sequences, first day dropped, cold days removed"],
-      ["LSTM-epsilon", "365-day context plus static attributes"],
-      ["Physics solver", "AET term and recession equation constrain Q path"],
-      ["Epsilon contrast", "Pre/post CDFs, Q10 low flow, Q90 high flow"]
-    ];
+  renderMethodStory() {
     return `
-      <section>
-        <h3>Workflow</h3>
-        <div class="epsilon-workflow">
-          ${steps.map(([title, text], index) => `
-            <div class="epsilon-workflow-step">
-              <div class="epsilon-workflow-index">${index + 1}</div>
-              <div>
-                <div class="epsilon-workflow-title">${this.escape(title)}</div>
-                <div class="epsilon-workflow-text">${this.escape(text)}</div>
-              </div>
-            </div>
-          `).join("")}
-        </div>
+      <section class="epsilon-story">
+        <h3>Method workflow</h3>
+        <p class="epsilon-story-lead">
+          The analysis starts from daily catchment records, keeps only recession periods where epsilon is physically interpretable,
+          infers epsilon inside a physics-informed LSTM, and then compares the inferred epsilon distributions before and after 1990.
+        </p>
+        ${this.renderStoryPanel({
+          index: "01",
+          title: "Build a catchment-day table rather than a raster archive",
+          body: "Observed streamflow comes from the matched legacy Event_Typology forcing records. ERA5-Land is reduced over each basin boundary to daily catchment means or sums. After joining by force_code and date, every row represents one catchment on one day, with Qobs plus the meteorological and land-state drivers used by the model.",
+          figure: this.renderDataAssemblyFigure()
+        })}
+        ${this.renderStoryPanel({
+          index: "02",
+          title: "Keep only hydrologically interpretable recession days",
+          body: "Epsilon is evaluated on recession sequences because those days expose catchment drainage behavior. A sequence must decline for at least four days; the first decline day is dropped, a decreasing-rate filter removes irregular segments, and days with mean air temperature at or below 0 C are excluded as a snowmelt proxy.",
+          figure: this.renderRecessionFigure()
+        })}
+        ${this.renderStoryPanel({
+          index: "03",
+          title: "Encode recent history and catchment context",
+          body: "For each retained target day, the network sees the preceding 365 days of dynamic forcing and state variables, plus static attributes. The dynamic window carries precipitation, temperature, PET and root-zone soil moisture history; the static vector carries basin climate, soil, storage, area and location information.",
+          figure: this.renderInputTensorFigure()
+        })}
+        ${this.renderStoryPanel({
+          index: "04",
+          title: "Infer epsilon inside the physics-informed LSTM",
+          body: "This is not a standard LSTM that only predicts discharge. Following the epsilon-model reference implementation, the recurrent network directly estimates daily epsilon and auxiliary physical terms. Epsilon is therefore a learned recession parameter inside the governing equation, not a post-hoc ratio computed from predicted GQ divided by Q.",
+          figure: this.renderModelFigure()
+        })}
+        ${this.renderStoryPanel({
+          index: "05",
+          title: "Constrain streamflow with the recession equation",
+          body: "The inferred epsilon is used to integrate the recession equation forward through each sequence. Training penalizes mismatch between simulated and observed Q, inconsistency with the differential-equation right-hand side, unrealistic day-to-day epsilon roughness, and reset-flow mismatch at the sequence start.",
+          figure: this.renderEquationFigure()
+        })}
+        ${this.renderStoryPanel({
+          index: "06",
+          title: "Compare pre- and post-1990 epsilon distributions",
+          body: "Cross-fitted inference gives daily epsilon for held-out catchments and years. The public map summarizes each basin by comparing 1950-1990 against 1991-2019. Low-flow epsilon uses each basin's own Q10 recession-day threshold; high-flow epsilon uses its own Q90 threshold, so classes are defined within catchments rather than by a global discharge cutoff.",
+          figure: this.renderOutputFigure()
+        })}
       </section>
     `;
   }
 
-  renderMethodDetails() {
+  renderStoryPanel({ index, title, body, figure }) {
     return `
-      <section>
-        <h3>Model and analysis details</h3>
-        <div class="epsilon-method-grid">
-          <div>
-            <h4>Inputs</h4>
-            <p>Daily dynamic inputs are precipitation, temperature, PET and root-zone soil moisture. Static catchment attributes include location, area, long-term precipitation, temperature, PET, AET, aridity, soil moisture summaries, radiation and precipitation-event frequencies.</p>
-          </div>
-          <div>
-            <h4>Recession mask</h4>
-            <p>Training and inference are restricted to recession days. A valid recession has at least four declining days, the first decline day is dropped, a decreasing-rate filter is applied, and days with mean temperature at or below 0 C are removed as a snow proxy.</p>
-          </div>
-          <div>
-            <h4>Physics-informed LSTM</h4>
-            <p>The model reads a 365-day context window and outputs daily epsilon, q_base, alpha, LP and gamma. AET is computed inside the model from PET and soil moisture using bounded LP/gamma parameters.</p>
-          </div>
-          <div>
-            <h4>Recession equation</h4>
-            <p><code>dQ/dt = -epsilon * Q^2 - epsilon * alpha * AET * Q</code>. The solved recession streamflow path is supervised against observed streamflow; epsilon is therefore inferred directly inside the physical equation.</p>
-          </div>
-          <div>
-            <h4>Training run</h4>
-            <p>The production run uses five cross-fitted folds, 150 epochs, batch size 256, hidden size 256, one LSTM layer, dropout 0.4, sequence length 365 and learning rate 1e-4.</p>
-          </div>
-          <div>
-            <h4>Loss</h4>
-            <p>The objective combines path error, right-hand-side tendency consistency, epsilon smoothness and reset-flow alignment: <code>L = 25 L_path + 10 L_rhs + 0.1 L_smooth + 5 L_q0</code>.</p>
-          </div>
-          <div>
-            <h4>Flow regimes</h4>
-            <p>Low flow is Qobs <= each catchment's recession-day Q10. High flow is Qobs >= each catchment's recession-day Q90. These thresholds are catchment-specific, not pooled globally.</p>
-          </div>
-          <div>
-            <h4>Displayed result</h4>
-            <p>The map shows 1,149 catchments with cross-fitted daily recession epsilon summaries. The bivariate class combines low-flow and high-flow relative epsilon change; stable means within +/-${this.stableThresholdPct}%.</p>
-          </div>
+      <article class="epsilon-story-panel">
+        <div class="epsilon-story-copy">
+          <div class="epsilon-story-index">${this.escape(index)}</div>
+          <h4>${this.escape(title)}</h4>
+          <p>${this.escape(body)}</p>
         </div>
-      </section>
+        <div class="epsilon-story-figure">${figure}</div>
+      </article>
+    `;
+  }
+
+  renderDataAssemblyFigure() {
+    return `
+      <svg viewBox="0 0 520 170" role="img" aria-label="Data assembly workflow">
+        ${this.svgBox(22, 28, 130, 48, "Legacy Qobs", "streamflow")}
+        ${this.svgBox(22, 94, 130, 48, "ERA5-Land", "forcing + states")}
+        ${this.svgArrow(162, 52, 230, 80)}
+        ${this.svgArrow(162, 118, 230, 92)}
+        ${this.svgBox(238, 54, 140, 58, "Catchment join", "GCIN / force code")}
+        ${this.svgArrow(388, 83, 448, 83)}
+        ${this.svgBox(452, 54, 48, 58, "daily", "table")}
+      </svg>
+    `;
+  }
+
+  renderRecessionFigure() {
+    return `
+      <svg viewBox="0 0 520 170" role="img" aria-label="Recession filtering schematic">
+        <polyline points="34,48 86,52 138,66 190,86 242,105 294,118 346,122 398,126 470,132" fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="86" cy="52" r="5" fill="#94a3b8"/><circle cx="138" cy="66" r="5" fill="#2563eb"/><circle cx="190" cy="86" r="5" fill="#2563eb"/><circle cx="242" cy="105" r="5" fill="#2563eb"/><circle cx="294" cy="118" r="5" fill="#2563eb"/>
+        <text x="32" y="28" class="epsilon-svg-title">Qobs recession sequence</text>
+        <text x="122" y="146" class="epsilon-svg-muted">drop first day -> keep declining days -> remove cold days</text>
+        <line x1="86" y1="62" x2="86" y2="132" stroke="#ef4444" stroke-dasharray="4 4"/>
+      </svg>
+    `;
+  }
+
+  renderInputTensorFigure() {
+    return `
+      <svg viewBox="0 0 520 170" role="img" aria-label="Input tensor schematic">
+        <rect x="28" y="44" width="210" height="78" rx="8" class="epsilon-svg-box"/>
+        ${[0, 1, 2, 3, 4].map((i) => `<line x1="${62 + i * 32}" y1="50" x2="${62 + i * 32}" y2="116" class="epsilon-svg-grid"/>`).join("")}
+        <text x="48" y="35" class="epsilon-svg-title">365-day dynamic window</text>
+        <text x="52" y="144" class="epsilon-svg-muted">P, T, PET, soil moisture</text>
+        ${this.svgArrow(250, 83, 310, 83)}
+        ${this.svgBox(318, 50, 150, 66, "Static attributes", "climate, soil, area")}
+      </svg>
+    `;
+  }
+
+  renderModelFigure() {
+    return `
+      <svg viewBox="0 0 520 190" role="img" aria-label="LSTM epsilon model structure">
+        ${this.svgBox(24, 68, 110, 54, "Inputs", "dynamic + static")}
+        ${this.svgArrow(144, 95, 206, 95)}
+        ${this.svgBox(214, 54, 120, 82, "LSTM", "hidden state")}
+        ${this.svgArrow(344, 95, 400, 95)}
+        <g>
+          ${this.svgSmallPill(408, 28, "epsilon_t")}
+          ${this.svgSmallPill(408, 62, "q_base_t")}
+          ${this.svgSmallPill(408, 96, "alpha")}
+          ${this.svgSmallPill(408, 130, "LP, gamma")}
+        </g>
+        <text x="210" y="164" class="epsilon-svg-muted">epsilon is inferred directly, not computed as predicted GQ / Q</text>
+      </svg>
+    `;
+  }
+
+  renderEquationFigure() {
+    return `
+      <svg viewBox="0 0 520 190" role="img" aria-label="Physics equation and loss">
+        <rect x="32" y="26" width="456" height="54" rx="8" class="epsilon-svg-formula"/>
+        <text x="54" y="60" class="epsilon-svg-equation">dQ/dt = -epsilon * Q^2 - epsilon * alpha * AET * Q</text>
+        ${this.svgArrow(260, 86, 260, 118)}
+        ${this.svgBox(64, 122, 112, 44, "L_path", "Q path")}
+        ${this.svgBox(204, 122, 112, 44, "L_rhs", "tendency")}
+        ${this.svgBox(344, 122, 112, 44, "L_smooth + L_q0", "regularize")}
+      </svg>
+    `;
+  }
+
+  renderOutputFigure() {
+    return `
+      <svg viewBox="0 0 520 190" role="img" aria-label="Pre post epsilon contrast">
+        ${this.svgBox(28, 42, 110, 50, "1950-1990", "pre")}
+        ${this.svgBox(28, 108, 110, 50, "1991-2019", "post")}
+        ${this.svgArrow(148, 68, 224, 90)}
+        ${this.svgArrow(148, 132, 224, 108)}
+        <rect x="232" y="50" width="124" height="92" rx="8" class="epsilon-svg-box"/>
+        <path d="M250 126 C278 72, 310 72, 338 60" fill="none" stroke="#2563eb" stroke-width="3"/>
+        <path d="M250 132 C280 100, 315 90, 338 78" fill="none" stroke="#b84235" stroke-width="3"/>
+        <text x="255" y="42" class="epsilon-svg-title">epsilon CDF</text>
+        ${this.svgArrow(366, 96, 428, 96)}
+        ${this.svgBox(436, 56, 62, 78, "map", "classes")}
+      </svg>
+    `;
+  }
+
+  svgBox(x, y, w, h, title, subtitle) {
+    return `
+      <g>
+        <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" class="epsilon-svg-box"/>
+        <text x="${x + w / 2}" y="${y + h / 2 - 4}" text-anchor="middle" class="epsilon-svg-title">${this.escape(title)}</text>
+        <text x="${x + w / 2}" y="${y + h / 2 + 14}" text-anchor="middle" class="epsilon-svg-muted">${this.escape(subtitle)}</text>
+      </g>
+    `;
+  }
+
+  svgSmallPill(x, y, text) {
+    return `
+      <g>
+        <rect x="${x}" y="${y}" width="82" height="24" rx="12" class="epsilon-svg-pill"/>
+        <text x="${x + 41}" y="${y + 16}" text-anchor="middle" class="epsilon-svg-title">${this.escape(text)}</text>
+      </g>
+    `;
+  }
+
+  svgArrow(x1, y1, x2, y2) {
+    return `
+      <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="epsilon-svg-arrow"/>
+      <path d="M${x2},${y2} l-8,-4 l2,4 l-2,4 z" class="epsilon-svg-arrow-head"/>
     `;
   }
 
@@ -729,7 +833,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-metric-label{font-size:11px;color:#64748b;margin-top:3px}
       .epsilon-overview-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:150;pointer-events:none}
       .epsilon-overview-modal.visible{display:flex}
-      .epsilon-overview-dialog{width:min(820px,calc(100vw - 64px));max-height:min(760px,calc(100vh - 64px));background:rgba(255,255,255,.96);border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
+      .epsilon-overview-dialog{width:min(940px,calc(100vw - 64px));max-height:min(800px,calc(100vh - 64px));background:rgba(255,255,255,.96);border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
       .epsilon-overview-header{height:58px;padding:0 18px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px}
       .epsilon-overview-title{font-size:18px;font-weight:750;color:#0f172a;letter-spacing:0}
       .epsilon-overview-close{width:32px;height:32px;border:0;background:transparent;color:#64748b;font-size:0;line-height:1;cursor:pointer;border-radius:6px;position:relative;padding:0}
@@ -744,40 +848,52 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-lead{color:#475569}
       .epsilon-overview-note{font-size:12px;color:#475569;margin-top:10px}
       .epsilon-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
-      .epsilon-workflow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-      .epsilon-workflow-step{position:relative;min-height:96px;border:1px solid #dbe3ef;border-radius:6px;background:#f8fafc;padding:12px 12px 12px 42px}
-      .epsilon-workflow-step::after{content:"";position:absolute;right:-10px;top:50%;width:10px;height:1px;background:#cbd5e1}
-      .epsilon-workflow-step:nth-child(3)::after,.epsilon-workflow-step:nth-child(6)::after{display:none}
-      .epsilon-workflow-index{position:absolute;left:12px;top:12px;width:20px;height:20px;border-radius:50%;background:#1d4ed8;color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
-      .epsilon-workflow-title{font-size:12px;font-weight:750;color:#0f172a;margin-bottom:5px}
-      .epsilon-workflow-text{font-size:11px;color:#64748b;line-height:1.45}
-      .epsilon-method-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-      .epsilon-method-grid>div{border:1px solid #dbe3ef;border-radius:6px;background:#f8fafc;padding:11px}
-      .epsilon-method-grid h4{margin:0 0 5px;font-size:12px;color:#0f172a}
-      .epsilon-method-grid p{margin:0;font-size:11.5px;line-height:1.55;color:#475569}
-      .epsilon-method-grid code{font-family:Consolas,monospace;font-size:11px;color:#0f172a;background:#eef2f7;border-radius:3px;padding:1px 3px}
+      .epsilon-story{position:relative}
+      .epsilon-story::before{content:"";position:absolute;left:14px;top:54px;bottom:18px;width:2px;background:linear-gradient(#93b4ff,#b84235);border-radius:999px;opacity:.45}
+      .epsilon-story-lead{max-width:760px;color:#475569;font-size:12.5px;line-height:1.7;margin:0 0 14px}
+      .epsilon-story-panel{position:relative;display:grid;grid-template-columns:minmax(250px,.92fr) minmax(320px,1.18fr);gap:18px;align-items:center;padding:12px 0 14px 42px}
+      .epsilon-story-copy{position:relative}
+      .epsilon-story-index{position:absolute;left:-42px;top:0;width:30px;height:30px;border-radius:50%;background:#1d4ed8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;box-shadow:0 0 0 5px rgba(255,255,255,.94)}
+      .epsilon-story-copy h4{margin:0 0 7px;font-size:14px;color:#0f172a;letter-spacing:0}
+      .epsilon-story-copy p{margin:0;font-size:12px;line-height:1.72;color:#475569}
+      .epsilon-story-figure{min-height:150px;border:1px solid #e2e8f0;border-radius:7px;background:#fff;padding:8px;box-shadow:0 8px 24px rgba(15,23,42,.045)}
+      .epsilon-story-figure svg{display:block;width:100%;height:auto}
+      .epsilon-svg-box,.epsilon-svg-formula{fill:#f8fafc;stroke:#cbd5e1;stroke-width:1.2}
+      .epsilon-svg-pill{fill:#e8f0ff;stroke:#93b4ff;stroke-width:1}
+      .epsilon-svg-grid{stroke:#dbe3ef;stroke-width:1}
+      .epsilon-svg-arrow{stroke:#94a3b8;stroke-width:1.4}
+      .epsilon-svg-arrow-head{fill:#94a3b8}
+      .epsilon-svg-title{fill:#0f172a;font-size:12px;font-weight:700}
+      .epsilon-svg-muted{fill:#64748b;font-size:10.5px}
+      .epsilon-svg-equation{fill:#0f172a;font-size:15px;font-family:Consolas,monospace;font-weight:700}
       body.theme-dark .epsilon-curve-preview{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-overview-dialog{background:rgba(15,23,42,.97);border-color:#263449;box-shadow:0 22px 58px rgba(0,0,0,.48)}
       body.theme-dark .epsilon-overview-header{border-bottom-color:#263449}
       body.theme-dark .epsilon-overview-title,
       body.theme-dark .epsilon-overview-body h3,
-      body.theme-dark .epsilon-workflow-title,
-      body.theme-dark .epsilon-method-grid h4,
+      body.theme-dark .epsilon-story-copy h4,
+      body.theme-dark .epsilon-svg-title,
+      body.theme-dark .epsilon-svg-equation,
       body.theme-dark .epsilon-metric-value{color:#e5edf7}
       body.theme-dark .epsilon-overview-body,
       body.theme-dark .epsilon-overview-lead,
       body.theme-dark .epsilon-overview-note,
-      body.theme-dark .epsilon-workflow-text,
-      body.theme-dark .epsilon-method-grid p,
+      body.theme-dark .epsilon-story-lead,
+      body.theme-dark .epsilon-story-copy p,
+      body.theme-dark .epsilon-svg-muted,
       body.theme-dark .epsilon-metric-label{color:#94a3b8}
       body.theme-dark .epsilon-overview-body section + section{border-top-color:#263449}
       body.theme-dark .epsilon-overview-close:hover{background:#1e293b;color:#f8fafc}
       body.theme-dark .epsilon-metric-card,
-      body.theme-dark .epsilon-workflow-step,
-      body.theme-dark .epsilon-method-grid>div{background:#111827;border-color:#263449}
-      body.theme-dark .epsilon-workflow-step::after{background:#334155}
-      body.theme-dark .epsilon-method-grid code{background:#1e293b;color:#e5edf7}
-      @media (max-width:760px){.epsilon-overview-metrics,.epsilon-method-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.epsilon-workflow{grid-template-columns:1fr}.epsilon-workflow-step::after{display:none}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}}
+      body.theme-dark .epsilon-story-figure{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-story-index{box-shadow:0 0 0 5px rgba(15,23,42,.97)}
+      body.theme-dark .epsilon-svg-box,
+      body.theme-dark .epsilon-svg-formula{fill:#0f172a;stroke:#334155}
+      body.theme-dark .epsilon-svg-pill{fill:#1e293b;stroke:#3b82f6}
+      body.theme-dark .epsilon-svg-grid{stroke:#334155}
+      body.theme-dark .epsilon-svg-arrow{stroke:#64748b}
+      body.theme-dark .epsilon-svg-arrow-head{fill:#64748b}
+      @media (max-width:760px){.epsilon-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.epsilon-story-panel{grid-template-columns:1fr}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}}
     `;
     document.head.appendChild(style);
   }
