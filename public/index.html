@@ -946,9 +946,9 @@
       remoteImportTimer: null,
       pendingConfirm: null,
       staticModules: [
-        { id: 'epsilon-change', name: 'Epsilon Change', defaultLoad: true },
-        { id: 'epsilon-change-low', name: 'Epsilon Change (Low Flow)', defaultLoad: false },
-        { id: 'epsilon-change-high', name: 'Epsilon Change (High Flow)', defaultLoad: false }
+        { id: 'epsilon-change', name: 'Epsilon Change', defaultLoad: true, exclusiveGroup: 'epsilon-change' },
+        { id: 'epsilon-change-low', name: 'Epsilon Change (Low Flow)', defaultLoad: false, exclusiveGroup: 'epsilon-change' },
+        { id: 'epsilon-change-high', name: 'Epsilon Change (High Flow)', defaultLoad: false, exclusiveGroup: 'epsilon-change' }
       ],
       themeStyle: 'light',
       imageryEnabled: false,
@@ -2329,9 +2329,10 @@
           this.unloadModule(id);
         } else {
           try {
-            if (this.isExclusiveModule(id)) {
+            const exclusiveGroup = this.moduleExclusiveGroup(id);
+            if (exclusiveGroup) {
               for (const module of this.modules) {
-                if (module.id !== id && this.isExclusiveModule(module.id) && this.moduleLoader.isLoaded(module.id)) {
+                if (module.id !== id && this.moduleExclusiveGroup(module.id) === exclusiveGroup && this.moduleLoader.isLoaded(module.id)) {
                   this.unloadModule(module.id, { quiet: true });
                 }
               }
@@ -2345,8 +2346,8 @@
         this.draw();
       },
 
-      isExclusiveModule(id) {
-        return ['epsilon-change', 'epsilon-change-low', 'epsilon-change-high'].includes(id);
+      moduleExclusiveGroup(id) {
+        return this.modules.find(module => module.id === id)?.exclusiveGroup || null;
       },
 
       unloadModule(id, options = {}) {
@@ -2446,7 +2447,7 @@
         const shouldReload = !registered || registeredVersion !== nextVersion;
         if (shouldReload) {
           if (this.moduleLoader.isLoaded(normalized.id)) {
-            this.unloadModule(normalized.id);
+            this.unloadModule(normalized.id, { quiet: true });
           }
           this.moduleLoader.modules.delete(normalized.id);
           this.moduleLoader.manifests?.delete?.(normalized.id);
@@ -2520,11 +2521,12 @@
 
         // Other layers
         layers.filter(l => !['basemap', 'outlines-basins', 'outlines-countries'].includes(l.id)).forEach(l => {
+          const removable = l.metadata?.removable !== false;
           html += `
             <div class="layer-item" data-id="${l.id}">
               <input type="checkbox" class="layer-checkbox" ${l.visible ? 'checked' : ''}>
               <span class="layer-name">${l.name}</span>
-              <div class="layer-actions"><button class="layer-btn layer-remove" title="Remove layer" aria-label="Remove layer"></button></div>
+              ${removable ? '<div class="layer-actions"><button class="layer-btn layer-remove" title="Remove layer" aria-label="Remove layer"></button></div>' : ''}
             </div>
           `;
         });
@@ -2591,6 +2593,7 @@
             removeBtn.onclick = (e) => {
               e.stopPropagation();
               this.layerManager.removeLayer(lid);
+              this.updateLayerList();
               this.draw();
             };
           }
