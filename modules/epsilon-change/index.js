@@ -578,7 +578,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-chart-area{flex:1;min-height:0;padding:14px 18px 18px;display:grid;grid-template-rows:repeat(3,1fr);gap:12px}
       .epsilon-chart-card{position:relative;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;overflow:hidden}
       .epsilon-chart-card canvas{display:block;width:100%;height:100%}
-      .epsilon-readout{position:absolute;right:28px;bottom:52px;width:138px;padding:7px 9px;border:1px solid #dbe3ef;border-radius:6px;background:rgba(255,255,255,.92);font-size:11px;color:#334155;line-height:1.42;box-shadow:0 8px 20px rgba(15,23,42,.08);pointer-events:none}
+      .epsilon-readout{position:absolute;right:42px;bottom:52px;width:138px;padding:7px 9px;border:1px solid #dbe3ef;border-radius:6px;background:rgba(255,255,255,.92);font-size:11px;color:#334155;line-height:1.42;box-shadow:0 8px 20px rgba(15,23,42,.08);pointer-events:none}
       .epsilon-readout:empty{display:none}
       .epsilon-readout strong{color:#0f172a}
     `;
