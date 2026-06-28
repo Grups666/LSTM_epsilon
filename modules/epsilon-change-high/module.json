@@ -1,0 +1,40 @@
+{
+  "id": "epsilon-change-high",
+  "name": "Epsilon Change (High Flow)",
+  "version": "0.1.0",
+  "assetVersion": "2026-06-28-low-high-continuous",
+  "description": "Catchment-scale continuous high-flow epsilon change before and after 1990.",
+  "author": "Spatial Research Team",
+  "icon": "activity",
+  "entry": "../epsilon-change/index.js",
+  "className": "EpsilonChangeModule",
+  "importKind": "module-manifest",
+  "defaultLoad": false,
+  "viewMode": "high",
+  "focusRegime": "high",
+  "datasets": [
+    {
+      "id": "epsilon-catchment-distributions",
+      "file": "../epsilon-change/data/epsilon-catchment-distributions.json"
+    }
+  ],
+  "provides": {
+    "layers": [
+      {
+        "id": "epsilon-change-high-catchments",
+        "name": "High-flow epsilon change",
+        "type": "vector",
+        "interactive": true
+      }
+    ],
+    "panels": [
+      {
+        "id": "epsilon-high-flow-catchment-inspector",
+        "name": "High-flow epsilon catchment inspector",
+        "position": "right",
+        "trigger": "feature:click",
+        "condition": { "layer": "epsilon-change-high-catchments", "module": "epsilon-change-high" }
+      }
+    ]
+  }
+}

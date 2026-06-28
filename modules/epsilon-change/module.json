@@ -2,7 +2,7 @@
   "id": "epsilon-change",
   "name": "Epsilon Change",
   "version": "0.1.0",
-  "assetVersion": "2026-06-20-cdf-layout-refine",
+  "assetVersion": "2026-06-28-flow-focused-modules",
   "description": "Catchment-scale low-flow and high-flow epsilon change classes before and after 1990.",
   "author": "Spatial Research Team",
   "icon": "activity",
