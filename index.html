@@ -179,28 +179,25 @@
       .inspector-close::after {
         content: "";
         position: absolute;
-        width: 8px;
-        height: 1px;
+        left: 50%;
+        top: 50%;
+        width: 10px;
+        height: 1.4px;
         border-radius: 999px;
         background: currentColor;
-      }
-      .import-close::before,
-      .import-close::after,
-      .inspector-close::before,
-      .inspector-close::after {
-        width: 10px;
+        transform-origin: center;
       }
       .module-remove-btn::before,
       .layer-btn::before,
       .import-close::before,
       .inspector-close::before {
-        transform: rotate(45deg);
+        transform: translate(-50%, -50%) rotate(45deg);
       }
       .module-remove-btn::after,
       .layer-btn::after,
       .import-close::after,
       .inspector-close::after {
-        transform: rotate(-45deg);
+        transform: translate(-50%, -50%) rotate(-45deg);
       }
       .layer-checkbox {
         width: 14px;

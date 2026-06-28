@@ -238,7 +238,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
             <div class="epsilon-overview-title">Overview</div>
             <div class="epsilon-overview-subtitle">${this.escape(this.moduleTitle())}</div>
           </div>
-          <button class="epsilon-overview-close" type="button" aria-label="Close">x</button>
+          <button class="epsilon-overview-close" type="button" aria-label="Close"></button>
         </div>
         <div class="epsilon-overview-body"></div>
       </div>
@@ -635,8 +635,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-header{height:58px;padding:0 18px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px}
       .epsilon-overview-title{font-size:18px;font-weight:750;color:#0f172a;letter-spacing:0}
       .epsilon-overview-subtitle{font-size:11px;color:#64748b;margin-top:3px}
-      .epsilon-overview-close{width:32px;height:32px;border:0;background:transparent;color:#64748b;font-size:22px;line-height:1;cursor:pointer;border-radius:6px}
+      .epsilon-overview-close{width:32px;height:32px;border:0;background:transparent;color:#64748b;font-size:0;line-height:1;cursor:pointer;border-radius:6px;position:relative;padding:0}
       .epsilon-overview-close:hover{background:#eef2f7;color:#0f172a}
+      .epsilon-overview-close::before,.epsilon-overview-close::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:1.5px;border-radius:999px;background:currentColor;transform-origin:center}
+      .epsilon-overview-close::before{transform:translate(-50%,-50%) rotate(45deg)}
+      .epsilon-overview-close::after{transform:translate(-50%,-50%) rotate(-45deg)}
       .epsilon-overview-body{padding:18px;overflow:auto;color:#334155;font-size:13px;line-height:1.65}
       .epsilon-overview-body section + section{margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0}
       .epsilon-overview-body h3{margin:0 0 8px;font-size:13px;color:#0f172a;letter-spacing:.03em;text-transform:uppercase}
@@ -661,8 +664,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         .epsilon-dialog-header{height:58px;padding:0 18px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px}
         .epsilon-dialog-title{font-size:15px;font-weight:700;color:#0f172a}
         .epsilon-dialog-subtitle{font-size:11px;color:#64748b;margin-top:3px}
-        .epsilon-close{width:30px;height:30px;border:0;background:transparent;border-radius:4px;cursor:pointer;font-size:22px;color:#64748b;line-height:1}
+        .epsilon-close{width:30px;height:30px;border:0;background:transparent;border-radius:4px;cursor:pointer;font-size:0;color:#64748b;line-height:1;position:relative;padding:0}
         .epsilon-close:hover{background:#f1f5f9;color:#0f172a}
+        .epsilon-close::before,.epsilon-close::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:1.5px;border-radius:999px;background:currentColor;transform-origin:center}
+        .epsilon-close::before{transform:translate(-50%,-50%) rotate(45deg)}
+        .epsilon-close::after{transform:translate(-50%,-50%) rotate(-45deg)}
         .epsilon-chart-area{flex:1;min-height:0;padding:14px 18px 18px;display:grid;grid-template-rows:repeat(3,1fr);gap:12px}
         .epsilon-chart-card{position:relative;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;overflow:hidden}
         .epsilon-chart-card canvas{display:block;width:100%;height:100%}
@@ -683,7 +689,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
             <div class="epsilon-dialog-title" id="epsilon-modal-title">Epsilon distribution</div>
             <div class="epsilon-dialog-subtitle" id="epsilon-modal-subtitle">CDF</div>
           </div>
-          <button class="epsilon-close" id="epsilon-modal-close" type="button" aria-label="Close">x</button>
+          <button class="epsilon-close" id="epsilon-modal-close" type="button" aria-label="Close"></button>
         </div>
         <div class="epsilon-chart-area">
           ${this.displayRegimes.map((regime) => `
