@@ -2,11 +2,11 @@
   "id": "epsilon-change-high",
   "name": "Epsilon Change (High Flow)",
   "version": "0.1.0",
-  "assetVersion": "2026-06-28-overview-header-match",
+  "assetVersion": "2026-07-04-nse-kge-cards",
   "description": "Catchment-scale continuous high-flow epsilon change before and after 1990.",
   "author": "Spatial Research Team",
   "icon": "activity",
-  "entry": "../epsilon-change/index.js",
+  "entry": "../epsilon-change/index.js?v=20260704-nse-kge",
   "className": "EpsilonChangeModule",
   "importKind": "module-manifest",
   "defaultLoad": false,
@@ -15,7 +15,7 @@
   "datasets": [
     {
       "id": "epsilon-catchment-distributions",
-      "file": "../epsilon-change/data/epsilon-catchment-distributions.json"
+      "file": "../epsilon-change/data/epsilon-catchment-distributions.json?v=20260704-nse-kge"
     }
   ],
   "provides": {
