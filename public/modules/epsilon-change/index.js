@@ -211,7 +211,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <section>
         <h3>Data and inference</h3>
         <p>
-          The map summarizes catchment-level daily epsilon, defined as the inferred daily GQ/Q ratio. Streamflow comes from the matched legacy Event_Typology forcing records. Meteorological forcing and land-state variables come from ERA5-Land daily catchment reductions, so each row is a catchment-day time series record rather than a gridded raster.
+          The map summarizes catchment-level daily epsilon, defined as the inferred daily GQ/Q ratio. Streamflow comes from GCIN-indexed observed streamflow records. Meteorological forcing and land-state variables come from ERA5-Land daily catchment reductions, so each row is a catchment-day time series record rather than a gridded raster.
         </p>
         <p>
           Pre-change is 1950-1990 and post-change is 1991-2019. Low-flow and high-flow regimes are defined within each catchment using its own Q10 and Q90 streamflow thresholds.
@@ -271,7 +271,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.renderStoryPanel({
           index: "01",
           title: "Build a catchment-day table rather than a raster archive",
-          body: "Observed streamflow comes from the matched legacy Event_Typology forcing records. ERA5-Land is reduced over each basin boundary to daily catchment means or sums. After joining by force_code and date, every row represents one catchment on one day, with Qobs plus the meteorological and land-state drivers used by the model.",
+          body: "Observed streamflow comes from GCIN-indexed streamflow records. ERA5-Land is reduced over each GCIN basin boundary to daily catchment means or sums. After joining by GCIN and date, every row represents one catchment on one day, with Qobs plus the meteorological and land-state drivers used by the model.",
           figure: this.renderDataAssemblyFigure()
         })}
         ${this.renderStoryPanel({
@@ -324,11 +324,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   renderDataAssemblyFigure() {
     return `
       <svg viewBox="0 0 520 170" role="img" aria-label="Data assembly workflow">
-        ${this.svgBox(22, 28, 130, 48, "Legacy Qobs", "streamflow")}
+        ${this.svgBox(22, 28, 130, 48, "GCIN Qobs", "streamflow")}
         ${this.svgBox(22, 94, 130, 48, "ERA5-Land", "forcing + states")}
         ${this.svgArrow(162, 52, 230, 80)}
         ${this.svgArrow(162, 118, 230, 92)}
-        ${this.svgBox(238, 54, 140, 58, "Catchment join", "GCIN / force code")}
+        ${this.svgBox(238, 54, 140, 58, "Catchment join", "GCIN / date")}
         ${this.svgArrow(388, 83, 448, 83)}
         ${this.svgBox(452, 54, 48, 58, "daily", "table")}
       </svg>
@@ -855,7 +855,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-record-muted{color:#64748b}
       .epsilon-overview-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:150;pointer-events:none}
       .epsilon-overview-modal.visible{display:flex}
-      .epsilon-overview-dialog{width:min(940px,calc(100vw - 64px));max-height:min(800px,calc(100vh - 64px));background:rgba(255,255,255,.96);border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
+      .epsilon-overview-dialog{width:min(940px,calc(100vw - 64px));max-height:min(800px,calc(100vh - 64px));background:#fff;border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
       .epsilon-overview-header{height:58px;min-height:58px;flex:0 0 58px;padding:0 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px;background:#f8fafc}
       .epsilon-overview-title{font-size:14px;font-weight:700;color:#0f172a;letter-spacing:0}
       .epsilon-overview-close{width:32px;height:32px;border:0;background:transparent;color:#64748b;font-size:0;line-height:1;cursor:pointer;border-radius:6px;position:relative;padding:0}
@@ -890,7 +890,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-svg-equation{fill:#0f172a;font-size:15px;font-family:Consolas,monospace;font-weight:700}
       body.theme-dark .epsilon-curve-preview{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-curve-preview:hover{background:#10213a;border-color:#3b82f6!important;box-shadow:0 0 0 1px rgba(59,130,246,.28),0 0 18px rgba(59,130,246,.18)}
-      body.theme-dark .epsilon-overview-dialog{background:rgba(15,23,42,.97);border-color:#263449;box-shadow:0 22px 58px rgba(0,0,0,.48)}
+      body.theme-dark .epsilon-overview-dialog{background:#0f172a;border-color:#263449;box-shadow:0 22px 58px rgba(0,0,0,.48)}
       body.theme-dark .epsilon-overview-header{background:#111c2f;border-bottom-color:#263449}
       body.theme-dark .epsilon-overview-title,
       body.theme-dark .epsilon-overview-body h3,

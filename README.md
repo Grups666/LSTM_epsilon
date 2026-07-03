@@ -27,7 +27,7 @@ Open `http://127.0.0.1:8766/`.
 
 ## Data
 
-The module uses cross-fitted daily epsilon inference summarized by catchment for:
+The module uses the pure GCIN production experiment. That experiment summarizes cross-fitted daily epsilon inference by catchment for:
 
 - pre period: 1950-1990;
 - post period: 1991-2019;
@@ -37,4 +37,13 @@ The generated data file is:
 
 `public/modules/epsilon-change/data/epsilon-catchment-distributions.json`
 
-The published explorer currently contains 1,149 catchments.
+The current training dataset contains 2,511 pure GCIN catchments. The published explorer data contains 2,297 catchments with valid pre/post epsilon contrasts.
+
+Current model-skill summary:
+
+- median catchment NSE: `0.466`
+- median catchment KGE: `0.663`
+- pooled NSE: `0.574`
+- pooled KGE: `0.707`
+
+Legacy/GridCode/Catchment_ID mixed products are excluded because their numeric identifiers and boundaries were not reliably matched.
