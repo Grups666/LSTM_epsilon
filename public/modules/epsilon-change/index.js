@@ -444,6 +444,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.metricCard("Aridity", this.formatNumber(basin.Aridity, 3))}
         ${this.metricCard("Precip.", `${this.formatNumber(basin.Prec_mm, 1)} mm`)}
         ${this.metricCard("Temp.", `${this.formatNumber(basin.Temp_C, 1)} C`)}
+        ${this.metricCard("NSE", this.formatNumber(basin.post_nse, 3))}
+        ${this.metricCard("KGE", this.formatNumber(basin.post_kge, 3))}
       </div>
       ${this.categoryBanner(basin)}
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
