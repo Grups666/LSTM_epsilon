@@ -24,6 +24,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.activeDistribution = null;
     this.themeObserver = null;
     this.stableThresholdPct = 5;
+    this.displayNseThreshold = 0.5;
     this.displayRegimes = ["all", "low", "high"];
     this.handleModalPointer = (event) => this.onDistributionPointer(event);
     this.handleFeatureClick = (payload) => {
@@ -48,6 +49,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.data = await this.fetchJson(this.resolve(this.dataFile));
     this.basins = (this.data.basins || [])
       .filter((basin) => Number.isFinite(Number(basin.lon)) && Number.isFinite(Number(basin.lat)))
+      .filter((basin) => Number(basin.pre_nse) > this.displayNseThreshold && Number(basin.post_nse) > this.displayNseThreshold)
       .map((basin) => ({
         ...basin,
         id: String(basin.GCIN),
@@ -215,6 +217,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         </p>
         <p>
           Pre-change is 1950-1990 and post-change is 1991-2019. Low-flow and high-flow regimes are defined within each catchment using its own Q10 and Q90 streamflow thresholds.
+          The map displays the reliability-filtered subset where both pre-period and post-period catchment NSE are greater than 0.5; the underlying data file still retains all evaluated catchments.
         </p>
         <p>
           Epsilon was inferred with the Ara-style physics-informed LSTM-epsilon workflow. The model directly predicts epsilon inside the recession differential equation; it does not first predict GQ and then divide by Q.
@@ -645,12 +648,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   overviewText() {
     if (this.viewMode === "low") {
-      return "Cross-fitted daily epsilon inference summarized by catchment. Points are catchment centroids colored by continuous low-flow relative epsilon change after 1990.";
+      return "Cross-fitted daily epsilon inference summarized by catchment. The map shows only catchments with pre- and post-period NSE greater than 0.5; points are colored by continuous low-flow relative epsilon change after 1990.";
     }
     if (this.viewMode === "high") {
-      return "Cross-fitted daily epsilon inference summarized by catchment. Points are catchment centroids colored by continuous high-flow relative epsilon change after 1990.";
+      return "Cross-fitted daily epsilon inference summarized by catchment. The map shows only catchments with pre- and post-period NSE greater than 0.5; points are colored by continuous high-flow relative epsilon change after 1990.";
     }
-    return "Cross-fitted daily epsilon inference summarized by catchment. Points are catchment centroids; color classifies each catchment by low-flow and high-flow epsilon change after 1990.";
+    return "Cross-fitted daily epsilon inference summarized by catchment. The map shows only catchments with pre- and post-period NSE greater than 0.5; color classifies each catchment by low-flow and high-flow epsilon change after 1990.";
   }
 
   legendNote() {

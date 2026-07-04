@@ -2,18 +2,18 @@
   "id": "epsilon-change",
   "name": "Epsilon Change",
   "version": "0.1.0",
-  "assetVersion": "2026-07-04-nse-kge-cards",
+  "assetVersion": "2026-07-04-nse-filter",
   "description": "Catchment-scale low-flow and high-flow epsilon change classes before and after 1990.",
   "author": "Spatial Research Team",
   "icon": "activity",
-  "entry": "./index.js?v=20260704-nse-kge",
+  "entry": "./index.js?v=20260704-nse-filter",
   "className": "EpsilonChangeModule",
   "importKind": "module-manifest",
   "defaultLoad": true,
   "datasets": [
     {
       "id": "epsilon-catchment-distributions",
-      "file": "./data/epsilon-catchment-distributions.json?v=20260704-nse-kge"
+      "file": "./data/epsilon-catchment-distributions.json?v=20260704-nse-filter"
     }
   ],
   "provides": {
