@@ -45,5 +45,3 @@ Current model-skill summary:
 - median catchment KGE: `0.663`
 - pooled NSE: `0.574`
 - pooled KGE: `0.707`
-
-Legacy/GridCode/Catchment_ID mixed products are excluded because their numeric identifiers and boundaries were not reliably matched.

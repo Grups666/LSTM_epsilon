@@ -1,110 +1,51 @@
 # Technical Methods
 
-## Current Status
+## Scope
 
-This document describes the active pure GCIN production experiment. The previous legacy/GridCode/Catchment_ID mixed experiment is not valid for production analysis because identifier and boundary provenance were not reliably matched.
-
-The active remote run is:
+This document records the active data, model, training, evaluation, and public-output workflow for the GCIN-indexed LSTM-epsilon experiment.
 
 ```text
 run label: full_pure_gcin_1950_2019
 config:    paper_repo/configs/epsilon_experiment_pure_gcin_1950_2019.yaml
-status:    five-fold training, inference aggregation, and production audit complete
+status:    five-fold training, inference aggregation, audit, figures, and public JSON export complete
 ```
 
-The production audit, figure CSV tables, PNG figures, and GitHub Pages JSON export are complete for the pure GCIN run.
+All Python commands for this project should be run in the conda environment `hydro`.
 
-## Data
+## Data Products
 
-The current production input is the pure GCIN dataset. It combines GCIN-indexed observed streamflow with ERA5-Land catchment-reduced meteorological and land-state variables.
-
-The model-ready files are private and are not part of the public repository:
+The model-ready daily series combines observed streamflow and catchment-reduced meteorological drivers:
 
 ```text
-train-ready yearly daily series:
-_private/processed/epsilon_training_daily_pure_gcin_1950_2019_parquet/
+identifier: GCIN
+years:      1950-2019
+catchments: 2,511
+record type: catchment-day time series
+```
 
-model daily input:
-_private/processed/epsilon_training_daily_pure_gcin_1950_2019_parquet/
+Private model inputs:
 
-physics daily input:
+```text
+_private/processed/epsilon_training_daily_pure_gcin_1950_2019_parquet/
 _private/processed/epsilon_physics_daily_pure_gcin_1950_2019_parquet/
-
-static attributes and AET parameter priors:
 _private/processed/epsilon_model_inputs_pure_gcin_1950_2019/static_attributes.parquet
 _private/processed/epsilon_model_inputs_pure_gcin_1950_2019/lp_gamma_fit_summary.parquet
 ```
 
-The final train-ready daily product contains:
-
-```text
-years:      1950-2019
-catchments: 2,511
-recession simulation rows: 9,192,715
-```
-
-Each physics daily row is a catchment-day record, not a raster cell. Core fields are:
+Core daily fields:
 
 ```text
 GCIN, date, precipitation_mmd, temperature_C, pet_mmd,
 SM_%, streamflow_mmd, observed_AET_mm
 ```
 
-Important identifier rule:
+The public repository includes only derived summaries, figures, and visualization JSON. Large private time-series parquet files and model checkpoints are not published.
+
+## Static Attributes
+
+The model uses static attributes aligned to GCIN catchments:
 
 ```text
-GCIN in the current model files is the original GCIN catchment identifier.
-It must not be joined by numeric equality to GridCode or legacy force-code
-products.
-```
-
-## Periods
-
-The climate contrast is fixed as:
-
-```text
-pre-change:  1950-01-01 to 1990-12-31
-post-change: 1991-01-01 to 2019-12-31
-```
-
-For flow-regime analyses, thresholds are computed separately for each catchment from its own observed recession-day flow distribution:
-
-```text
-low flow:  Qobs <= catchment Q10
-mid flow:  catchment Q10 < Qobs < catchment Q90
-high flow: Qobs >= catchment Q90
-```
-
-## Recession Filtering
-
-Training and epsilon inference are restricted to recession days. The active configuration uses:
-
-```text
-minimum decline length: 4 days
-drop first decline day: true
-decreasing-rate filter: true
-cold-temperature filter: temperature_C <= 0.0 deg C removed
-```
-
-The cold-temperature filter is a temperature-based snowmelt proxy. It removes recession days whose daily mean temperature is at or below 0 deg C.
-
-Prepared experiment inputs report:
-
-```text
-total recession days: 6,224,673
-```
-
-## Model
-
-The model follows the Ara-style physics-informed `LSTM-epsilon` formulation. It directly infers daily `epsilon` inside the recession equation rather than predicting `GQ` first and dividing by `Q`.
-
-For each catchment and day, the model uses a 365-day context window of dynamic inputs and static attributes:
-
-```text
-dynamic inputs:
-precipitation_mmd, temperature_C, pet_mmd, SM_%
-
-static attributes:
 longitude, latitude, area_km2, Prec_mm, Temp_C, PET_mm, AET_mm,
 P_AET_mm, Aridity, elevation_mean_m, mean_slope_degree,
 Median_DepthToBedrock_cm, max_soil_moisture, Porosity,
@@ -113,23 +54,51 @@ wet_days_ratio_5mm, high_prec_freq_10mm, high_prec_dur_10mm,
 low_prec_freq_1mm, low_prec_dur_1mm
 ```
 
-The network outputs:
+PET is derived from available meteorological variables and is used in the model's AET calculation. `LP` and `gamma` recession/AET parameters are computed from the prepared daily series and stored in `lp_gamma_fit_summary.parquet`.
+
+## Recession Selection
+
+Training and epsilon inference are performed on recession days. The active recession filter:
 
 ```text
-epsilon_t, q_base_t, alpha, LP, gamma
+minimum decline length: 4 days
+drop first decline day: true
+decreasing-rate filter: true
+cold-temperature filter: remove temperature_C <= 0 deg C
 ```
 
-The recession equation is:
+The prepared experiment inputs contain:
+
+```text
+total recession days: 6,224,673
+recession simulation days after cross-fitted inference: 9,192,715
+```
+
+Flow-regime summaries are computed within each catchment:
+
+```text
+low flow:  Qobs <= catchment recession-day Q10
+mid flow:  catchment Q10 < Qobs < catchment Q90
+high flow: Qobs >= catchment recession-day Q90
+```
+
+## Model
+
+The model is a physics-informed LSTM-epsilon model. It directly infers `epsilon_t` in the recession equation:
 
 ```text
 dQ/dt = -epsilon * Q^2 - epsilon * alpha * AET * Q
 ```
 
-AET is computed inside the model from PET and soil moisture using bounded `LP` and `gamma` parameters. Streamflow is solved with a closed-form state-reset recession path and compared against observed streamflow on recession days.
+For each target recession day, the model reads a 365-day dynamic context window and static attributes. The network outputs:
 
-## Training
+```text
+epsilon_t, q_base_t, alpha, LP, gamma
+```
 
-The active full training run uses:
+AET is computed internally from PET and soil moisture using bounded `LP` and `gamma`. The recession path is solved with a state-reset formulation and compared against observed streamflow.
+
+## Training Configuration
 
 ```text
 folds: 5
@@ -144,7 +113,7 @@ sequence length: 365
 mixed precision: false
 ```
 
-The loss is a physics-informed epsilon-core objective:
+The objective is:
 
 ```text
 L = lambda_path * L_path
@@ -156,66 +125,79 @@ L = lambda_path * L_path
 with:
 
 ```text
-lambda_path: 25.0
-lambda_rhs: 10.0
-lambda_smooth: 0.1
-lambda_q0: 5.0
-huber_delta: 0.5
+lambda_path:   25.0
+lambda_rhs:    10.0
+lambda_smooth:  0.1
+lambda_q0:      5.0
+huber_delta:    0.5
 ```
 
-`L_path` compares the integrated recession streamflow path against observed streamflow. `L_rhs` constrains the differential-equation tendency. `L_smooth` penalizes excessive daily epsilon curvature. `L_q0` aligns the reset initial flow with observed streamflow at recession starts.
+`L_path` compares solved streamflow against observed streamflow. `L_rhs` constrains the differential-equation tendency. `L_smooth` penalizes excessive daily epsilon curvature. `L_q0` aligns recession-start flow reset with observed streamflow.
+
+## Evaluation
+
+Model skill is evaluated with catchment-level NSE and KGE, reported separately for pre-change and post-change periods and also as aggregate summaries.
+
+Current production audit:
+
+```text
+all-period pooled NSE:            0.574
+all-period pooled KGE:            0.707
+all-period median catchment NSE:  0.466
+all-period median catchment KGE:  0.663
+pre-period median catchment NSE:  0.457
+post-period median catchment NSE: 0.485
+```
+
+The public map applies a visualization-only reliability filter:
+
+```text
+pre_nse > 0.5 and post_nse > 0.5
+displayed catchments: 846
+```
+
+All evaluated catchments remain in the underlying JSON and tabular outputs.
+
+## Spatial Skill Diagnostic
+
+The current diagnostic evaluates why the reliability-filtered map retains many European catchments and relatively few CONUS catchments. It combines model skill, catchment location, GEE-vs-original-forcing precipitation agreement, Qobs variability, Q90/Q10 flow contrast, aridity, area, and temperature.
+
+Diagnostic files:
+
+```text
+_private/audits/nse_filter_geography/nse_filter_diagnostic_by_catchment.csv
+_private/audits/nse_filter_geography/nse_filter_region_summary.csv
+_private/audits/nse_filter_geography/nse_filter_diagnostic_summary.json
+```
+
+Main diagnostic conclusion: the spatial skill contrast is associated with hydroclimate and flow-regime structure. The retained subset tends to be cooler, less arid, and less extreme in low-to-high recession flow contrast. Regional precipitation agreement also matters, but it does not fully explain within-region skill differences.
 
 ## Outputs
 
-The active private output layout is:
+Private model outputs:
 
 ```text
-_private/results/epsilon_pure_gcin_1950_2019/
-  full_pure_gcin_1950_2019/
-    fold_<k>/
-      best_model.pt
-      metrics.csv
-      heldout_epsilon_change_summary.parquet
-      recession_day_simulations.parquet
-      run_metadata.json
-    production_audit.csv
-_private/results/epsilon_pure_gcin_1950_2019/analysis/
-  crossfit_epsilon_change_summary.parquet
-  crossfit_epsilon_change_summary.csv
-  crossfit_training_metrics.csv
-  crossfit_delta_epsilon_stats.csv
+_private/results/epsilon_pure_gcin_1950_2019/full_pure_gcin_1950_2019/
+  fold_<k>/
+    best_model.pt
+    metrics.csv
+    heldout_epsilon_change_summary.parquet
+    recession_day_simulations.parquet
+    run_metadata.json
+  production_audit.csv
 ```
 
-Figure and public-summary outputs are generated after training:
+Analysis and figure outputs:
 
 ```text
 _private/results/paper_figures_pure_gcin/
-paper_repo/docs/SUMMARY.md
+paper_repo/docs/assets/epsilon_pure_gcin_1950_2019/
 _submission/LSTM_epsilon_publish/public/modules/epsilon-change/data/epsilon-catchment-distributions.json
-```
-
-Current production audit summary:
-
-```text
-all-period pooled NSE:           0.574
-all-period pooled KGE:           0.707
-all-period median catchment NSE: 0.466
-all-period median catchment KGE: 0.663
-post-period median catchment NSE: 0.485
-pre-period median catchment NSE:  0.457
-
-valid catchments for delta epsilon: 2,297
-mean pre epsilon:                   0.715
-mean post epsilon:                  0.757
-mean delta epsilon:                 0.080
-median delta epsilon:               0.019
 ```
 
 ## Reproduction Commands
 
-Run all Python commands in the project-level `hydro` conda environment.
-
-Prepare experiment inputs:
+Prepare inputs:
 
 ```powershell
 conda run -n hydro python paper_repo\src\epsilon_model\prepare_experiment_inputs.py `
@@ -231,7 +213,7 @@ conda run -n hydro python paper_repo\src\epsilon_model\train_epsilon_model.py `
   --run-label full_pure_gcin_1950_2019
 ```
 
-After all folds finish, run the full postprocess:
+Run full postprocess:
 
 ```powershell
 conda run -n hydro python paper_repo\src\epsilon_model\run_full_postprocess.py `
@@ -241,5 +223,3 @@ conda run -n hydro python paper_repo\src\epsilon_model\run_full_postprocess.py `
   --summary-md paper_repo\docs\SUMMARY.md `
   --github-pages-out _submission\LSTM_epsilon_publish\public\modules\epsilon-change\data\epsilon-catchment-distributions.json
 ```
-
-The postprocess command runs fold inference where missing, aggregates cross-fitted outputs, computes the production audit including NSE/KGE, generates figures, updates the public summary, and exports GitHub Pages data.
