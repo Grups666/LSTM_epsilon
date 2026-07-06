@@ -2,11 +2,11 @@
   "id": "epsilon-change-low",
   "name": "Epsilon Change (Low Flow)",
   "version": "0.1.0",
-  "assetVersion": "2026-07-04-nse-filter",
+  "assetVersion": "2026-07-06-skill-filter",
   "description": "Catchment-scale continuous low-flow epsilon change before and after 1990.",
   "author": "Spatial Research Team",
   "icon": "activity",
-  "entry": "../epsilon-change/index.js?v=20260704-nse-filter",
+  "entry": "../epsilon-change/index.js?v=20260706-skill-filter",
   "className": "EpsilonChangeModule",
   "importKind": "module-manifest",
   "defaultLoad": false,
@@ -15,7 +15,7 @@
   "datasets": [
     {
       "id": "epsilon-catchment-distributions",
-      "file": "../epsilon-change/data/epsilon-catchment-distributions.json?v=20260704-nse-filter"
+      "file": "../epsilon-change/data/epsilon-catchment-distributions.json?v=20260706-skill-filter"
     }
   ],
   "provides": {
