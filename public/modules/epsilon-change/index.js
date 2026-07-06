@@ -10,6 +10,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.manifest = manifest;
     this.basePath = manifest.basePath || `/modules/${manifest.id || "epsilon-change"}/`;
     this.data = null;
+    this.rawBasins = [];
     this.basins = [];
     this.byId = new Map();
     this.selected = null;
@@ -24,7 +25,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.activeDistribution = null;
     this.themeObserver = null;
     this.stableThresholdPct = 5;
-    this.displayNseThreshold = 0.5;
+    this.skillFilter = {
+      metric: manifest.skillFilterMetric || "nse",
+      threshold: Number.isFinite(Number(manifest.skillFilterThreshold)) ? Number(manifest.skillFilterThreshold) : 0.5
+    };
+    this.filterControl = null;
     this.displayRegimes = ["all", "low", "high"];
     this.handleModalPointer = (event) => this.onDistributionPointer(event);
     this.handleFeatureClick = (payload) => {
@@ -47,9 +52,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   async onLoad() {
     this.data = await this.fetchJson(this.resolve(this.dataFile));
-    this.basins = (this.data.basins || [])
+    this.rawBasins = (this.data.basins || [])
       .filter((basin) => Number.isFinite(Number(basin.lon)) && Number.isFinite(Number(basin.lat)))
-      .filter((basin) => Number(basin.pre_nse) > this.displayNseThreshold && Number(basin.post_nse) > this.displayNseThreshold)
       .map((basin) => ({
         ...basin,
         id: String(basin.GCIN),
@@ -59,11 +63,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         low_change_state: this.changeState(basin.low_relative_delta_pct),
         high_change_state: this.changeState(basin.high_relative_delta_pct)
       }));
+    this.applySkillFilter();
     this.colorScaleExtent = this.computeContinuousExtent();
     this.byId = new Map(this.basins.map((basin) => [basin.id, basin]));
     this.addLayer();
     this.ensurePreviewStyles();
     this.ensureLegend();
+    this.ensureFilterControl();
     this.showOverview();
     Foundation.eventBus.on(Foundation.Events.FEATURE_CLICK, this.handleFeatureClick);
     Foundation.eventBus.on(Foundation.Events.LAYER_TOGGLE, this.handleLayerToggle);
@@ -81,6 +87,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.themeObserver?.disconnect();
     this.themeObserver = null;
     this.selected = null;
+    this.filterControl?.remove();
+    this.filterControl = null;
     this.destroyModals();
   }
 
@@ -97,6 +105,82 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Failed to load ${url}: ${response.status}`);
     return response.json();
+  }
+
+  applySkillFilter() {
+    const metric = this.skillFilter.metric === "kge" ? "kge" : "nse";
+    const threshold = Number(this.skillFilter.threshold);
+    this.skillFilter.metric = metric;
+    this.skillFilter.threshold = Number.isFinite(threshold) ? threshold : 0.5;
+    this.basins = this.rawBasins.filter((basin) => {
+      const pre = Number(basin[`pre_${metric}`]);
+      const post = Number(basin[`post_${metric}`]);
+      return Number.isFinite(pre) && Number.isFinite(post) && pre > this.skillFilter.threshold && post > this.skillFilter.threshold;
+    });
+    this.byId = new Map(this.basins.map((basin) => [basin.id, basin]));
+    if (this.selected && !this.byId.has(String(this.selected.id))) this.selected = null;
+  }
+
+  updateSkillFilter(metric, threshold) {
+    this.skillFilter.metric = metric;
+    this.skillFilter.threshold = threshold;
+    this.applySkillFilter();
+    this.colorScaleExtent = this.computeContinuousExtent();
+    this.ensureLegend();
+    this.updateFilterControlReadout();
+    if (this.overviewModal?.classList.contains("visible")) this.showOverview();
+    this.app.draw?.();
+  }
+
+  skillFilterLabel() {
+    return `${this.skillFilter.metric.toUpperCase()} > ${this.formatNumber(this.skillFilter.threshold, 2)}`;
+  }
+
+  ensureFilterControl() {
+    if (this.filterControl) return;
+    this.filterControl = document.createElement("div");
+    this.filterControl.className = "epsilon-filter-control";
+    this.filterControl.innerHTML = `
+      <div class="epsilon-filter-title">Reliability filter</div>
+      <label class="epsilon-filter-row">
+        <span>Metric</span>
+        <select class="epsilon-filter-metric" aria-label="Reliability metric">
+          <option value="nse">NSE</option>
+          <option value="kge">KGE</option>
+        </select>
+      </label>
+      <label class="epsilon-filter-row">
+        <span>Minimum</span>
+        <input class="epsilon-filter-number" type="number" min="-1" max="1" step="0.05" aria-label="Minimum reliability threshold">
+      </label>
+      <input class="epsilon-filter-range" type="range" min="-1" max="1" step="0.05" aria-label="Minimum reliability threshold slider">
+      <div class="epsilon-filter-count"></div>
+    `;
+    document.body.appendChild(this.filterControl);
+
+    const metric = this.filterControl.querySelector(".epsilon-filter-metric");
+    const number = this.filterControl.querySelector(".epsilon-filter-number");
+    const range = this.filterControl.querySelector(".epsilon-filter-range");
+    const sync = (value) => {
+      const threshold = Number(value);
+      number.value = Number.isFinite(threshold) ? threshold.toFixed(2) : "0.50";
+      range.value = number.value;
+      this.updateSkillFilter(metric.value, Number(number.value));
+    };
+    metric.value = this.skillFilter.metric;
+    number.value = this.skillFilter.threshold.toFixed(2);
+    range.value = number.value;
+    metric.onchange = () => this.updateSkillFilter(metric.value, Number(number.value));
+    number.onchange = () => sync(number.value);
+    range.oninput = () => sync(range.value);
+    this.updateFilterControlReadout();
+  }
+
+  updateFilterControlReadout() {
+    if (!this.filterControl) return;
+    const count = this.filterControl.querySelector(".epsilon-filter-count");
+    if (!count) return;
+    count.textContent = `${this.basins.length.toLocaleString()} / ${this.rawBasins.length.toLocaleString()} catchments shown`;
   }
 
   addLayer() {
@@ -217,7 +301,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         </p>
         <p>
           Pre-change is 1950-1990 and post-change is 1991-2019. Low-flow and high-flow regimes are defined within each catchment using its own Q10 and Q90 streamflow thresholds.
-          The map displays the reliability-filtered subset where both pre-period and post-period catchment NSE are greater than 0.5; the underlying data file still retains all evaluated catchments.
+          The map displays the reliability-filtered subset where both pre-period and post-period catchment ${this.skillFilter.metric.toUpperCase()} are greater than ${this.formatNumber(this.skillFilter.threshold, 2)}; the underlying data file still retains all evaluated catchments.
         </p>
         <p>
           Epsilon was inferred with the Ara-style physics-informed LSTM-epsilon workflow. The model directly predicts epsilon inside the recession differential equation; it does not first predict GQ and then divide by Q.
@@ -648,12 +732,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   overviewText() {
     if (this.viewMode === "low") {
-      return "Cross-fitted daily epsilon inference summarized by catchment. The map shows only catchments with pre- and post-period NSE greater than 0.5; points are colored by continuous low-flow relative epsilon change after 1990.";
+      return `Cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; points are colored by continuous low-flow relative epsilon change after 1990.`;
     }
     if (this.viewMode === "high") {
-      return "Cross-fitted daily epsilon inference summarized by catchment. The map shows only catchments with pre- and post-period NSE greater than 0.5; points are colored by continuous high-flow relative epsilon change after 1990.";
+      return `Cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; points are colored by continuous high-flow relative epsilon change after 1990.`;
     }
-    return "Cross-fitted daily epsilon inference summarized by catchment. The map shows only catchments with pre- and post-period NSE greater than 0.5; color classifies each catchment by low-flow and high-flow epsilon change after 1990.";
+    return `Cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; color classifies each catchment by low-flow and high-flow epsilon change after 1990.`;
   }
 
   legendNote() {
@@ -858,6 +942,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-streamflow-record{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:-4px 0 14px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;font-size:11px;color:#64748b}
       .epsilon-streamflow-record strong{font-size:12px;color:#0f172a}
       .epsilon-record-muted{color:#64748b}
+      .epsilon-filter-control{position:fixed;right:12px;top:124px;z-index:22;width:190px;padding:10px;background:rgba(255,255,255,.94);border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 10px 28px rgba(15,23,42,.16);color:#0f172a;font-size:11px;pointer-events:auto}
+      .epsilon-filter-title{font-size:12px;font-weight:800;margin-bottom:8px;color:#0f172a}
+      .epsilon-filter-row{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;gap:8px;margin:6px 0;color:#64748b}
+      .epsilon-filter-row select,.epsilon-filter-row input{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;font-size:12px;padding:5px 6px}
+      .epsilon-filter-range{width:100%;box-sizing:border-box;margin:6px 0 3px;accent-color:#2563eb}
+      .epsilon-filter-count{font-size:10.5px;color:#475569;margin-top:6px;line-height:1.35}
       .epsilon-overview-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:150;pointer-events:none}
       .epsilon-overview-modal.visible{display:flex}
       .epsilon-overview-dialog{width:min(940px,calc(100vw - 64px));max-height:min(800px,calc(100vh - 64px));background:#fff;border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
@@ -915,6 +1005,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-metric-card,
       body.theme-dark .epsilon-streamflow-record,
       body.theme-dark .epsilon-story-figure{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-filter-control{background:rgba(15,23,42,.94);border-color:#263449;color:#e5edf7;box-shadow:0 10px 28px rgba(0,0,0,.32)}
+      body.theme-dark .epsilon-filter-title{color:#e5edf7}
+      body.theme-dark .epsilon-filter-row{color:#94a3b8}
+      body.theme-dark .epsilon-filter-row select,
+      body.theme-dark .epsilon-filter-row input{background:#111827;border-color:#334155;color:#e5edf7}
+      body.theme-dark .epsilon-filter-count{color:#94a3b8}
       body.theme-dark .epsilon-streamflow-record strong{color:#e5edf7}
       body.theme-dark .epsilon-streamflow-record,
       body.theme-dark .epsilon-record-muted{color:#94a3b8}
@@ -925,7 +1021,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-svg-grid{stroke:#334155}
       body.theme-dark .epsilon-svg-arrow{stroke:#64748b}
       body.theme-dark .epsilon-svg-arrow-head{fill:#64748b}
-      @media (max-width:760px){.epsilon-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.epsilon-story-panel{grid-template-columns:1fr}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}}
+      @media (max-width:760px){.epsilon-filter-control{left:12px;right:auto;top:auto;bottom:12px;width:calc(100vw - 24px);box-sizing:border-box}.epsilon-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.epsilon-story-panel{grid-template-columns:1fr}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}}
     `;
     document.head.appendChild(style);
   }
