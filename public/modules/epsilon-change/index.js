@@ -29,7 +29,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       metric: manifest.skillFilterMetric || "nse",
       threshold: Number.isFinite(Number(manifest.skillFilterThreshold)) ? Number(manifest.skillFilterThreshold) : 0.5
     };
-    this.filterControl = null;
     this.displayRegimes = ["all", "low", "high"];
     this.handleModalPointer = (event) => this.onDistributionPointer(event);
     this.handleFeatureClick = (payload) => {
@@ -69,7 +68,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.addLayer();
     this.ensurePreviewStyles();
     this.ensureLegend();
-    this.ensureFilterControl();
     this.showOverview();
     Foundation.eventBus.on(Foundation.Events.FEATURE_CLICK, this.handleFeatureClick);
     Foundation.eventBus.on(Foundation.Events.LAYER_TOGGLE, this.handleLayerToggle);
@@ -87,8 +85,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.themeObserver?.disconnect();
     this.themeObserver = null;
     this.selected = null;
-    this.filterControl?.remove();
-    this.filterControl = null;
     this.destroyModals();
   }
 
@@ -127,60 +123,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.applySkillFilter();
     this.colorScaleExtent = this.computeContinuousExtent();
     this.ensureLegend();
-    this.updateFilterControlReadout();
     if (this.overviewModal?.classList.contains("visible")) this.showOverview();
     this.app.draw?.();
   }
 
   skillFilterLabel() {
     return `${this.skillFilter.metric.toUpperCase()} > ${this.formatNumber(this.skillFilter.threshold, 2)}`;
-  }
-
-  ensureFilterControl() {
-    if (this.filterControl) return;
-    this.filterControl = document.createElement("div");
-    this.filterControl.className = "epsilon-filter-control";
-    this.filterControl.innerHTML = `
-      <div class="epsilon-filter-title">Reliability filter</div>
-      <label class="epsilon-filter-row">
-        <span>Metric</span>
-        <select class="epsilon-filter-metric" aria-label="Reliability metric">
-          <option value="nse">NSE</option>
-          <option value="kge">KGE</option>
-        </select>
-      </label>
-      <label class="epsilon-filter-row">
-        <span>Minimum</span>
-        <input class="epsilon-filter-number" type="number" min="-1" max="1" step="0.05" aria-label="Minimum reliability threshold">
-      </label>
-      <input class="epsilon-filter-range" type="range" min="-1" max="1" step="0.05" aria-label="Minimum reliability threshold slider">
-      <div class="epsilon-filter-count"></div>
-    `;
-    document.body.appendChild(this.filterControl);
-
-    const metric = this.filterControl.querySelector(".epsilon-filter-metric");
-    const number = this.filterControl.querySelector(".epsilon-filter-number");
-    const range = this.filterControl.querySelector(".epsilon-filter-range");
-    const sync = (value) => {
-      const threshold = Number(value);
-      number.value = Number.isFinite(threshold) ? threshold.toFixed(2) : "0.50";
-      range.value = number.value;
-      this.updateSkillFilter(metric.value, Number(number.value));
-    };
-    metric.value = this.skillFilter.metric;
-    number.value = this.skillFilter.threshold.toFixed(2);
-    range.value = number.value;
-    metric.onchange = () => this.updateSkillFilter(metric.value, Number(number.value));
-    number.onchange = () => sync(number.value);
-    range.oninput = () => sync(range.value);
-    this.updateFilterControlReadout();
-  }
-
-  updateFilterControlReadout() {
-    if (!this.filterControl) return;
-    const count = this.filterControl.querySelector(".epsilon-filter-count");
-    if (!count) return;
-    count.textContent = `${this.basins.length.toLocaleString()} / ${this.rawBasins.length.toLocaleString()} catchments shown`;
   }
 
   addLayer() {
@@ -285,6 +233,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.overviewModal.querySelector(".epsilon-overview-body").innerHTML = `
       <section>
         <p class="epsilon-overview-lead">${this.escape(this.overviewText())}</p>
+        ${this.renderOverviewFilter()}
         <div class="epsilon-overview-metrics">
           ${this.metricCard("Catchments", this.basins.length.toLocaleString())}
           ${this.metricCard("All-recession mean", this.formatPct(this.mean(all)), this.mean(all))}
@@ -309,7 +258,52 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       </section>
       ${this.renderMethodStory()}
     `;
+    this.bindOverviewFilter();
     this.overviewModal.classList.add("visible");
+  }
+
+  renderOverviewFilter() {
+    return `
+      <div class="epsilon-overview-filter">
+        <div class="epsilon-filter-title">Reliability filter</div>
+        <div class="epsilon-filter-grid">
+          <label class="epsilon-filter-field">
+            <span>Metric</span>
+            <select class="epsilon-filter-metric" aria-label="Reliability metric">
+              <option value="nse"${this.skillFilter.metric === "nse" ? " selected" : ""}>NSE</option>
+              <option value="kge"${this.skillFilter.metric === "kge" ? " selected" : ""}>KGE</option>
+            </select>
+          </label>
+          <label class="epsilon-filter-field">
+            <span>Minimum</span>
+            <input class="epsilon-filter-number" type="number" min="-1" max="1" step="0.05" value="${this.formatNumber(this.skillFilter.threshold, 2)}" aria-label="Minimum reliability threshold">
+          </label>
+          <label class="epsilon-filter-field epsilon-filter-slider">
+            <span>Threshold</span>
+            <input class="epsilon-filter-range" type="range" min="-1" max="1" step="0.05" value="${this.formatNumber(this.skillFilter.threshold, 2)}" aria-label="Minimum reliability threshold slider">
+          </label>
+        </div>
+        <div class="epsilon-filter-count">${this.basins.length.toLocaleString()} / ${this.rawBasins.length.toLocaleString()} catchments shown</div>
+      </div>
+    `;
+  }
+
+  bindOverviewFilter() {
+    const root = this.overviewModal?.querySelector(".epsilon-overview-filter");
+    if (!root) return;
+    const metric = root.querySelector(".epsilon-filter-metric");
+    const number = root.querySelector(".epsilon-filter-number");
+    const range = root.querySelector(".epsilon-filter-range");
+    const apply = (value) => {
+      const threshold = Number(value);
+      const next = Number.isFinite(threshold) ? threshold : 0.5;
+      number.value = next.toFixed(2);
+      range.value = next.toFixed(2);
+      this.updateSkillFilter(metric.value, next);
+    };
+    metric.onchange = () => this.updateSkillFilter(metric.value, Number(number.value));
+    number.onchange = () => apply(number.value);
+    range.oninput = () => apply(range.value);
   }
 
   closeOverview() {
@@ -942,12 +936,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-streamflow-record{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:-4px 0 14px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;font-size:11px;color:#64748b}
       .epsilon-streamflow-record strong{font-size:12px;color:#0f172a}
       .epsilon-record-muted{color:#64748b}
-      .epsilon-filter-control{position:fixed;right:12px;top:124px;z-index:22;width:190px;padding:10px;background:rgba(255,255,255,.94);border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 10px 28px rgba(15,23,42,.16);color:#0f172a;font-size:11px;pointer-events:auto}
-      .epsilon-filter-title{font-size:12px;font-weight:800;margin-bottom:8px;color:#0f172a}
-      .epsilon-filter-row{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;gap:8px;margin:6px 0;color:#64748b}
-      .epsilon-filter-row select,.epsilon-filter-row input{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;font-size:12px;padding:5px 6px}
-      .epsilon-filter-range{width:100%;box-sizing:border-box;margin:6px 0 3px;accent-color:#2563eb}
-      .epsilon-filter-count{font-size:10.5px;color:#475569;margin-top:6px;line-height:1.35}
       .epsilon-overview-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:150;pointer-events:none}
       .epsilon-overview-modal.visible{display:flex}
       .epsilon-overview-dialog{width:min(940px,calc(100vw - 64px));max-height:min(800px,calc(100vh - 64px));background:#fff;border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
@@ -965,6 +953,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-lead{color:#475569}
       .epsilon-overview-note{font-size:12px;color:#475569;margin-top:10px}
       .epsilon-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
+      .epsilon-overview-filter{margin:14px 0 16px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
+      .epsilon-filter-title{font-size:12px;font-weight:800;margin-bottom:8px;color:#0f172a}
+      .epsilon-filter-grid{display:grid;grid-template-columns:minmax(112px,.7fr) minmax(112px,.7fr) minmax(180px,1.4fr);gap:10px;align-items:end}
+      .epsilon-filter-field{display:grid;gap:4px;margin:0;color:#64748b;font-size:11px;line-height:1.3}
+      .epsilon-filter-field select,.epsilon-filter-field input{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;font-size:12px;padding:5px 6px}
+      .epsilon-filter-range{padding:0!important;accent-color:#2563eb}
+      .epsilon-filter-count{font-size:11px;color:#475569;margin-top:8px;line-height:1.35}
       .epsilon-story{position:relative}
       .epsilon-story::before{content:"";position:absolute;left:14px;top:54px;bottom:18px;width:2px;background:linear-gradient(#93b4ff,#b84235);border-radius:999px;opacity:.45}
       .epsilon-story-lead{max-width:760px;color:#475569;font-size:12.5px;line-height:1.7;margin:0 0 14px}
@@ -1005,11 +1000,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-metric-card,
       body.theme-dark .epsilon-streamflow-record,
       body.theme-dark .epsilon-story-figure{background:#111827;border-color:#263449}
-      body.theme-dark .epsilon-filter-control{background:rgba(15,23,42,.94);border-color:#263449;color:#e5edf7;box-shadow:0 10px 28px rgba(0,0,0,.32)}
+      body.theme-dark .epsilon-overview-filter{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-filter-title{color:#e5edf7}
-      body.theme-dark .epsilon-filter-row{color:#94a3b8}
-      body.theme-dark .epsilon-filter-row select,
-      body.theme-dark .epsilon-filter-row input{background:#111827;border-color:#334155;color:#e5edf7}
+      body.theme-dark .epsilon-filter-field{color:#94a3b8}
+      body.theme-dark .epsilon-filter-field select,
+      body.theme-dark .epsilon-filter-field input{background:#0f172a;border-color:#334155;color:#e5edf7}
       body.theme-dark .epsilon-filter-count{color:#94a3b8}
       body.theme-dark .epsilon-streamflow-record strong{color:#e5edf7}
       body.theme-dark .epsilon-streamflow-record,
@@ -1021,7 +1016,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-svg-grid{stroke:#334155}
       body.theme-dark .epsilon-svg-arrow{stroke:#64748b}
       body.theme-dark .epsilon-svg-arrow-head{fill:#64748b}
-      @media (max-width:760px){.epsilon-filter-control{left:12px;right:auto;top:auto;bottom:12px;width:calc(100vw - 24px);box-sizing:border-box}.epsilon-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.epsilon-story-panel{grid-template-columns:1fr}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}}
+      @media (max-width:760px){.epsilon-filter-grid{grid-template-columns:1fr}.epsilon-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.epsilon-story-panel{grid-template-columns:1fr}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}}
     `;
     document.head.appendChild(style);
   }

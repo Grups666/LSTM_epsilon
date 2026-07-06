@@ -2418,7 +2418,7 @@
           };
         }
 
-        const staticUrl = `./modules/${encodeURIComponent(id)}/module.json?v=20260706-skill-filter`;
+        const staticUrl = `./modules/${encodeURIComponent(id)}/module.json`;
         try {
           const response = await fetch(staticUrl);
           if (!response.ok) throw new Error(`Module manifest not found: ${id}`);
