@@ -2420,7 +2420,7 @@
 
         const staticUrl = `./modules/${encodeURIComponent(id)}/module.json`;
         try {
-          const response = await fetch(staticUrl);
+          const response = await fetch(staticUrl, { cache: 'no-store' });
           if (!response.ok) throw new Error(`Module manifest not found: ${id}`);
           return {
             ...(await response.json()),
@@ -2467,8 +2467,8 @@
         };
       },
 
-      loadModuleScript(manifest, forceReload = false) {
-        return new Promise((resolve, reject) => {
+      async loadModuleScript(manifest, forceReload = false) {
+        return new Promise(async (resolve, reject) => {
           if (!manifest.className) {
             reject(new Error('Module manifest requires className'));
             return;
@@ -2479,11 +2479,18 @@
           }
           const script = document.createElement('script');
           const entryUrl = this.resolveModuleAsset(manifest, manifest.entry);
-          const version = manifest.assetVersion || manifest.version ? `v=${encodeURIComponent(manifest.assetVersion || manifest.version)}` : '';
-          script.src = version ? `${entryUrl}${entryUrl.includes('?') ? '&' : '?'}${version}` : entryUrl;
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error(`Failed to load module entry: ${script.src}`));
-          document.body.appendChild(script);
+          try {
+            const response = await fetch(entryUrl, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            script.textContent = await response.text();
+            document.body.appendChild(script);
+            resolve();
+          } catch (error) {
+            script.src = entryUrl;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error(`Failed to load module entry: ${entryUrl}`));
+            document.body.appendChild(script);
+          }
         });
       },
 
