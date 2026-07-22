@@ -2,6 +2,7 @@
   "id": "epsilon-change",
   "name": "Epsilon Change",
   "version": "0.1.0",
+  "assetVersion": "2026-07-21-crossfit-nse-filter",
   "description": "Catchment-scale low-flow and high-flow epsilon change classes before and after 1990.",
   "author": "Spatial Research Team",
   "icon": "activity",
@@ -9,6 +10,8 @@
   "className": "EpsilonChangeModule",
   "importKind": "module-manifest",
   "defaultLoad": true,
+  "skillFilterMetric": "nse",
+  "skillFilterThreshold": 0.5,
   "datasets": [
     {
       "id": "epsilon-catchment-distributions",

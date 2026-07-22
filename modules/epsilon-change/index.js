@@ -117,13 +117,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     if (this.selected && !this.byId.has(String(this.selected.id))) this.selected = null;
   }
 
-  updateSkillFilter(metric, threshold) {
+  updateSkillFilter(metric, threshold, refreshOverview = true) {
     this.skillFilter.metric = metric;
     this.skillFilter.threshold = threshold;
     this.applySkillFilter();
     this.colorScaleExtent = this.computeContinuousExtent();
     this.ensureLegend();
-    if (this.overviewModal?.classList.contains("visible")) this.showOverview();
+    if (refreshOverview && this.overviewModal?.classList.contains("visible")) this.showOverview();
     this.app.draw?.();
   }
 
@@ -246,14 +246,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <section>
         <h3>Data and inference</h3>
         <p>
-          The map summarizes catchment-level daily epsilon, defined as the inferred daily GQ/Q ratio. Streamflow comes from GCIN-indexed observed streamflow records. Meteorological forcing and land-state variables come from ERA5-Land daily catchment reductions, so each row is a catchment-day time series record rather than a gridded raster.
+          The map summarizes catchment-level daily epsilon, the recession coefficient inferred directly inside the governing streamflow equation. Streamflow comes from GCIN-indexed observed streamflow records. Meteorological forcing and land-state variables come from ERA5-Land daily catchment reductions, so each row is a catchment-day time series record rather than a gridded raster.
         </p>
         <p>
           Pre-change is 1950-1990 and post-change is 1991-2019. Low-flow and high-flow regimes are defined within each catchment using its own Q10 and Q90 streamflow thresholds.
           The map displays the reliability-filtered subset where both pre-period and post-period catchment ${this.skillFilter.metric.toUpperCase()} are greater than ${this.formatNumber(this.skillFilter.threshold, 2)}; the underlying data file still retains all evaluated catchments.
         </p>
         <p>
-          Epsilon was inferred with the Ara-style physics-informed LSTM-epsilon workflow. The model directly predicts epsilon inside the recession differential equation; it does not first predict GQ and then divide by Q.
+          Epsilon was inferred with the Ara-style physics-informed LSTM-epsilon workflow. The model directly predicts the daily recession coefficient inside the governing differential equation.
         </p>
       </section>
       ${this.renderMethodStory()}
@@ -294,16 +294,21 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const metric = root.querySelector(".epsilon-filter-metric");
     const number = root.querySelector(".epsilon-filter-number");
     const range = root.querySelector(".epsilon-filter-range");
-    const apply = (value) => {
+    const apply = (value, refreshOverview = true) => {
       const threshold = Number(value);
       const next = Number.isFinite(threshold) ? threshold : 0.5;
       number.value = next.toFixed(2);
       range.value = next.toFixed(2);
-      this.updateSkillFilter(metric.value, next);
+      this.updateSkillFilter(metric.value, next, refreshOverview);
+      if (!refreshOverview) {
+        const count = root.querySelector(".epsilon-filter-count");
+        if (count) count.textContent = `${this.basins.length.toLocaleString()} / ${this.rawBasins.length.toLocaleString()} catchments shown`;
+      }
     };
     metric.onchange = () => this.updateSkillFilter(metric.value, Number(number.value));
     number.onchange = () => apply(number.value);
-    range.oninput = () => apply(range.value);
+    range.oninput = () => apply(range.value, false);
+    range.onchange = () => apply(range.value, true);
   }
 
   closeOverview() {
@@ -370,7 +375,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.renderStoryPanel({
           index: "04",
           title: "Infer epsilon inside the physics-informed LSTM",
-          body: "This is not a standard LSTM that only predicts discharge. Following the epsilon-model reference implementation, the recurrent network directly estimates daily epsilon and auxiliary physical terms. Epsilon is therefore a learned recession parameter inside the governing equation, not a post-hoc ratio computed from predicted GQ divided by Q.",
+          body: "Following the epsilon-model reference implementation, the recurrent network directly estimates daily epsilon and auxiliary physical terms. Epsilon is a learned recession parameter inside the governing equation, and the simulated recession path supplies the streamflow supervision.",
           figure: this.renderModelFigure()
         })}
         ${this.renderStoryPanel({
@@ -382,7 +387,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.renderStoryPanel({
           index: "06",
           title: "Compare pre- and post-1990 epsilon distributions",
-          body: "Cross-fitted inference gives daily epsilon for held-out catchments and years. The public map summarizes each basin by comparing 1950-1990 against 1991-2019. Low-flow epsilon uses each basin's own Q10 recession-day threshold; high-flow epsilon uses its own Q90 threshold, so classes are defined within catchments rather than by a global discharge cutoff.",
+          body: "Cross-fitted inference gives daily epsilon for catchments excluded from model fitting across the full 1950-2019 record. Observed Q is still used to identify recession days, define flow regimes and evaluate skill. The map compares 1950-1990 against 1991-2019; low- and high-flow classes use each basin's own Q10 and Q90 rather than a global discharge cutoff.",
           figure: this.renderOutputFigure()
         })}
       </section>
@@ -454,7 +459,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           ${this.svgSmallPill(408, 96, "alpha")}
           ${this.svgSmallPill(408, 130, "LP, gamma")}
         </g>
-        <text x="210" y="164" class="epsilon-svg-muted">epsilon is inferred directly, not computed as predicted GQ / Q</text>
+        <text x="210" y="164" class="epsilon-svg-muted">epsilon is inferred directly inside the recession equation</text>
       </svg>
     `;
   }
@@ -557,7 +562,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
     this.app.showInspector?.(title, `
       <p style="margin:0 0 14px;color:#64748b;font-size:12px;line-height:1.6">
-        Epsilon is the modeled daily ratio GQ/Q. This panel compares the inferred epsilon distribution before and after 1990.
+        Epsilon is the daily recession coefficient inferred inside the physics-constrained streamflow equation. This panel compares its distribution before and after 1990.
       </p>
       ${cards}
       ${streamflowRecord}
