@@ -276,7 +276,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           </label>
           <label class="epsilon-filter-field">
             <span>Minimum</span>
-            <input class="epsilon-filter-number" type="number" min="-1" max="1" step="0.05" value="${this.formatNumber(this.skillFilter.threshold, 2)}" aria-label="Minimum reliability threshold">
+            <input class="epsilon-filter-number" type="number" step="0.05" value="${this.formatNumber(this.skillFilter.threshold, 2)}" aria-label="Minimum reliability threshold">
           </label>
           <label class="epsilon-filter-field epsilon-filter-slider">
             <span>Threshold</span>
@@ -387,7 +387,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.renderStoryPanel({
           index: "06",
           title: "Compare pre- and post-1990 epsilon distributions",
-          body: "Cross-fitted inference gives daily epsilon for catchments excluded from model fitting across the full 1950-2019 record. Observed Q is still used to identify recession days, define flow regimes and evaluate skill. The map compares 1950-1990 against 1991-2019; low- and high-flow classes use each basin's own Q10 and Q90 rather than a global discharge cutoff.",
+          body: "Five-fold temporal cross-fitting gives each eligible day an out-of-time epsilon estimate. In every rotation, one contiguous pre-1990 block and one contiguous post-1990 block are excluded from model fitting for all catchments. Observed Q is still used to identify recession days, define flow regimes and evaluate skill. The map compares 1950-1990 against 1991-2019; low- and high-flow classes use each basin's own Q10 and Q90 rather than a global discharge cutoff.",
           figure: this.renderOutputFigure()
         })}
       </section>
@@ -530,8 +530,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.metricCard("Aridity", this.formatNumber(basin.Aridity, 3))}
         ${this.metricCard("Precip.", `${this.formatNumber(basin.Prec_mm, 1)} mm`)}
         ${this.metricCard("Temp.", `${this.formatNumber(basin.Temp_C, 1)} C`)}
-        ${this.metricCard("NSE", this.formatNumber(basin.post_nse, 3))}
-        ${this.metricCard("KGE", this.formatNumber(basin.post_kge, 3))}
+        ${this.metricCard("NSE pre", this.formatNumber(basin.pre_nse, 3))}
+        ${this.metricCard("NSE post", this.formatNumber(basin.post_nse, 3))}
+        ${this.metricCard("KGE pre", this.formatNumber(basin.pre_kge, 3))}
+        ${this.metricCard("KGE post", this.formatNumber(basin.post_kge, 3))}
       </div>
       ${this.categoryBanner(basin)}
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
@@ -731,12 +733,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   overviewText() {
     if (this.viewMode === "low") {
-      return `Cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; points are colored by continuous low-flow relative epsilon change after 1990.`;
+      return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; points are colored by continuous low-flow relative epsilon change after 1990.`;
     }
     if (this.viewMode === "high") {
-      return `Cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; points are colored by continuous high-flow relative epsilon change after 1990.`;
+      return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; points are colored by continuous high-flow relative epsilon change after 1990.`;
     }
-    return `Cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; color classifies each catchment by low-flow and high-flow epsilon change after 1990.`;
+    return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; color classifies each catchment by low-flow and high-flow epsilon change after 1990.`;
   }
 
   legendNote() {

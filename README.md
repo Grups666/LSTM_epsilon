@@ -27,24 +27,26 @@ Open `http://127.0.0.1:8766/`.
 
 ## Data
 
-The module uses the pure GCIN production experiment. That experiment summarizes cross-fitted daily epsilon inference by catchment for:
+The module uses the pure GCIN paired temporal cross-fit. It summarizes out-of-time daily epsilon inference by catchment for:
 
 - pre period: 1950-1990;
 - post period: 1991-2019;
 - all-recession, low-flow (`Q_obs <= Q10`), and high-flow (`Q_obs >= Q90`) regimes.
 
+Each of five rotations holds out one contiguous pre-1990 block and one contiguous post-1990 block for all catchments. The other four blocks from each period train one shared model. There is no validation set or test-guided checkpoint selection.
+
 The generated data file is:
 
 `public/modules/epsilon-change/data/epsilon-catchment-distributions.json`
 
-The current training dataset contains 2,511 pure GCIN catchments. The published explorer data contains 2,297 catchments with valid pre/post epsilon contrasts.
-
-The production run evaluates each of the 2,511 catchments exactly once as held-out test data. Current model-skill summary:
-
-- median catchment NSE: `0.327` (p10-p90: `-1.045` to `0.651`)
-- median catchment KGE: `0.494` (p10-p90: `-0.168` to `0.770`)
-- pooled NSE: `0.343`
-- pooled KGE: `0.498`
-- pre/post NSE > 0.5 in both periods: `566` catchments
+The training dataset contains 2,511 pure GCIN catchments. Five-fold out-of-fold predictions are concatenated before calculating each catchment's pre-period and post-period NSE/KGE and epsilon contrast.
 
 The explorer JSON retains all 2,297 catchments with a valid epsilon contrast. The Overview panel applies NSE or KGE filtering in the browser; `NSE > 0.5` in both periods is only the default display filter, not a hard-coded export filter.
+
+Audited out-of-fold performance:
+
+- median catchment NSE: `0.581` (p10-p90: `0.128` to `0.775`)
+- pooled NSE: `0.577`
+- median catchment KGE: `0.642`
+- pre/post median NSE: `0.555 / 0.626`
+- pre/post NSE above `0.5` in both periods: `1,304` catchments

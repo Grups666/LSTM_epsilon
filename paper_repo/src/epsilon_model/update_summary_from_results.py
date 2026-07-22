@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from config import load_config
@@ -11,9 +12,9 @@ from config import load_config
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=Path("paper_repo/configs/epsilon_experiment_pure_gcin_1950_2019.yaml"))
-    parser.add_argument("--figures-dir", type=Path, default=Path("_private/results/paper_figures_crossfit_1990"))
+    parser.add_argument("--figures-dir", type=Path, default=Path("_private/results/paper_figures_temporal_crossfit_1990"))
     parser.add_argument("--summary-md", type=Path, default=Path("paper_repo/docs/SUMMARY.md"))
-    parser.add_argument("--run-label", type=str, default="crossfit_1990")
+    parser.add_argument("--run-label", type=str, default="temporal_crossfit_1990")
     return parser.parse_args()
 
 
@@ -73,6 +74,7 @@ def main() -> None:
         fig / "model_skill_by_catchment.csv",
         fig / "epsilon_change_by_catchment.csv",
         fig / "epsilon_change_by_flow_regime.csv",
+        fig / "epsilon_change_inference.csv",
     ]
     missing = [str(p) for p in required if not p.exists()]
     if missing:
@@ -83,6 +85,7 @@ def main() -> None:
     skill_by_catchment = pd.read_csv(fig / "model_skill_by_catchment.csv")
     epsilon_by_catchment = pd.read_csv(fig / "epsilon_change_by_catchment.csv").set_index("GCIN")
     regime = pd.read_csv(fig / "epsilon_change_by_flow_regime.csv")
+    inference = pd.read_csv(fig / "epsilon_change_inference.csv").set_index("subset")
     qobs_inventory_path = Path(cfg["paths"]["output_dir"]) / "inputs" / "qobs_inventory.parquet"
     qobs_inventory = pd.read_parquet(qobs_inventory_path)
     median_valid_q_days = int(qobs_inventory["valid_q_days"].median())
@@ -122,9 +125,21 @@ def main() -> None:
     reliable_nse_mean_delta = float(reliable_nse_delta.mean())
     reliable_nse_median_delta = float(reliable_nse_delta.median())
     reliable_nse_negative_share = float((reliable_nse_delta < 0).mean())
+    reliable_key = "both_period_nse_gt_0.5"
+    reliable_inference = inference.reindex([reliable_key]).iloc[0]
     low = regime_summary[regime_summary["regime"] == "low"].iloc[0]
     high = regime_summary[regime_summary["regime"] == "high"].iloc[0]
     fig_rel = markdown_relative_path(args.summary_md, fig)
+    mean_delta = float(result["mean_delta_epsilon"])
+    median_delta = float(result["median_delta_epsilon"])
+    if np.sign(mean_delta) != np.sign(median_delta):
+        direction_note = (
+            "The mean and median have opposite signs, showing that the catchment-level change distribution is "
+            "strongly skewed. Large-magnitude negative catchments move the mean, while the typical catchment "
+            "represented by the median has a small positive shift; neither direction should be reported alone."
+        )
+    else:
+        direction_note = "The mean and median have the same sign, but their magnitude difference still reflects distribution skew."
 
     text = f"""# Catchment Epsilon Change Around 1990
 
@@ -192,14 +207,14 @@ run label: {args.run_label}
 cluster/fold count: {n_folds}
 batch_size: {batch_size}
 maximum epochs: {epochs}
-basin roles per outer fold: approximately 70% train / 10% validation / 20% test
+time roles per outer fold: 80% train / 20% test; no validation set
 ```
 
-The model and physics-informed objective follow the reference `LSTM-epsilon` structure. For each outer fold, the held-out test basins never participate in fitting, normalization, validation, or checkpoint selection. Normalization is estimated from training basins only, and the best checkpoint is selected by median catchment NSE on separate validation basins. Each catchment is inferred exactly once by the model for which it belongs to the held-out test fold.
+The model and physics-informed objective follow the reference `LSTM-epsilon` structure. The pre and post periods are each divided into five contiguous calendar blocks. In fold `k`, pre block `k` and post block `k` are held out together, while the other four pre blocks and four post blocks train one shared model. All catchments participate in every fold, but no test date can enter a training target, training context window, or normalization estimate.
 
-This is basin-held-out cross-fitting for a gauged-catchment attribution study, not strict ungauged prediction. Observed Q in held-out catchments is still used to identify recession days, define local Q10/Q90 regimes, evaluate NSE, and supply the reference workflow's Q-derived `low_high_ratio` static attribute.
+There is no validation split and no checkpoint selection from NSE. Architecture, physics-loss weights, learning rate, and epoch count are fixed before testing; every fold retains its epoch-{epochs} model. The Q-derived `low_high_ratio` static attribute is recomputed from training years only in each fold.
 
-The 1990 transition is a prespecified scientific comparison point, not a temporal train/test boundary. All basin roles use the full 1950-2019 record because the goal is cross-catchment epsilon estimation rather than future-flow forecasting. Data-driven breakpoint or transition-interval estimation is reserved for a later robustness analysis and is not used to tune the present model.
+Across five rotations, every eligible date receives one out-of-fold prediction from a model that did not train on its temporal block. The resulting out-of-fold records are concatenated before calculating each catchment's pre-period NSE, post-period NSE, and epsilon contrast. Fold-level NSE means and dispersion are retained only as stability diagnostics.
 
 Cold-temperature filtering is enabled:
 
@@ -215,9 +230,9 @@ The final cross-fitted analysis covers `{int(result['n_valid_delta']):,}` catchm
 
 ### Model Skill
 
-![Validation NSE and training loss]({fig_rel}/figure_01_training_loss.png)
+![Training loss across temporal folds]({fig_rel}/figure_01_training_loss.png)
 
-The model was evaluated only on held-out outer-fold basins using recession-day streamflow. Following the reference testing workflow, each held-out basin is inferred retrospectively over its complete available record; this is not a future-only forecast. Catchment-level NSE is the primary skill metric and checkpoint-selection criterion. Scores are summarized by the median across basins so large high-flow basins do not dominate the diagnostic; KGE is retained as a supplementary robustness metric.
+The model is evaluated only on out-of-fold recession days. Inference uses the same 365-day warm-up plus 365-day target-window geometry used during training. Catchment-level NSE is an indirect reliability metric for latent epsilon, not a tuning target. Scores are summarized by the median across basins so large or long-record basins do not dominate the diagnostic; KGE is retained as a supplementary robustness metric.
 
 ```text
 median catchment NSE: {skill_all['median_catchment_nse']:.3f}
@@ -230,19 +245,21 @@ pooled NSE, supplementary: {skill_all['pooled_nse']:.3f}
 pooled KGE, supplementary: {skill_all['pooled_kge']:.3f}
 ```
 
-Median catchment NSE is the primary reported diagnostic because each catchment contributes one score. Catchment KGE and pooled NSE/KGE are supplementary; pooled scores stack all recession-day records, so long-record or high-flow catchments can dominate the value.
+For each catchment and period, the primary NSE is calculated once after concatenating all five folds' out-of-fold predictions. It is not the arithmetic mean of five fold NSE values, because each block has a different observed-flow variance. Fold NSE averages remain supplementary diagnostics.
 
 The public explorer retains all evaluated catchments in its JSON. Its Overview panel applies the reliability filter in the browser: users can switch between NSE and KGE and change the threshold. At the default threshold of 0.5, `{both_nse_05:,}` catchments pass NSE in both periods and `{both_kge_05:,}` pass KGE in both periods.
 
-The full-cohort epsilon shift below is descriptive because the held-out NSE distribution has a substantial low-skill tail. For the primary reliability subset, both pre-period and post-period catchment NSE must exceed 0.5. All `{len(reliable_nse_delta):,}` catchments passing that rule have a valid pre/post epsilon contrast:
+The full-cohort epsilon shift below is descriptive when the out-of-fold NSE distribution has a substantial low-skill tail. For the primary reliability subset, both pre-period and post-period catchment NSE must exceed 0.5. All `{len(reliable_nse_delta):,}` catchments passing that rule have a valid pre/post epsilon contrast:
 
 ```text
 reliability-subset mean delta epsilon: {fmt_sci(reliable_nse_mean_delta)}
 reliability-subset median delta epsilon: {fmt_sci(reliable_nse_median_delta)}
 reliability-subset share with negative delta epsilon: {fmt_pct(reliable_nse_negative_share)}
+bootstrap 95% CI for mean delta: {fmt_sci(reliable_inference['mean_bootstrap_ci025'])} to {fmt_sci(reliable_inference['mean_bootstrap_ci975'])}
+bootstrap 95% CI for median delta: {fmt_sci(reliable_inference['median_bootstrap_ci025'])} to {fmt_sci(reliable_inference['median_bootstrap_ci975'])}
 ```
 
-This filter does not validate epsilon against a direct observation: epsilon remains latent, and NSE measures the skill of the physics-constrained streamflow reconstruction. The subset result should therefore be interpreted as a change in model-inferred epsilon among catchments with adequate indirect reconstruction skill.
+The intervals resample catchments and quantify cross-catchment sampling uncertainty; they do not account for spatial dependence or model structural uncertainty. This filter does not validate epsilon against a direct observation: epsilon remains latent, and NSE measures the skill of the physics-constrained streamflow reconstruction. The subset result should therefore be interpreted as a change in model-inferred epsilon among catchments with adequate indirect reconstruction skill.
 
 ### Epsilon Shift
 
@@ -263,6 +280,8 @@ mean delta epsilon: {fmt_sci(result['mean_delta_epsilon'])}
 median delta epsilon: {fmt_sci(result['median_delta_epsilon'])}
 catchment share with negative delta epsilon: {fmt_pct(result['negative_delta_share'])}
 ```
+
+{direction_note}
 
 The mean, median, and negative-share statistics describe the central tendency and sign balance of the catchment-level epsilon shift. They should be interpreted together: the mean is sensitive to large-magnitude catchments, while the median is the more robust summary of the typical catchment.
 

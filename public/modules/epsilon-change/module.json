@@ -2,7 +2,7 @@
   "id": "epsilon-change",
   "name": "Epsilon Change",
   "version": "0.1.0",
-  "assetVersion": "2026-07-21-crossfit-nse-filter",
+  "assetVersion": "2026-07-23-temporal-crossfit-final",
   "description": "Catchment-scale low-flow and high-flow epsilon change classes before and after 1990.",
   "author": "Spatial Research Team",
   "icon": "activity",
@@ -40,7 +40,7 @@
       {
         "id": "epsilon-distribution-statistics",
         "type": "cross-fitted-inference-summary",
-        "description": "Per-catchment pre/post epsilon CDF and summary statistics under all-, low-, and high-flow regimes."
+        "description": "Per-catchment out-of-time pre/post epsilon CDF and summary statistics under all-, low-, and high-flow regimes."
       }
     ]
   }

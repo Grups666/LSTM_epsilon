@@ -16,7 +16,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=Path("paper_repo/configs/epsilon_experiment_pure_gcin_1950_2019.yaml"))
     parser.add_argument("--run-root", type=Path)
-    parser.add_argument("--run-label", type=str, default="crossfit_1990")
+    parser.add_argument("--run-label", type=str, default="temporal_crossfit_1990")
     parser.add_argument("--static", type=Path)
     parser.add_argument(
         "--qobs-coverage",
@@ -281,6 +281,14 @@ def build_payload(sim: pd.DataFrame, static_path: Path, qobs_coverage_path: Path
             },
             "nCatchments": len(basins),
             "bins": bins,
+            "evaluation": {
+                "strategy": cfg["splits"]["strategy"],
+                "folds": int(cfg["splits"]["n_folds"]),
+                "trainBlocksPerPeriod": int(cfg["splits"]["n_folds"]) - 1,
+                "testBlocksPerPeriod": 1,
+                "validationSet": False,
+                "checkpointSelection": cfg["training"]["checkpoint_selection"],
+            },
             "module": "epsilon-change",
         },
         "basins": basins,

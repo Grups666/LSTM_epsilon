@@ -57,14 +57,8 @@ data:
 
 splits:
   n_folds: 5
-  validation_fold_offset: 1
-  validation_fraction_of_fold: 0.5
-  stratify_columns:
-    - latitude
-    - Aridity
-    - area_km2
-    - Prec_mm
-    - Temp_C
+  strategy: paired_pre_post_temporal_blocks
+  purge_context_days: 365
 
 recession:
   min_decline_days: 4
@@ -107,18 +101,14 @@ training:
   lambda_smooth: 0.1
   lambda_q0: 5.0
   huber_delta: 0.5
-  validation_batches: 8
-  checkpoint_selection: validation_median_nse
-  early_stopping_min_epochs: 15
-  early_stopping_patience: 5
-  early_stopping_min_delta: 0.001
+  checkpoint_selection: final_epoch
   num_workers: 0
   mixed_precision: false
 
 smoke:
-  years: [1950, 1951, 1952, 1953, 1954, 1955]
+  year_start: 1950
+  year_end: 2019
   max_catchments: 32
   epochs: 2
   batch_size: 8
   iters_per_epoch: 2
-  validation_batches: 1
