@@ -13,7 +13,7 @@ from train_epsilon_model import detect_recession_paper
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--out", type=Path, default=Path("_private/processed/qobs_inventory/recession_temperature_filter_audit.csv"))
+    parser.add_argument("--out", type=Path, default=Path("_private/audits/recession_temperature_filter_audit.csv"))
     parser.add_argument("--thresholds", nargs="+", type=float, default=[-2.0, 0.0, 1.0, 2.0])
     return parser.parse_args()
 

@@ -39,9 +39,12 @@ The generated data file is:
 
 The current training dataset contains 2,511 pure GCIN catchments. The published explorer data contains 2,297 catchments with valid pre/post epsilon contrasts.
 
-Current model-skill summary:
+The production run evaluates each of the 2,511 catchments exactly once as held-out test data. Current model-skill summary:
 
-- median catchment NSE: `0.466`
-- median catchment KGE: `0.663`
-- pooled NSE: `0.574`
-- pooled KGE: `0.707`
+- median catchment NSE: `0.327` (p10-p90: `-1.045` to `0.651`)
+- median catchment KGE: `0.494` (p10-p90: `-0.168` to `0.770`)
+- pooled NSE: `0.343`
+- pooled KGE: `0.498`
+- pre/post NSE > 0.5 in both periods: `566` catchments
+
+The explorer JSON retains all 2,297 catchments with a valid epsilon contrast. The Overview panel applies NSE or KGE filtering in the browser; `NSE > 0.5` in both periods is only the default display filter, not a hard-coded export filter.

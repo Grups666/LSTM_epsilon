@@ -1,12 +1,12 @@
-experiment_name: epsilon_era5land_legacy_1950_2019
-seed: 20260627
+experiment_name: epsilon_pure_gcin_1950_2019
+seed: 20260701
 
 paths:
-  daily_dir: _private/processed/epsilon_training_daily_era5land_legacy_qobs_parquet
-  physics_daily_dir: _private/processed/epsilon_physics_daily_era5land_legacy_qobs_parquet
-  static_attributes: _private/processed/epsilon_model_inputs_era5land_legacy/static_attributes.parquet
-  lp_gamma: _private/processed/epsilon_model_inputs/lp_gamma_fit_summary.parquet
-  output_dir: _private/results/epsilon_era5land_legacy_1950_2019
+  daily_dir: _private/processed/epsilon_training_daily_pure_gcin_1950_2019_parquet
+  physics_daily_dir: _private/processed/epsilon_physics_daily_pure_gcin_1950_2019_parquet
+  static_attributes: _private/processed/epsilon_model_inputs_pure_gcin_1950_2019/static_attributes.parquet
+  lp_gamma: _private/processed/epsilon_model_inputs_pure_gcin_1950_2019/lp_gamma_fit_summary.parquet
+  output_dir: _private/results/epsilon_pure_gcin_1950_2019
 
 data:
   start_year: 1950
@@ -35,22 +35,19 @@ data:
     - longitude
     - latitude
     - area_km2
+    - elevation_mean_m
+    - mean_slope_degree
+    - Median_DepthToBedrock_cm
     - Prec_mm
     - Temp_C
     - PET_mm
     - AET_mm
     - P_AET_mm
     - Aridity
-    - mean_sm_rootzone
     - max_soil_moisture
     - Porosity
-    - Annual_Mean_Moisture_Index
     - Seasonality_of_Moisture_Index
-    - mean_net_radiation_mj_m2_day
-    - swvl1_mean
-    - swvl2_mean
-    - swvl3_mean
-    - swvl4_mean
+    - low_high_ratio
     - wet_days_ratio_1mm
     - wet_days_ratio_5mm
     - high_prec_freq_10mm
@@ -61,6 +58,7 @@ data:
 splits:
   n_folds: 5
   validation_fold_offset: 1
+  validation_fraction_of_fold: 0.5
   stratify_columns:
     - latitude
     - Aridity
@@ -79,7 +77,6 @@ recession:
 physics:
   rho: 365
   bufftime: 365
-  train_frac: 0.6
   dynamic_columns:
     - precipitation_mmd
     - temperature_C
@@ -99,20 +96,22 @@ model:
   num_layers: 1
   dropout: 0.4
   n_mul: 10
-  epsilon_min: 0.0
-  epsilon_max: 5.0
 
 training:
   loss: physics_informed_epsilon_core
-  batch_size: 256
-  epochs: 150
+  batch_size: 512
+  epochs: 30
   learning_rate: 0.0001
   lambda_path: 25.0
   lambda_rhs: 10.0
   lambda_smooth: 0.1
   lambda_q0: 5.0
   huber_delta: 0.5
-  save_every: 10
+  validation_batches: 8
+  checkpoint_selection: validation_median_nse
+  early_stopping_min_epochs: 15
+  early_stopping_patience: 5
+  early_stopping_min_delta: 0.001
   num_workers: 0
   mixed_precision: false
 
@@ -122,3 +121,4 @@ smoke:
   epochs: 2
   batch_size: 8
   iters_per_epoch: 2
+  validation_batches: 1

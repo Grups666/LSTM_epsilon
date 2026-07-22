@@ -10,10 +10,10 @@ from config import load_config
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=Path, default=Path("paper_repo/configs/epsilon_experiment_era5land_legacy_1950_2019.yaml"))
-    parser.add_argument("--figures-dir", type=Path, default=Path("_private/results/paper_figures"))
+    parser.add_argument("--config", type=Path, default=Path("paper_repo/configs/epsilon_experiment_pure_gcin_1950_2019.yaml"))
+    parser.add_argument("--figures-dir", type=Path, default=Path("_private/results/paper_figures_crossfit_1990"))
     parser.add_argument("--summary-md", type=Path, default=Path("paper_repo/docs/SUMMARY.md"))
-    parser.add_argument("--run-label", type=str, default="full_crossfit_era5land_legacy_1950_2019")
+    parser.add_argument("--run-label", type=str, default="crossfit_1990")
     return parser.parse_args()
 
 
@@ -70,6 +70,8 @@ def main() -> None:
     required = [
         fig / "result_summary.csv",
         fig / "model_skill_summary.csv",
+        fig / "model_skill_by_catchment.csv",
+        fig / "epsilon_change_by_catchment.csv",
         fig / "epsilon_change_by_flow_regime.csv",
     ]
     missing = [str(p) for p in required if not p.exists()]
@@ -78,7 +80,23 @@ def main() -> None:
 
     result = scalar_table(fig / "result_summary.csv")
     skill = pd.read_csv(fig / "model_skill_summary.csv")
+    skill_by_catchment = pd.read_csv(fig / "model_skill_by_catchment.csv")
+    epsilon_by_catchment = pd.read_csv(fig / "epsilon_change_by_catchment.csv").set_index("GCIN")
     regime = pd.read_csv(fig / "epsilon_change_by_flow_regime.csv")
+    qobs_inventory_path = Path(cfg["paths"]["output_dir"]) / "inputs" / "qobs_inventory.parquet"
+    qobs_inventory = pd.read_parquet(qobs_inventory_path)
+    median_valid_q_days = int(qobs_inventory["valid_q_days"].median())
+    median_pre_valid_q_days = int(qobs_inventory["pre_valid_q_days"].median())
+    median_post_valid_q_days = int(qobs_inventory["post_valid_q_days"].median())
+    both_periods_any = int(
+        ((qobs_inventory["pre_valid_q_days"] > 0) & (qobs_inventory["post_valid_q_days"] > 0)).sum()
+    )
+    both_periods_two_years = int(
+        ((qobs_inventory["pre_valid_q_days"] >= 730) & (qobs_inventory["post_valid_q_days"] >= 730)).sum()
+    )
+    both_periods_five_years = int(
+        ((qobs_inventory["pre_valid_q_days"] >= 1825) & (qobs_inventory["post_valid_q_days"] >= 1825)).sum()
+    )
     regime_summary = (
         regime.groupby("regime", observed=True)
         .agg(
@@ -90,6 +108,20 @@ def main() -> None:
         .reset_index()
     )
     skill_all = skill[skill["period"] == "all"].iloc[0]
+    skill_pre = skill[skill["period"] == "pre"].iloc[0]
+    skill_post = skill[skill["period"] == "post"].iloc[0]
+    skill_wide = skill_by_catchment.pivot(index="GCIN", columns="period", values=["nse", "kge"])
+    both_nse_05 = int(((skill_wide[("nse", "pre")] > 0.5) & (skill_wide[("nse", "post")] > 0.5)).sum())
+    both_kge_05 = int(((skill_wide[("kge", "pre")] > 0.5) & (skill_wide[("kge", "post")] > 0.5)).sum())
+    reliable_nse_gcins = skill_wide.index[
+        (skill_wide[("nse", "pre")] > 0.5) & (skill_wide[("nse", "post")] > 0.5)
+    ]
+    reliable_nse_delta = epsilon_by_catchment.loc[
+        epsilon_by_catchment.index.intersection(reliable_nse_gcins), "delta_epsilon_mean"
+    ].dropna()
+    reliable_nse_mean_delta = float(reliable_nse_delta.mean())
+    reliable_nse_median_delta = float(reliable_nse_delta.median())
+    reliable_nse_negative_share = float((reliable_nse_delta < 0).mean())
     low = regime_summary[regime_summary["regime"] == "low"].iloc[0]
     high = regime_summary[regime_summary["regime"] == "high"].iloc[0]
     fig_rel = markdown_relative_path(args.summary_md, fig)
@@ -134,9 +166,22 @@ The model-ready daily series are stored as yearly parquet files under:
 Each record contains:
 
 ```text
-GCIN, date, precipitation_mmd, temperature_C, pet_mmd, SM_%,
-streamflow_mmd, observed_AET_mm
+GCIN, date, precipitation_mmd, temperature_C, pet_mmd,
+SM_%, streamflow_mmd, observed_AET_mm
 ```
+
+Observed-Q duration is based on valid daily values rather than nominal table bounds:
+
+```text
+median valid Q record:                         {median_valid_q_days:,} days
+median valid Q days in {year(pre_start)}-{year(pre_end)}:             {median_pre_valid_q_days:,}
+median valid Q days in {year(post_start)}-{year(post_end)}:             {median_post_valid_q_days:,}
+catchments with any valid Q in both periods:   {both_periods_any:,}
+catchments with >= 2 years in both periods:    {both_periods_two_years:,}
+catchments with >= 5 years in both periods:    {both_periods_five_years:,}
+```
+
+In the current pure GCIN run, `GCIN` is the original GCIN catchment identifier. Legacy/GridCode/Catchment_ID mixed products are excluded from production analysis because their numeric identifiers cannot be assumed to reference the same catchment boundaries.
 
 ## Current Run
 
@@ -146,10 +191,15 @@ The production run is:
 run label: {args.run_label}
 cluster/fold count: {n_folds}
 batch_size: {batch_size}
-epochs: {epochs}
+maximum epochs: {epochs}
+basin roles per outer fold: approximately 70% train / 10% validation / 20% test
 ```
 
-The training follows Ara's `LSTM-epsilon` model structure. It trains one model per catchment cluster, then infers daily recession epsilon for the same cluster. The five cluster outputs are aggregated after all runs finish.
+The model and physics-informed objective follow the reference `LSTM-epsilon` structure. For each outer fold, the held-out test basins never participate in fitting, normalization, validation, or checkpoint selection. Normalization is estimated from training basins only, and the best checkpoint is selected by median catchment NSE on separate validation basins. Each catchment is inferred exactly once by the model for which it belongs to the held-out test fold.
+
+This is basin-held-out cross-fitting for a gauged-catchment attribution study, not strict ungauged prediction. Observed Q in held-out catchments is still used to identify recession days, define local Q10/Q90 regimes, evaluate NSE, and supply the reference workflow's Q-derived `low_high_ratio` static attribute.
+
+The 1990 transition is a prespecified scientific comparison point, not a temporal train/test boundary. All basin roles use the full 1950-2019 record because the goal is cross-catchment epsilon estimation rather than future-flow forecasting. Data-driven breakpoint or transition-interval estimation is reserved for a later robustness analysis and is not used to tune the present model.
 
 Cold-temperature filtering is enabled:
 
@@ -165,18 +215,34 @@ The final cross-fitted analysis covers `{int(result['n_valid_delta']):,}` catchm
 
 ### Model Skill
 
-![Training loss]({fig_rel}/figure_01_training_loss.png)
+![Validation NSE and training loss]({fig_rel}/figure_01_training_loss.png)
 
-The model was trained separately for five catchment clusters and evaluated on recession-day streamflow. Model skill is summarized by catchment-level NSE/KGE first, then by the median across basins, so large high-flow basins do not dominate the diagnostic.
+The model was evaluated only on held-out outer-fold basins using recession-day streamflow. Following the reference testing workflow, each held-out basin is inferred retrospectively over its complete available record; this is not a future-only forecast. Catchment-level NSE is the primary skill metric and checkpoint-selection criterion. Scores are summarized by the median across basins so large high-flow basins do not dominate the diagnostic; KGE is retained as a supplementary robustness metric.
 
 ```text
 median catchment NSE: {skill_all['median_catchment_nse']:.3f}
+catchment NSE p10-p90: {skill_all['p10_catchment_nse']:.3f} to {skill_all['p90_catchment_nse']:.3f}
 median catchment KGE: {skill_all['median_catchment_kge']:.3f}
+catchment KGE p10-p90: {skill_all['p10_catchment_kge']:.3f} to {skill_all['p90_catchment_kge']:.3f}
+pre-period median NSE / KGE: {skill_pre['median_catchment_nse']:.3f} / {skill_pre['median_catchment_kge']:.3f}
+post-period median NSE / KGE: {skill_post['median_catchment_nse']:.3f} / {skill_post['median_catchment_kge']:.3f}
 pooled NSE, supplementary: {skill_all['pooled_nse']:.3f}
 pooled KGE, supplementary: {skill_all['pooled_kge']:.3f}
 ```
 
-The catchment-median NSE is close to zero, while the pooled NSE is higher because all recession-day records are stacked before scoring. This gap indicates that the inferred epsilon contrast is more stable as a cross-fitted recession-parameter analysis than as a basin-by-basin streamflow simulator.
+Median catchment NSE is the primary reported diagnostic because each catchment contributes one score. Catchment KGE and pooled NSE/KGE are supplementary; pooled scores stack all recession-day records, so long-record or high-flow catchments can dominate the value.
+
+The public explorer retains all evaluated catchments in its JSON. Its Overview panel applies the reliability filter in the browser: users can switch between NSE and KGE and change the threshold. At the default threshold of 0.5, `{both_nse_05:,}` catchments pass NSE in both periods and `{both_kge_05:,}` pass KGE in both periods.
+
+The full-cohort epsilon shift below is descriptive because the held-out NSE distribution has a substantial low-skill tail. For the primary reliability subset, both pre-period and post-period catchment NSE must exceed 0.5. All `{len(reliable_nse_delta):,}` catchments passing that rule have a valid pre/post epsilon contrast:
+
+```text
+reliability-subset mean delta epsilon: {fmt_sci(reliable_nse_mean_delta)}
+reliability-subset median delta epsilon: {fmt_sci(reliable_nse_median_delta)}
+reliability-subset share with negative delta epsilon: {fmt_pct(reliable_nse_negative_share)}
+```
+
+This filter does not validate epsilon against a direct observation: epsilon remains latent, and NSE measures the skill of the physics-constrained streamflow reconstruction. The subset result should therefore be interpreted as a change in model-inferred epsilon among catchments with adequate indirect reconstruction skill.
 
 ### Epsilon Shift
 
@@ -191,12 +257,14 @@ delta epsilon = mean epsilon in {year(post_start)}-{year(post_end)} - mean epsil
 Across all recession days:
 
 ```text
+mean pre-change epsilon: {fmt_sci(result['mean_pre_epsilon'])}
+mean post-change epsilon: {fmt_sci(result['mean_post_epsilon'])}
 mean delta epsilon: {fmt_sci(result['mean_delta_epsilon'])}
 median delta epsilon: {fmt_sci(result['median_delta_epsilon'])}
 catchment share with negative delta epsilon: {fmt_pct(result['negative_delta_share'])}
 ```
 
-The all-catchment mean is negative and the median shift is also slightly negative. The absolute median is small, so the central tendency is a weak downward shift rather than a large regime-wide displacement. The distribution remains heterogeneous: `{fmt_pct(result['negative_delta_share'])}` of valid catchments show negative epsilon change, while a smaller set of catchments has positive shifts.
+The mean, median, and negative-share statistics describe the central tendency and sign balance of the catchment-level epsilon shift. They should be interpreted together: the mean is sensitive to large-magnitude catchments, while the median is the more robust summary of the typical catchment.
 
 Flow-regime summaries use basin-specific observed-flow thresholds:
 
@@ -210,7 +278,7 @@ mid-flow epsilon:  Q10 < observed Q < Q90
 {regime_line(regime_summary, "mid")}
 {regime_line(regime_summary, "high")}
 
-Low-flow and high-flow epsilon are evaluated separately because recession behavior under the tails of the flow distribution can reflect different storage-release controls. Their mean relative changes are `{fmt_pct(low['mean_relative_delta_mean'])}` for low flow and `{fmt_pct(high['mean_relative_delta_mean'])}` for high flow. These flow-regime summaries should be read together with the median and quartile structure in the table, because outlier basins can move the mean.
+Low-flow and high-flow epsilon are evaluated separately because recession behavior under the tails of the flow distribution can reflect different storage-release controls. Their mean relative changes are `{fmt_pct(low['mean_relative_delta_mean'])}` for low flow and `{fmt_pct(high['mean_relative_delta_mean'])}` for high flow. These flow-regime summaries should be read together with the median and quartile structure in the table, because outlier catchments can move the mean.
 
 ### Hydroclimate Structure
 
@@ -218,7 +286,7 @@ Low-flow and high-flow epsilon are evaluated separately because recession behavi
 
 The hydroclimate-gradient figure bins catchments into quartiles of precipitation, temperature, and aridity, then compares mean and median epsilon change within each bin. This checks whether the epsilon shift is a spatially random artifact or whether it aligns with background catchment climate.
 
-The current result should be read as a first-order gradient analysis rather than a causal attribution test. The median changes remain close to zero compared with the mean changes, so the hydroclimate signal is likely influenced by a subset of catchments with large positive or negative deltas. The next statistical step is to test these gradients with robust regression or hierarchical models rather than relying on quartile plots alone.
+The hydroclimate gradients should be read as descriptive evidence, not causal attribution. They show whether epsilon shifts align with background precipitation, temperature, and aridity structure, and they identify where more formal regression or hierarchical testing would be useful.
 
 ### Spatial Pattern
 
@@ -231,7 +299,7 @@ catchment-level table: {fig_rel}/epsilon_change_by_catchment.csv
 flow-regime table:    {fig_rel}/epsilon_change_by_flow_regime.csv
 ```
 
-The map highlights heterogeneous post-1990 changes: the median change is small and negative, about `{fmt_sci(result['median_delta_epsilon'])}`.
+The map highlights where post-1990 changes cluster spatially. The cross-catchment median change is `{fmt_sci(result['median_delta_epsilon'])}`.
 
 ## Method Summary
 

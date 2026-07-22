@@ -2,139 +2,185 @@
 
 ## Introduction
 
-This study examines whether catchment recession behavior changed after 1990. The central quantity is `epsilon`, a daily latent coefficient inferred by a physics-informed LSTM inside a recession-flow differential equation. It is not temperature, precipitation, or a post-hoc ratio from a standard LSTM. It represents the model-inferred recession response of streamflow under the observed hydroclimatic state.
+This study asks whether catchment recession behavior changed across the 1990 transition. We use `epsilon` as a daily latent coefficient in a physics-informed recession equation, inferred directly by the model for each recession day.
 
-The analysis compares two periods:
+The analysis is organized around two periods:
 
 ```text
 pre-change:  1950-01-01 to 1990-12-31
 post-change: 1991-01-01 to 2019-12-31
 ```
 
-The primary question is whether daily recession-period epsilon shifts after 1990, and whether that shift differs between low-flow and high-flow recession conditions.
-
-## Data Resources
-
-The active dataset is a pure GCIN catchment-day product. Observed streamflow is indexed by `GCIN`, and all meteorological and land-state drivers are reduced over the corresponding GCIN catchment boundaries.
+The main scientific question is:
 
 ```text
-period:                    1950-2019
-model-ready catchments:     2,511
-recession simulation days:  9,192,715
-format:                    yearly parquet
+Did catchment epsilon shift between 1950-1990 and 1991-2019, and is that shift structured by flow regime and hydroclimate?
 ```
 
-The dynamic inputs include catchment-level precipitation, temperature, PET, soil moisture, streamflow, and AET-related variables. Static attributes include location, area, long-term hydroclimate summaries, aridity, soil and topographic properties, precipitation frequency/duration metrics, and moisture indices.
+## Resources
 
-Daily rows are catchment time-series records rather than raster grid cells.
+The current analysis uses:
 
-## Method
+```text
+ERA5-Land catchment daily forcing and state variables
+Event_Typology observed streamflow
+catchment static attributes
+LP/gamma AET prior bounds
+Ara-style physics-informed epsilon-core LSTM
+```
 
-The model follows the Ara-style physics-informed `LSTM-epsilon` formulation. It directly predicts daily epsilon inside the recession equation:
+The model-ready daily series are stored as yearly parquet files under:
+
+```text
+_private/processed/epsilon_physics_daily_pure_gcin_1950_2019_parquet/
+```
+
+Each record contains:
+
+```text
+GCIN, date, precipitation_mmd, temperature_C, pet_mmd,
+SM_%, streamflow_mmd, observed_AET_mm
+```
+
+Observed-Q duration is based on valid daily values rather than nominal table bounds:
+
+```text
+median valid Q record:                         16,132 days
+median valid Q days in 1950-1990:             7,472
+median valid Q days in 1991-2019:             9,204
+catchments with any valid Q in both periods:   2,304
+catchments with >= 2 years in both periods:    2,220
+catchments with >= 5 years in both periods:    2,133
+```
+
+In the current pure GCIN run, `GCIN` is the original GCIN catchment identifier. Legacy/GridCode/Catchment_ID mixed products are excluded from production analysis because their numeric identifiers cannot be assumed to reference the same catchment boundaries.
+
+## Current Run
+
+The production run is:
+
+```text
+run label: crossfit_1990
+cluster/fold count: 5
+batch_size: 512
+maximum epochs: 30
+basin roles per outer fold: approximately 70% train / 10% validation / 20% test
+```
+
+The model and physics-informed objective follow the reference `LSTM-epsilon` structure. For each outer fold, the held-out test basins never participate in fitting, normalization, validation, or checkpoint selection. Normalization is estimated from training basins only, and the best checkpoint is selected by median catchment NSE on separate validation basins. Each catchment is inferred exactly once by the model for which it belongs to the held-out test fold.
+
+This is basin-held-out cross-fitting for a gauged-catchment attribution study, not strict ungauged prediction. Observed Q in held-out catchments is still used to identify recession days, define local Q10/Q90 regimes, evaluate NSE, and supply the reference workflow's Q-derived `low_high_ratio` static attribute.
+
+The 1990 transition is a prespecified scientific comparison point, not a temporal train/test boundary. All basin roles use the full 1950-2019 record because the goal is cross-catchment epsilon estimation rather than future-flow forecasting. Data-driven breakpoint or transition-interval estimation is reserved for a later robustness analysis and is not used to tune the present model.
+
+Cold-temperature filtering is enabled:
+
+```text
+remove recession days with daily mean temperature <= 0 deg C
+```
+
+The cold-temperature filter threshold is `0.0 deg C`; this removes recession days where the daily mean temperature is at or below the threshold.
+
+## Results
+
+The final cross-fitted analysis covers `2,297` catchments and `9,192,715` recession-day simulations.
+
+### Model Skill
+
+![Validation NSE and training loss](assets/epsilon_pure_gcin_1950_2019/figure_01_training_loss.png)
+
+The model was evaluated only on held-out outer-fold basins using recession-day streamflow. Following the reference testing workflow, each held-out basin is inferred retrospectively over its complete available record; this is not a future-only forecast. Catchment-level NSE is the primary skill metric and checkpoint-selection criterion. Scores are summarized by the median across basins so large high-flow basins do not dominate the diagnostic; KGE is retained as a supplementary robustness metric.
+
+```text
+median catchment NSE: 0.327
+catchment NSE p10-p90: -1.045 to 0.651
+median catchment KGE: 0.494
+catchment KGE p10-p90: -0.168 to 0.770
+pre-period median NSE / KGE: 0.302 / 0.478
+post-period median NSE / KGE: 0.388 / 0.520
+pooled NSE, supplementary: 0.343
+pooled KGE, supplementary: 0.498
+```
+
+Median catchment NSE is the primary reported diagnostic because each catchment contributes one score. Catchment KGE and pooled NSE/KGE are supplementary; pooled scores stack all recession-day records, so long-record or high-flow catchments can dominate the value.
+
+The public explorer retains all evaluated catchments in its JSON. Its Overview panel applies the reliability filter in the browser: users can switch between NSE and KGE and change the threshold. At the default threshold of 0.5, `566` catchments pass NSE in both periods and `1,003` pass KGE in both periods.
+
+The full-cohort epsilon shift below is descriptive because the held-out NSE distribution has a substantial low-skill tail. For the primary reliability subset, both pre-period and post-period catchment NSE must exceed 0.5. All `566` catchments passing that rule have a valid pre/post epsilon contrast:
+
+```text
+reliability-subset mean delta epsilon: 1.982e-02
+reliability-subset median delta epsilon: 9.771e-03
+reliability-subset share with negative delta epsilon: 21.6%
+```
+
+This filter does not validate epsilon against a direct observation: epsilon remains latent, and NSE measures the skill of the physics-constrained streamflow reconstruction. The subset result should therefore be interpreted as a change in model-inferred epsilon among catchments with adequate indirect reconstruction skill.
+
+### Epsilon Shift
+
+![Epsilon delta distribution by all days and flow regime](assets/epsilon_pure_gcin_1950_2019/figure_02_delta_distribution.png)
+
+For each catchment, epsilon change is defined as the post-change mean minus the pre-change mean:
+
+```text
+delta epsilon = mean epsilon in 1991-2019 - mean epsilon in 1950-1990
+```
+
+Across all recession days:
+
+```text
+mean pre-change epsilon: 4.259e-01
+mean post-change epsilon: 4.490e-01
+mean delta epsilon: 3.777e-02
+median delta epsilon: 8.809e-03
+catchment share with negative delta epsilon: 28.3%
+```
+
+The mean, median, and negative-share statistics describe the central tendency and sign balance of the catchment-level epsilon shift. They should be interpreted together: the mean is sensitive to large-magnitude catchments, while the median is the more robust summary of the typical catchment.
+
+Flow-regime summaries use basin-specific observed-flow thresholds:
+
+```text
+low-flow epsilon:  recession days with observed Q <= each catchment's Q10
+high-flow epsilon: recession days with observed Q >= each catchment's Q90
+mid-flow epsilon:  Q10 < observed Q < Q90
+```
+
+- `low` flow: mean delta epsilon = 3.341e-02; median delta epsilon = 4.151e-03; mean relative delta = 6.5%.
+- `mid` flow: mean delta epsilon = 2.569e-02; median delta epsilon = 4.677e-03; mean relative delta = 6.2%.
+- `high` flow: mean delta epsilon = 1.619e-02; median delta epsilon = 2.194e-03; mean relative delta = 7.4%.
+
+Low-flow and high-flow epsilon are evaluated separately because recession behavior under the tails of the flow distribution can reflect different storage-release controls. Their mean relative changes are `6.5%` for low flow and `7.4%` for high flow. These flow-regime summaries should be read together with the median and quartile structure in the table, because outlier catchments can move the mean.
+
+### Hydroclimate Structure
+
+![Hydroclimate gradients of epsilon change](assets/epsilon_pure_gcin_1950_2019/figure_03_hydroclimate_gradients.png)
+
+The hydroclimate-gradient figure bins catchments into quartiles of precipitation, temperature, and aridity, then compares mean and median epsilon change within each bin. This checks whether the epsilon shift is a spatially random artifact or whether it aligns with background catchment climate.
+
+The hydroclimate gradients should be read as descriptive evidence, not causal attribution. They show whether epsilon shifts align with background precipitation, temperature, and aridity structure, and they identify where more formal regression or hierarchical testing would be useful.
+
+### Spatial Pattern
+
+![Spatial distribution of epsilon change](assets/epsilon_pure_gcin_1950_2019/figure_04_spatial_delta.png)
+
+The spatial map shows catchment-level epsilon change as point locations. It is designed to reveal regional clustering that is hidden in the histogram and boxplot. Blue and red points mark opposite signs of epsilon change, so the map should be interpreted together with the catchment-level delta table:
+
+```text
+catchment-level table: assets/epsilon_pure_gcin_1950_2019/epsilon_change_by_catchment.csv
+flow-regime table:    assets/epsilon_pure_gcin_1950_2019/epsilon_change_by_flow_regime.csv
+```
+
+The map highlights where post-1990 changes cluster spatially. The cross-catchment median change is `8.809e-03`.
+
+## Method Summary
+
+For each catchment, the model reads a 365-day context window of dynamic inputs plus static attributes. It predicts daily `epsilon_t`, `q_base_t`, and bounded AET parameters `alpha`, `LP`, and `gamma`. AET is computed inside the model from PET, soil moisture, LP, and gamma. Streamflow is then solved through the closed-form state-reset recession equation and supervised against observed streamflow on recession days.
+
+The main differential equation is:
 
 ```text
 dQ/dt = -epsilon * Q^2 - epsilon * alpha * AET * Q
 ```
 
-The model does not first predict `GQ` and then divide by observed `Q`. For each target day, it reads a 365-day dynamic context window plus static attributes. The network outputs daily epsilon and the bounded parameters needed to solve the recession path. The integrated streamflow path is supervised against observed streamflow on recession days.
-
-Training and inference are restricted to hydrologically interpretable recession sequences:
-
-```text
-minimum decline length: 4 days
-first decline day:      removed
-decreasing-rate filter: enabled
-cold-day filter:        temperature_C <= 0 deg C removed
-```
-
-Low-flow and high-flow analyses use each catchment's own observed recession-day flow distribution:
-
-```text
-low flow:  Qobs <= catchment Q10
-mid flow:  catchment Q10 < Qobs < catchment Q90
-high flow: Qobs >= catchment Q90
-```
-
-These are local thresholds, not global discharge cutoffs.
-
-## Model Skill
-
-The production run used five cross-fitted folds. Median catchment-level skill across the recession simulations is:
-
-```text
-median catchment NSE: 0.466
-median catchment KGE: 0.663
-pooled NSE:           0.574
-pooled KGE:           0.707
-```
-
-Period-specific catchment skill is:
-
-```text
-pre-period median NSE:  0.457
-post-period median NSE: 0.485
-pre-period median KGE:  0.660
-post-period median KGE: 0.667
-```
-
-For visual exploration, the GitHub Pages map displays the high-skill subset where both pre-period and post-period catchment NSE are greater than 0.5:
-
-```text
-catchments with both-period NSE > 0.5: 846
-evaluated catchments with pre/post contrast: 2,297
-```
-
-The underlying result files retain all evaluated catchments; the filter is only applied in the public map.
-
-## Epsilon Change
-
-Across evaluated catchments, the all-recession epsilon contrast shows a positive post-1990 shift:
-
-```text
-valid catchments for delta epsilon: 2,297
-mean pre epsilon:                   0.715
-mean post epsilon:                  0.757
-mean delta epsilon:                 0.080
-median delta epsilon:               0.019
-negative-delta catchment share:     23.3%
-```
-
-The flow-regime view is essential because the same catchment can show different epsilon shifts under low-flow and high-flow recession conditions. The public explorer therefore classifies or colors catchments using low-flow and high-flow relative epsilon changes rather than only long-term mean epsilon.
-
-## Spatial Skill Pattern
-
-The `NSE > 0.5` display filter strongly changes the spatial sample. Europe retains many catchments, while CONUS, Australia, and Africa retain far fewer:
-
-| Region | Evaluated | Kept | Kept % | Median pre NSE | Median post NSE | Median precip corr | Median Q90/Q10 | Median aridity |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Europe | 1,283 | 724 | 56.4 | 0.561 | 0.609 | 0.823 | 8.06 | 0.634 |
-| CONUS | 312 | 28 | 9.0 | 0.360 | 0.293 | 0.704 | 31.48 | 1.026 |
-| Australia | 222 | 28 | 12.6 | 0.310 | 0.250 | 0.349 | 38.91 | 1.125 |
-| Africa | 241 | 17 | 7.1 | 0.258 | 0.235 | 0.811 | 22.64 | 1.317 |
-| South America | 138 | 37 | 26.8 | 0.407 | 0.290 | 0.698 | 6.79 | 0.707 |
-
-The contrast is not explained by simple daily flow variability alone. The retained catchments tend to be cooler, less arid, smaller, and less extreme in low-to-high flow contrast. Across catchments, `min(pre NSE, post NSE)` is negatively associated with aridity and temperature:
-
-```text
-Spearman(min NSE, aridity):     -0.469
-Spearman(min NSE, temperature): -0.467
-Spearman(min NSE, Q90/Q10):     -0.205
-Spearman(min NSE, precip corr):  0.182
-```
-
-The precipitation-matching hypothesis is partly supported at the regional scale: Europe has higher GEE-vs-original-forcing precipitation agreement than CONUS. However, within CONUS alone, precipitation correlation does not fully separate retained from removed catchments. The current interpretation is that model skill is controlled by a combination of forcing agreement, aridity, thermal regime, flow intermittency, and recession-regime contrast.
-
-## Figures
-
-The current pure GCIN run is summarized by:
-
-- [Model skill distribution](assets/epsilon_pure_gcin_1950_2019/figure_01_model_skill.png)
-- [Epsilon change distribution](assets/epsilon_pure_gcin_1950_2019/figure_02_delta_distribution.png)
-- [Hydroclimate gradients](assets/epsilon_pure_gcin_1950_2019/figure_03_hydroclimate_gradients.png)
-- [Spatial epsilon change](assets/epsilon_pure_gcin_1950_2019/figure_04_spatial_delta.png)
-
-The companion technical record is:
-
-```text
-paper_repo/docs/TECHNICAL_METHODS.md
-```
+The model is therefore an epsilon-core physics-informed LSTM that infers daily epsilon directly inside the recession equation.

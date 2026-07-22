@@ -14,11 +14,15 @@ REGIMES = ("all", "low", "high")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=Path, default=Path("paper_repo/configs/epsilon_experiment_era5land_legacy_1950_2019.yaml"))
+    parser.add_argument("--config", type=Path, default=Path("paper_repo/configs/epsilon_experiment_pure_gcin_1950_2019.yaml"))
     parser.add_argument("--run-root", type=Path)
-    parser.add_argument("--run-label", type=str, default="full_crossfit_era5land_legacy_1950_2019")
+    parser.add_argument("--run-label", type=str, default="crossfit_1990")
     parser.add_argument("--static", type=Path)
-    parser.add_argument("--qobs-coverage", type=Path, default=Path("_private/processed/legacy_forcings/timeseries_matched_extended_qobs_coverage_by_gcin.csv"))
+    parser.add_argument(
+        "--qobs-coverage",
+        type=Path,
+        default=Path("_private/results/epsilon_pure_gcin_1950_2019/inputs/qobs_inventory.parquet"),
+    )
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--bins", type=int, default=48)
     return parser.parse_args()
@@ -83,6 +87,36 @@ def stats(values: pd.Series) -> dict[str, float | None]:
     }
 
 
+def nse(obs: np.ndarray, pred: np.ndarray) -> float | None:
+    valid = np.isfinite(obs) & np.isfinite(pred)
+    if valid.sum() < 2:
+        return None
+    obs = obs[valid]
+    pred = pred[valid]
+    denominator = np.sum((obs - obs.mean()) ** 2)
+    if denominator <= 0:
+        return None
+    return finite_or_none(1.0 - np.sum((obs - pred) ** 2) / denominator)
+
+
+def kge(obs: np.ndarray, pred: np.ndarray) -> float | None:
+    valid = np.isfinite(obs) & np.isfinite(pred)
+    if valid.sum() < 2:
+        return None
+    obs = obs[valid]
+    pred = pred[valid]
+    obs_std = obs.std(ddof=1)
+    pred_std = pred.std(ddof=1)
+    obs_mean = obs.mean()
+    pred_mean = pred.mean()
+    if obs_std <= 0 or pred_std <= 0 or obs_mean == 0:
+        return None
+    correlation = ((obs - obs_mean) * (pred - pred_mean)).sum() / ((len(obs) - 1) * obs_std * pred_std)
+    alpha = pred_std / obs_std
+    beta = pred_mean / obs_mean
+    return finite_or_none(1.0 - np.sqrt((correlation - 1.0) ** 2 + (alpha - 1.0) ** 2 + (beta - 1.0) ** 2))
+
+
 def density_curve(pre: np.ndarray, post: np.ndarray, bins: int) -> dict[str, list[float | None]]:
     pre = pre[np.isfinite(pre)]
     post = post[np.isfinite(post)]
@@ -117,19 +151,38 @@ def density_curve(pre: np.ndarray, post: np.ndarray, bins: int) -> dict[str, lis
 def read_qobs_coverage(path: Path) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame()
-    coverage = pd.read_csv(path)
+    if path.suffix.lower() == ".parquet":
+        coverage = pd.read_parquet(path)
+    else:
+        coverage = pd.read_csv(path)
     if "GCIN" not in coverage.columns:
         return pd.DataFrame()
+    rename = {
+        "start": "first_valid_date",
+        "end": "last_valid_date",
+        "valid_q_days": "valid_days",
+    }
+    coverage = coverage.rename(columns={k: v for k, v in rename.items() if k in coverage.columns})
     coverage["GCIN"] = pd.to_numeric(coverage["GCIN"], errors="coerce").astype("Int64")
     return coverage.set_index("GCIN")
 
 
 def build_payload(sim: pd.DataFrame, static_path: Path, qobs_coverage_path: Path, bins: int, cfg: dict, run_label: str) -> dict[str, object]:
-    static_columns = ["GCIN", "force_code", "longitude", "latitude", "area_km2", "Prec_mm", "Temp_C", "Aridity"]
-    try:
-        static = pd.read_parquet(static_path, columns=static_columns)
-    except Exception:
-        static = pd.read_parquet(static_path, columns=[c for c in static_columns if c != "force_code"])
+    static_columns = [
+        "GCIN",
+        "catchment_id",
+        "source",
+        "source_id",
+        "force_code",
+        "longitude",
+        "latitude",
+        "area_km2",
+        "Prec_mm",
+        "Temp_C",
+        "Aridity",
+    ]
+    available = set(pd.read_parquet(static_path).columns)
+    static = pd.read_parquet(static_path, columns=[c for c in static_columns if c in available])
     static["GCIN"] = pd.to_numeric(static["GCIN"], errors="coerce").astype("Int64")
     static = static.set_index("GCIN")
     qobs_coverage = read_qobs_coverage(qobs_coverage_path)
@@ -143,6 +196,9 @@ def build_payload(sim: pd.DataFrame, static_path: Path, qobs_coverage_path: Path
         row = static.loc[gcin]
         basin: dict[str, object] = {
             "GCIN": int(gcin),
+            "catchment_id": None if "catchment_id" not in static.columns or pd.isna(row["catchment_id"]) else str(row["catchment_id"]),
+            "source": None if "source" not in static.columns or pd.isna(row["source"]) else str(row["source"]),
+            "source_id": None if "source_id" not in static.columns or pd.isna(row["source_id"]) else int(row["source_id"]),
             "force_code": int(row["force_code"]) if "force_code" in static.columns and pd.notna(row["force_code"]) else None,
             "lon": finite_or_none(row["longitude"]),
             "lat": finite_or_none(row["latitude"]),
@@ -164,6 +220,13 @@ def build_payload(sim: pd.DataFrame, static_path: Path, qobs_coverage_path: Path
         q90 = finite_or_none(g["q90"].iloc[0])
         basin_curves = {}
         all_delta_is_valid = False
+
+        for period in ("pre", "post"):
+            period_rows = g[g["period"] == period]
+            observed = period_rows["observed_Q_mmd"].to_numpy(float)
+            simulated = period_rows["simulated_Q_mmd"].to_numpy(float)
+            basin[f"{period}_nse"] = nse(observed, simulated)
+            basin[f"{period}_kge"] = kge(observed, simulated)
 
         for regime in REGIMES:
             rg = g if regime == "all" else g[g["regime"] == regime]

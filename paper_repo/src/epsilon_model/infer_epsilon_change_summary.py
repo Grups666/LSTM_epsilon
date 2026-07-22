@@ -17,7 +17,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--fold", type=int, required=True)
-    parser.add_argument("--run-label", type=str, default="physics_runs")
+    parser.add_argument("--run-label", type=str, default="crossfit_1990")
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--max-catchments", type=int, default=None)
     return parser.parse_args()
@@ -107,10 +107,19 @@ def main() -> None:
         metadata = json.load(f)
     years = [int(y) for y in metadata["years"]]
     gcins = split_gcins(cfg, args.fold, bool(metadata.get("smoke", args.smoke)))
-    if args.max_catchments is not None:
-        gcins = set(sorted(gcins)[: args.max_catchments])
     frame = load_physics_frame(cfg, years, gcins)
-    basins, _ = build_dataset(cfg, frame, gcins)
+    basins, _ = build_dataset(
+        cfg,
+        frame,
+        gcins,
+        normalization_stats=metadata["stats"],
+    )
+    max_catchments = args.max_catchments
+    if max_catchments is None and bool(metadata.get("smoke", args.smoke)):
+        max_catchments = max(1, int(cfg["smoke"].get("max_catchments", 128)) // 4)
+    if max_catchments is not None:
+        keep = set(sorted(basins)[:max_catchments])
+        basins = {gcin: basin for gcin, basin in basins.items() if gcin in keep}
 
     input_dim = len(cfg["physics"]["dynamic_columns"]) + len(cfg["data"]["static_columns"])
     model = EpsilonStateResetModel(

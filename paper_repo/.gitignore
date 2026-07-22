@@ -1,0 +1,19 @@
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Data products should be documented, not committed, unless explicitly small.
+data/raw/
+data/interim/
+data/processed/
+outputs/
+models/
+
+# Secrets and local configuration
+.env
+.env.*
+*.key
+*.pem
+.cdsapirc

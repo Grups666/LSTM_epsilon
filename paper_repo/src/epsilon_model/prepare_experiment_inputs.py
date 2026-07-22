@@ -53,6 +53,39 @@ def build_fold_assignment(cfg: dict, inputs_dir: Path) -> pd.DataFrame:
     out = static[["GCIN", *cfg["splits"]["stratify_columns"]]].copy()
     out["fold"] = folds
     out["stratum"] = strata
+    validation_offset = int(cfg["splits"].get("validation_fold_offset", 1))
+    validation_fraction = float(cfg["splits"].get("validation_fraction_of_fold", 0.5))
+    if not (0.0 < validation_fraction < 1.0):
+        raise ValueError("validation_fraction_of_fold must be between 0 and 1")
+
+    for test_fold in range(n_folds):
+        role = np.full(len(out), "train", dtype=object)
+        test_mask = folds == test_fold
+        role[test_mask] = "test"
+
+        validation_fold = (test_fold + validation_offset) % n_folds
+        validation_candidates = np.flatnonzero(folds == validation_fold)
+        rng = np.random.default_rng(seed + test_fold)
+        rng.shuffle(validation_candidates)
+        n_validation = max(1, int(round(validation_fraction * len(validation_candidates))))
+        role[validation_candidates[:n_validation]] = "validation"
+        out[f"role_fold_{test_fold}"] = role
+
+        counts = pd.Series(role).value_counts()
+        print(
+            f"crossfit fold {test_fold}: "
+            f"train={int(counts.get('train', 0))} "
+            f"validation={int(counts.get('validation', 0))} "
+            f"test={int(counts.get('test', 0))}"
+        )
+
+    role_columns = [f"role_fold_{fold}" for fold in range(n_folds)]
+    allowed_roles = {"train", "validation", "test"}
+    if any(set(out[col].unique()) != allowed_roles for col in role_columns):
+        raise RuntimeError("Every crossfit fold must contain train, validation, and test basins")
+    test_counts = (out[role_columns] == "test").sum(axis=1)
+    if not bool((test_counts == 1).all()):
+        raise RuntimeError("Every basin must be held out as test exactly once across the five folds")
     out_path = inputs_dir / "fold_assignment.parquet"
     out.to_parquet(out_path, index=False)
     out.to_csv(inputs_dir / "fold_assignment.csv", index=False)
@@ -67,11 +100,12 @@ def build_qobs_inventory(cfg: dict, inputs_dir: Path) -> pd.DataFrame:
         path = daily_dir / f"epsilon_training_daily_{year}.parquet"
         df = pd.read_parquet(path, columns=["GCIN", "date", cfg["data"]["target_column"]])
         df["has_q"] = df[cfg["data"]["target_column"]].notna()
+        df["valid_q_date"] = pd.to_datetime(df["date"]).where(df["has_q"])
         agg = df.groupby("GCIN", observed=True).agg(
             rows=("has_q", "size"),
             valid_q_days=("has_q", "sum"),
-            start=("date", "min"),
-            end=("date", "max"),
+            start=("valid_q_date", "min"),
+            end=("valid_q_date", "max"),
         )
         agg["year"] = year
         rows.append(agg.reset_index())
@@ -106,65 +140,6 @@ def build_qobs_inventory(cfg: dict, inputs_dir: Path) -> pd.DataFrame:
     return inv
 
 
-def recession_mask(q: np.ndarray, precip: np.ndarray, min_days: int, drop_first: bool, max_precip: float) -> np.ndarray:
-    """Legacy recession helper retained for older input-preparation outputs.
-
-    The current Ara-aligned training path uses detect_recession_paper() in
-    train_epsilon_model.py, with optional snow-month masking and no precipitation
-    threshold filter.
-    """
-    valid = np.isfinite(q)
-    decline = np.zeros(len(q), dtype=bool)
-    decline[1:] = valid[1:] & valid[:-1] & (q[1:] < q[:-1])
-    dry = np.isfinite(precip) & (precip <= max_precip)
-    candidate = decline & dry
-    out = np.zeros(len(q), dtype=bool)
-    i = 0
-    while i < len(candidate):
-        if not candidate[i]:
-            i += 1
-            continue
-        j = i
-        while j < len(candidate) and candidate[j]:
-            j += 1
-        if j - i >= min_days:
-            start = i + 1 if drop_first else i
-            out[start:j] = True
-        i = j
-    return out
-
-
-def build_recession_days(cfg: dict, inputs_dir: Path) -> None:
-    daily_dir = Path(cfg["paths"]["daily_dir"])
-    rec_dir = inputs_dir / "qobs_recession_days_by_year"
-    rec_dir.mkdir(parents=True, exist_ok=True)
-    target = cfg["data"]["target_column"]
-    params = cfg["recession"]
-    total = 0
-    for year in range(int(cfg["data"]["start_year"]), int(cfg["data"]["end_year"]) + 1):
-        path = daily_dir / f"epsilon_training_daily_{year}.parquet"
-        df = pd.read_parquet(path, columns=["GCIN", "date", "tp", target])
-        pieces = []
-        for gcin, group in df.groupby("GCIN", sort=False, observed=True):
-            q = group[target].to_numpy(dtype="float64")
-            precip = group["tp"].to_numpy(dtype="float64")
-            mask = recession_mask(
-                q,
-                precip,
-                int(params["min_decline_days"]),
-                bool(params["drop_first_decline_day"]),
-                float(params.get("max_precip_mm", 1.0)),
-            )
-            if mask.any():
-                pieces.append(group.loc[mask, ["GCIN", "date", target]].assign(recession_day=True))
-        out = pd.concat(pieces, ignore_index=True) if pieces else pd.DataFrame(columns=["GCIN", "date", target, "recession_day"])
-        out_path = rec_dir / f"qobs_recession_days_{year}.parquet"
-        out.to_parquet(out_path, index=False)
-        total += len(out)
-        print(f"wrote {out_path} rows={len(out)}")
-    print(f"recession_days_total={total}")
-
-
 def main() -> None:
     args = parse_args()
     cfg = load_config(args.config)
@@ -172,7 +147,6 @@ def main() -> None:
     inputs_dir.mkdir(parents=True, exist_ok=True)
     build_fold_assignment(cfg, inputs_dir)
     build_qobs_inventory(cfg, inputs_dir)
-    build_recession_days(cfg, inputs_dir)
 
 
 if __name__ == "__main__":

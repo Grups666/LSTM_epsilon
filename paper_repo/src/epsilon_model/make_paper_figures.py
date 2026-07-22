@@ -5,6 +5,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -35,8 +36,8 @@ TOKENS = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--run-label", type=str, default="full_crossfit_era5land_legacy_1950_2019")
-    parser.add_argument("--out-dir", type=Path, default=Path("_private/results/paper_figures"))
+    parser.add_argument("--run-label", type=str, default="crossfit_1990")
+    parser.add_argument("--out-dir", type=Path, default=Path("_private/results/paper_figures_crossfit_1990"))
     return parser.parse_args()
 
 
@@ -182,6 +183,19 @@ def compute_model_skill(sim: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, pd.
                 "bias_ratio": float(np.nanmean(pred) / np.nanmean(obs)) if np.nanmean(obs) != 0 else np.nan,
             }
         )
+    for gcin, g in work.groupby("GCIN", observed=True):
+        obs = g["observed_Q_mmd"].to_numpy(dtype=float)
+        pred = g["simulated_Q_mmd"].to_numpy(dtype=float)
+        rows.append(
+            {
+                "GCIN": int(gcin),
+                "period": "all",
+                "n_days": int(np.isfinite(obs).sum()),
+                "nse": nse(obs, pred),
+                "kge": kge(obs, pred),
+                "bias_ratio": float(np.nanmean(pred) / np.nanmean(obs)) if np.nanmean(obs) != 0 else np.nan,
+            }
+        )
     by_catchment = pd.DataFrame(rows)
 
     summary_rows = []
@@ -208,6 +222,7 @@ def compute_model_skill(sim: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, pd.
         )
     all_obs = work["observed_Q_mmd"].to_numpy(dtype=float)
     all_pred = work["simulated_Q_mmd"].to_numpy(dtype=float)
+    all_catchment = by_catchment[by_catchment["period"] == "all"]
     summary_rows.append(
         {
             "period": "all",
@@ -215,28 +230,62 @@ def compute_model_skill(sim: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, pd.
             "n_catchments": int(work["GCIN"].nunique()),
             "pooled_nse": nse(all_obs, all_pred),
             "pooled_kge": kge(all_obs, all_pred),
-            "median_catchment_nse": float(by_catchment["nse"].median()),
-            "median_catchment_kge": float(by_catchment["kge"].median()),
-            "p10_catchment_nse": float(by_catchment["nse"].quantile(0.10)),
-            "p90_catchment_nse": float(by_catchment["nse"].quantile(0.90)),
-            "p10_catchment_kge": float(by_catchment["kge"].quantile(0.10)),
-            "p90_catchment_kge": float(by_catchment["kge"].quantile(0.90)),
-            "mean_catchment_nse": float(by_catchment["nse"].mean()),
-            "mean_catchment_kge": float(by_catchment["kge"].mean()),
+            "median_catchment_nse": float(all_catchment["nse"].median()),
+            "median_catchment_kge": float(all_catchment["kge"].median()),
+            "p10_catchment_nse": float(all_catchment["nse"].quantile(0.10)),
+            "p90_catchment_nse": float(all_catchment["nse"].quantile(0.90)),
+            "p10_catchment_kge": float(all_catchment["kge"].quantile(0.10)),
+            "p90_catchment_kge": float(all_catchment["kge"].quantile(0.90)),
+            "mean_catchment_nse": float(all_catchment["nse"].mean()),
+            "mean_catchment_kge": float(all_catchment["kge"].mean()),
         }
     )
     return by_catchment, pd.DataFrame(summary_rows)
 
 
 def figure_training(metrics: pd.DataFrame, out_dir: Path) -> None:
-    fig, ax = plt.subplots(figsize=(8.8, 4.8))
+    fig, (ax_nse, ax_loss) = plt.subplots(1, 2, figsize=(11.4, 4.8))
     fig.subplots_adjust(top=0.78)
-    header(fig, "Physics-informed training convergence", "Total loss by cluster/fold for the Ara-style epsilon-core model.")
-    sns.lineplot(data=metrics, x="epoch", y="total", hue="fold", palette="tab10", linewidth=1.2, ax=ax)
-    ax.set_yscale("log")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("Total loss, log scale")
-    ax.legend(title="Cluster", frameon=False, ncols=5, loc="upper center", bbox_to_anchor=(0.5, 1.18))
+    header(
+        fig,
+        "Validation NSE guides checkpoint selection",
+        "Median catchment NSE is the primary validation diagnostic; physics-informed loss records optimization convergence.",
+    )
+    required = {"train_total", "validation_total", "validation_median_nse"}
+    if required.issubset(metrics.columns):
+        folds = sorted(metrics["fold"].unique())
+        colors = sns.color_palette("tab10", n_colors=len(folds))
+        for color, fold in zip(colors, folds):
+            group = metrics[metrics["fold"] == fold].sort_values("epoch")
+            ax_nse.plot(group["epoch"], group["validation_median_nse"], color=color, linewidth=1.4)
+            best = group.loc[group["validation_median_nse"].idxmax()]
+            ax_nse.scatter(best["epoch"], best["validation_median_nse"], color=color, s=24, zorder=4)
+            ax_loss.plot(group["epoch"], group["train_total"], color=color, linewidth=1.2)
+            ax_loss.plot(group["epoch"], group["validation_total"], color=color, linewidth=1.2, linestyle="--")
+        fold_handles = [Line2D([0], [0], color=color, linewidth=1.5, label=str(fold)) for color, fold in zip(colors, folds)]
+        ax_nse.legend(
+            handles=fold_handles,
+            title="Fold",
+            frameon=False,
+            ncols=min(len(folds), 5),
+            loc="upper left",
+        )
+        split_handles = [
+            Line2D([0], [0], color=TOKENS["ink"], linewidth=1.5, label="Train"),
+            Line2D([0], [0], color=TOKENS["ink"], linewidth=1.5, linestyle="--", label="Validation"),
+        ]
+        ax_loss.legend(handles=split_handles, title="Split", frameon=False, loc="upper right")
+    else:
+        raise ValueError(f"Training metrics are missing required columns: {sorted(required - set(metrics.columns))}")
+    ax_nse.axhline(0.0, color=TOKENS["ink"], linewidth=0.9, alpha=0.7)
+    ax_nse.axhline(0.5, color=TOKENS["red"], linewidth=0.9, linestyle=":", alpha=0.8)
+    ax_nse.set_xlabel("Epoch")
+    ax_nse.set_ylabel("Validation median catchment NSE")
+    ax_nse.set_title("A  Held-out validation skill", loc="left")
+    ax_loss.set_yscale("log")
+    ax_loss.set_xlabel("Epoch")
+    ax_loss.set_ylabel("Total loss, log scale")
+    ax_loss.set_title("B  Optimization objective", loc="left")
     save(fig, out_dir / "figure_01_training_loss")
 
 
@@ -387,12 +436,15 @@ def write_tables(
     regime.to_csv(out_dir / "epsilon_change_by_flow_regime.csv", index=False)
     skill_by_catchment.to_csv(out_dir / "model_skill_by_catchment.csv", index=False)
     skill_summary.to_csv(out_dir / "model_skill_summary.csv", index=False)
+    valid_delta = summary["delta_epsilon_mean"].dropna()
     stats = {
         "n_catchments": len(summary),
         "n_valid_delta": int(summary["delta_epsilon_mean"].notna().sum()),
+        "mean_pre_epsilon": float(summary["pre_epsilon_mean"].mean()),
+        "mean_post_epsilon": float(summary["post_epsilon_mean"].mean()),
         "mean_delta_epsilon": float(summary["delta_epsilon_mean"].mean()),
         "median_delta_epsilon": float(summary["delta_epsilon_mean"].median()),
-        "negative_delta_share": float((summary["delta_epsilon_mean"] < 0).mean()),
+        "negative_delta_share": float((valid_delta < 0).mean()),
         "n_recession_simulation_days": len(sim),
         "pooled_nse_all": float(skill_summary.loc[skill_summary["period"] == "all", "pooled_nse"].iloc[0]),
         "pooled_kge_all": float(skill_summary.loc[skill_summary["period"] == "all", "pooled_kge"].iloc[0]),

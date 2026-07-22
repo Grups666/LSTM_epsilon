@@ -11,7 +11,7 @@ from config import load_config, output_dir
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--run-label", type=str, default="full_crossfit")
+    parser.add_argument("--run-label", type=str, default="crossfit_1990")
     return parser.parse_args()
 
 
@@ -31,8 +31,27 @@ def main() -> None:
         metrics.append(m)
     all_summary = pd.concat(frames, ignore_index=True)
     all_metrics = pd.concat(metrics, ignore_index=True)
+    assignments = pd.read_parquet(out / "inputs" / "fold_assignment.parquet").set_index("GCIN")
+    if all_summary["GCIN"].duplicated().any():
+        duplicates = sorted(all_summary.loc[all_summary["GCIN"].duplicated(), "GCIN"].astype(int).unique())
+        raise RuntimeError(f"Catchments appear in more than one held-out fold: {duplicates[:10]}")
+    expected_all = set()
+    for fold in range(int(cfg["splits"]["n_folds"])):
+        expected_all.update(assignments.index[assignments[f"role_fold_{fold}"] == "test"].astype(int))
+    for fold, group in all_summary.groupby("fold", observed=True):
+        expected = assignments.loc[group["GCIN"].astype(int), f"role_fold_{int(fold)}"]
+        if not bool((expected == "test").all()):
+            raise RuntimeError(f"Fold {fold} summary contains non-test catchments")
+    observed_all = set(all_summary["GCIN"].dropna().astype(int))
+    missing = sorted(expected_all - observed_all)
+    unexpected = sorted(observed_all - expected_all)
+    if missing or unexpected:
+        raise RuntimeError(
+            "Cross-fit summary does not match the expected held-out catchments: "
+            f"missing={missing[:10]} unexpected={unexpected[:10]}"
+        )
 
-    out_dir = out / "analysis"
+    out_dir = run_root / "analysis"
     out_dir.mkdir(parents=True, exist_ok=True)
     all_summary.to_parquet(out_dir / "crossfit_epsilon_change_summary.parquet", index=False)
     all_summary.to_csv(out_dir / "crossfit_epsilon_change_summary.csv", index=False)
