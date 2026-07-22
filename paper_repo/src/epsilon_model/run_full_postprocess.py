@@ -35,7 +35,7 @@ def require_completed_training(cfg: dict, run_label: str) -> Path:
     missing = []
     for fold in range(int(cfg["splits"]["n_folds"])):
         fold_dir = run_root / f"fold_{fold}"
-        for name in ("best_model.pt", "metrics.csv", "run_metadata.json"):
+        for name in ("final_model.pt", "metrics.csv", "run_metadata.json"):
             path = fold_dir / name
             if not path.exists():
                 missing.append(path)

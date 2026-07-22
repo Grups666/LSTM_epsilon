@@ -1,7 +1,7 @@
 param(
     [string]$Python = "D:\SSH\conda_envs\hydro\python.exe",
     [string]$Config = "paper_repo\configs\epsilon_experiment_pure_gcin_1950_2019.yaml",
-    [string]$RunLabel = "crossfit_1990"
+    [string]$RunLabel = "temporal_crossfit_1990"
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,20 +16,39 @@ New-Item -ItemType Directory -Force -Path $runRoot | Out-Null
 for ($fold = 0; $fold -lt 5; $fold++) {
     $foldDir = Join-Path $runRoot "fold_$fold"
     $metadata = Join-Path $foldDir "run_metadata.json"
-    $model = Join-Path $foldDir "best_model.pt"
+    $model = Join-Path $foldDir "final_model.pt"
     if ((Test-Path $metadata) -and (Test-Path $model)) {
         Write-Host "fold $fold already complete; skipping"
-        continue
+    } else {
+        New-Item -ItemType Directory -Force -Path $foldDir | Out-Null
+        $log = Join-Path $foldDir "training.log"
+        & $Python "paper_repo\src\epsilon_model\train_epsilon_model.py" `
+            --config $Config `
+            --fold $fold `
+            --run-label $RunLabel 2>&1 | Tee-Object -FilePath $log
+        if ($LASTEXITCODE -ne 0) {
+            throw "Training failed for fold $fold with exit code $LASTEXITCODE"
+        }
     }
 
-    New-Item -ItemType Directory -Force -Path $foldDir | Out-Null
-    $log = Join-Path $foldDir "training.log"
-    & $Python "paper_repo\src\epsilon_model\train_epsilon_model.py" `
-        --config $Config `
-        --fold $fold `
-        --run-label $RunLabel 2>&1 | Tee-Object -FilePath $log
-    if ($LASTEXITCODE -ne 0) {
-        throw "Training failed for fold $fold with exit code $LASTEXITCODE"
+    $summary = Join-Path $foldDir "heldout_epsilon_change_summary.parquet"
+    $simulation = Join-Path $foldDir "recession_day_simulations.parquet"
+    $skill = Join-Path $foldDir "heldout_skill_summary.csv"
+    if (-not ((Test-Path $summary) -and (Test-Path $simulation) -and (Test-Path $skill))) {
+        Write-Host "Running held-out inference for fold $fold"
+        & $Python "paper_repo\src\epsilon_model\infer_epsilon_change_summary.py" `
+            --config $Config `
+            --fold $fold `
+            --run-label $RunLabel
+        if ($LASTEXITCODE -ne 0) {
+            throw "Held-out inference failed for fold $fold with exit code $LASTEXITCODE"
+        }
+    }
+
+    Import-Csv -LiteralPath $skill | ForEach-Object {
+        Write-Host ("fold {0} held-out {1} NSE: median={2:N3}, mean={3:N3}, pooled={4:N3}, basins={5}" -f `
+            $fold, $_.period, [double]$_.median_catchment_nse, [double]$_.mean_catchment_nse, `
+            [double]$_.pooled_nse, $_.n_catchments)
     }
 }
 

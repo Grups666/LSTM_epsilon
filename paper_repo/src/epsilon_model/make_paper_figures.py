@@ -36,8 +36,8 @@ TOKENS = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--run-label", type=str, default="crossfit_1990")
-    parser.add_argument("--out-dir", type=Path, default=Path("_private/results/paper_figures_crossfit_1990"))
+    parser.add_argument("--run-label", type=str, default="temporal_crossfit_1990")
+    parser.add_argument("--out-dir", type=Path, default=Path("_private/results/paper_figures_temporal_crossfit_1990"))
     return parser.parse_args()
 
 
@@ -63,7 +63,6 @@ def setup_style() -> None:
 def save(fig: plt.Figure, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path.with_suffix(".png"), dpi=320, bbox_inches="tight")
-    fig.savefig(path.with_suffix(".svg"), bbox_inches="tight")
     plt.close(fig)
 
 
@@ -80,14 +79,10 @@ def require(path: Path) -> Path:
 
 def load_run(cfg: dict, run_label: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     run_root = output_dir(cfg) / run_label
-    summaries = []
     metrics = []
     sims = []
     for fold in range(int(cfg["splits"]["n_folds"])):
         fold_dir = run_root / f"fold_{fold}"
-        summary = pd.read_parquet(require(fold_dir / "heldout_epsilon_change_summary.parquet"))
-        summary["fold"] = fold
-        summaries.append(summary)
         metric = pd.read_csv(require(fold_dir / "metrics.csv"))
         metric["fold"] = fold
         metrics.append(metric)
@@ -96,7 +91,8 @@ def load_run(cfg: dict, run_label: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.
             sim = pd.read_parquet(sim_path)
             sim["fold"] = fold
             sims.append(sim)
-    return pd.concat(summaries, ignore_index=True), pd.concat(metrics, ignore_index=True), pd.concat(sims, ignore_index=True)
+    summary = pd.read_parquet(require(run_root / "analysis" / "temporal_crossfit_epsilon_change_summary.parquet"))
+    return summary, pd.concat(metrics, ignore_index=True), pd.concat(sims, ignore_index=True)
 
 
 def compute_flow_regime_stats(sim: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -244,48 +240,43 @@ def compute_model_skill(sim: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, pd.
 
 
 def figure_training(metrics: pd.DataFrame, out_dir: Path) -> None:
-    fig, (ax_nse, ax_loss) = plt.subplots(1, 2, figsize=(11.4, 4.8))
+    fig, (ax_total, ax_parts) = plt.subplots(1, 2, figsize=(11.4, 4.8))
     fig.subplots_adjust(top=0.78)
     header(
         fig,
-        "Validation NSE guides checkpoint selection",
-        "Median catchment NSE is the primary validation diagnostic; physics-informed loss records optimization convergence.",
+        "Fixed-epoch optimization across temporal folds",
+        "No validation set or test-guided checkpoint selection is used; all folds retain the epoch-30 model.",
     )
-    required = {"train_total", "validation_total", "validation_median_nse"}
+    required = {"train_total", "train_l_path", "train_l_rhs", "train_l_smooth", "train_l_q0"}
     if required.issubset(metrics.columns):
         folds = sorted(metrics["fold"].unique())
         colors = sns.color_palette("tab10", n_colors=len(folds))
         for color, fold in zip(colors, folds):
             group = metrics[metrics["fold"] == fold].sort_values("epoch")
-            ax_nse.plot(group["epoch"], group["validation_median_nse"], color=color, linewidth=1.4)
-            best = group.loc[group["validation_median_nse"].idxmax()]
-            ax_nse.scatter(best["epoch"], best["validation_median_nse"], color=color, s=24, zorder=4)
-            ax_loss.plot(group["epoch"], group["train_total"], color=color, linewidth=1.2)
-            ax_loss.plot(group["epoch"], group["validation_total"], color=color, linewidth=1.2, linestyle="--")
+            ax_total.plot(group["epoch"], group["train_total"], color=color, linewidth=1.4)
         fold_handles = [Line2D([0], [0], color=color, linewidth=1.5, label=str(fold)) for color, fold in zip(colors, folds)]
-        ax_nse.legend(
+        ax_total.legend(
             handles=fold_handles,
             title="Fold",
             frameon=False,
             ncols=min(len(folds), 5),
             loc="upper left",
         )
-        split_handles = [
-            Line2D([0], [0], color=TOKENS["ink"], linewidth=1.5, label="Train"),
-            Line2D([0], [0], color=TOKENS["ink"], linewidth=1.5, linestyle="--", label="Validation"),
-        ]
-        ax_loss.legend(handles=split_handles, title="Split", frameon=False, loc="upper right")
+        mean_metrics = metrics.groupby("epoch", observed=True)[list(required - {"train_total"})].mean()
+        component_colors = [TOKENS["blue"], TOKENS["red"], TOKENS["gold"], TOKENS["green"]]
+        for color, column in zip(component_colors, ["train_l_path", "train_l_rhs", "train_l_smooth", "train_l_q0"]):
+            ax_parts.plot(mean_metrics.index, mean_metrics[column], color=color, linewidth=1.3, label=column.removeprefix("train_l_"))
+        ax_parts.legend(title="Loss term", frameon=False, loc="upper right")
     else:
         raise ValueError(f"Training metrics are missing required columns: {sorted(required - set(metrics.columns))}")
-    ax_nse.axhline(0.0, color=TOKENS["ink"], linewidth=0.9, alpha=0.7)
-    ax_nse.axhline(0.5, color=TOKENS["red"], linewidth=0.9, linestyle=":", alpha=0.8)
-    ax_nse.set_xlabel("Epoch")
-    ax_nse.set_ylabel("Validation median catchment NSE")
-    ax_nse.set_title("A  Held-out validation skill", loc="left")
-    ax_loss.set_yscale("log")
-    ax_loss.set_xlabel("Epoch")
-    ax_loss.set_ylabel("Total loss, log scale")
-    ax_loss.set_title("B  Optimization objective", loc="left")
+    ax_total.set_yscale("log")
+    ax_total.set_xlabel("Epoch")
+    ax_total.set_ylabel("Training total loss, log scale")
+    ax_total.set_title("A  Fold-level convergence", loc="left")
+    ax_parts.set_yscale("log")
+    ax_parts.set_xlabel("Epoch")
+    ax_parts.set_ylabel("Mean training loss, log scale")
+    ax_parts.set_title("B  Physics-loss components", loc="left")
     save(fig, out_dir / "figure_01_training_loss")
 
 
@@ -471,6 +462,8 @@ def main() -> None:
     skill_by_catchment, skill_summary = compute_model_skill(sim_labeled, cfg)
     print("writing tables", flush=True)
     write_tables(summary, regime, sim_labeled, skill_by_catchment, skill_summary, args.out_dir)
+    inference_path = output_dir(cfg) / args.run_label / "analysis" / "epsilon_change_inference.csv"
+    pd.read_csv(require(inference_path)).to_csv(args.out_dir / "epsilon_change_inference.csv", index=False)
     print("drawing training figure", flush=True)
     figure_training(metrics, args.out_dir)
     print("drawing delta distribution", flush=True)

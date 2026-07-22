@@ -3,11 +3,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
-from sklearn.model_selection import StratifiedKFold
 
 from config import load_config, output_dir
+from temporal_split import blocks_frame, expected_fold_for_year
 
 
 def parse_args() -> argparse.Namespace:
@@ -17,78 +16,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def make_strata(static: pd.DataFrame, columns: list[str]) -> pd.Series:
-    parts: list[pd.Series] = []
-    for col in columns:
-        s = static[col]
-        if col == "area_km2":
-            s = np.log10(s.clip(lower=1e-6))
-        try:
-            binned = pd.qcut(s, q=4, duplicates="drop").astype(str)
-            binned = binned.where(s.notna(), "missing")
-        except ValueError:
-            binned = pd.Series(["all"] * len(static), index=static.index)
-        parts.append(binned)
-    strata = parts[0]
-    for p in parts[1:]:
-        strata = strata + "|" + p
-    counts = strata.value_counts()
-    rare = strata.map(counts) < 5
-    strata = strata.mask(rare, "rare")
-    return strata
-
-
-def build_fold_assignment(cfg: dict, inputs_dir: Path) -> pd.DataFrame:
-    static = pd.read_parquet(cfg["paths"]["static_attributes"])
-    static = static.sort_values("GCIN").reset_index(drop=True)
-    strata = make_strata(static, cfg["splits"]["stratify_columns"])
-
-    n_folds = int(cfg["splits"]["n_folds"])
-    seed = int(cfg["seed"])
-    splitter = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=seed)
-    folds = np.empty(len(static), dtype=np.int16)
-    for fold_id, (_, test_idx) in enumerate(splitter.split(static, strata)):
-        folds[test_idx] = fold_id
-
-    out = static[["GCIN", *cfg["splits"]["stratify_columns"]]].copy()
-    out["fold"] = folds
-    out["stratum"] = strata
-    validation_offset = int(cfg["splits"].get("validation_fold_offset", 1))
-    validation_fraction = float(cfg["splits"].get("validation_fraction_of_fold", 0.5))
-    if not (0.0 < validation_fraction < 1.0):
-        raise ValueError("validation_fraction_of_fold must be between 0 and 1")
-
-    for test_fold in range(n_folds):
-        role = np.full(len(out), "train", dtype=object)
-        test_mask = folds == test_fold
-        role[test_mask] = "test"
-
-        validation_fold = (test_fold + validation_offset) % n_folds
-        validation_candidates = np.flatnonzero(folds == validation_fold)
-        rng = np.random.default_rng(seed + test_fold)
-        rng.shuffle(validation_candidates)
-        n_validation = max(1, int(round(validation_fraction * len(validation_candidates))))
-        role[validation_candidates[:n_validation]] = "validation"
-        out[f"role_fold_{test_fold}"] = role
-
-        counts = pd.Series(role).value_counts()
-        print(
-            f"crossfit fold {test_fold}: "
-            f"train={int(counts.get('train', 0))} "
-            f"validation={int(counts.get('validation', 0))} "
-            f"test={int(counts.get('test', 0))}"
-        )
-
-    role_columns = [f"role_fold_{fold}" for fold in range(n_folds)]
-    allowed_roles = {"train", "validation", "test"}
-    if any(set(out[col].unique()) != allowed_roles for col in role_columns):
-        raise RuntimeError("Every crossfit fold must contain train, validation, and test basins")
-    test_counts = (out[role_columns] == "test").sum(axis=1)
-    if not bool((test_counts == 1).all()):
-        raise RuntimeError("Every basin must be held out as test exactly once across the five folds")
-    out_path = inputs_dir / "fold_assignment.parquet"
-    out.to_parquet(out_path, index=False)
-    out.to_csv(inputs_dir / "fold_assignment.csv", index=False)
+def build_temporal_fold_assignment(cfg: dict, inputs_dir: Path) -> pd.DataFrame:
+    expected_fold_for_year(cfg)
+    out = blocks_frame(cfg)
+    out_path = inputs_dir / "temporal_fold_assignment.csv"
+    out.to_csv(out_path, index=False)
+    print(out.to_string(index=False))
     print(f"wrote {out_path} rows={len(out)}")
     return out
 
@@ -145,7 +78,7 @@ def main() -> None:
     cfg = load_config(args.config)
     inputs_dir = output_dir(cfg) / "inputs"
     inputs_dir.mkdir(parents=True, exist_ok=True)
-    build_fold_assignment(cfg, inputs_dir)
+    build_temporal_fold_assignment(cfg, inputs_dir)
     build_qobs_inventory(cfg, inputs_dir)
 
 

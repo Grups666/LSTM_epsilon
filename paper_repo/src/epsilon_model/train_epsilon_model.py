@@ -14,6 +14,7 @@ import torch
 
 from config import load_config, output_dir
 from physics_model import EpsilonStateResetModel, PhysicsInformedLoss
+from temporal_split import test_years, train_years
 
 
 EPS = 1e-6
@@ -30,7 +31,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--iters-per-epoch", type=int, default=None)
-    parser.add_argument("--validation-batches", type=int, default=None)
     return parser.parse_args()
 
 
@@ -152,8 +152,7 @@ class BasinSeries:
     start_mask: np.ndarray
     bounds: np.ndarray
     split_labels: np.ndarray
-    train_start: int
-    train_end: int
+    train_starts: np.ndarray
 
 
 def load_physics_frame(cfg: dict, years: list[int], gcins: set[int]) -> pd.DataFrame:
@@ -169,28 +168,6 @@ def load_physics_frame(cfg: dict, years: list[int], gcins: set[int]) -> pd.DataF
     out = pd.concat(frames, ignore_index=True).sort_values(["GCIN", "date"])
     out["GCIN"] = out["GCIN"].astype("int32")
     return out
-
-
-def split_gcins_by_role(cfg: dict, fold: int, smoke: bool) -> dict[str, set[int]]:
-    folds_path = output_dir(cfg) / "inputs" / "fold_assignment.parquet"
-    if not folds_path.exists():
-        raise FileNotFoundError(f"Missing crossfit assignment: {folds_path}")
-    folds = pd.read_parquet(folds_path)
-    role_col = f"role_fold_{int(fold)}"
-    if role_col not in folds.columns:
-        raise ValueError(f"Crossfit assignment is missing {role_col}; rerun prepare_experiment_inputs.py")
-
-    roles = {
-        role: set(folds.loc[folds[role_col] == role, "GCIN"].astype(int))
-        for role in ("train", "validation", "test")
-    }
-    if any(not values for values in roles.values()):
-        raise ValueError(f"Fold {fold} has an empty train, validation, or test role")
-    return roles
-
-
-def split_gcins(cfg: dict, fold: int, smoke: bool, role: str = "test") -> set[int]:
-    return split_gcins_by_role(cfg, fold, smoke)[role]
 
 
 def build_bounds(static: pd.DataFrame, lp_gamma: pd.DataFrame, cfg: dict) -> dict[int, np.ndarray]:
@@ -234,14 +211,13 @@ def build_dataset(
     cfg: dict,
     frame: pd.DataFrame,
     gcins: set[int],
-    stats_gcins: set[int] | None = None,
+    training_years: set[int],
     normalization_stats: dict[str, Any] | None = None,
 ) -> tuple[dict[int, BasinSeries], dict[str, Any]]:
     dynamic_cols = cfg["physics"]["dynamic_columns"]
     target_col = cfg["physics"]["target_column"]
     static_cols = cfg["data"]["static_columns"]
     warmup_days = int(cfg["physics"]["bufftime"])
-    stats_gcins = gcins if stats_gcins is None else stats_gcins
 
     static = pd.read_parquet(cfg["paths"]["static_attributes"])
     static["GCIN"] = static["GCIN"].astype(int)
@@ -254,9 +230,11 @@ def build_dataset(
     cold_threshold = cfg["recession"].get("cold_temperature_filter_C")
     cold_threshold = None if cold_threshold is None else float(cold_threshold)
 
-    train_dyn = []
-    train_static = []
     raw_groups: dict[int, pd.DataFrame] = {}
+    low_high: dict[int, float] = {}
+    dyn_sum = np.zeros(len(dynamic_cols), dtype="float64")
+    dyn_sum_sq = np.zeros(len(dynamic_cols), dtype="float64")
+    dyn_count = np.zeros(len(dynamic_cols), dtype="int64")
 
     for gcin, group in frame.groupby("GCIN", sort=False, observed=True):
         group = group.sort_values("date").reset_index(drop=True)
@@ -264,17 +242,35 @@ def build_dataset(
         if nt <= warmup_days + int(cfg["physics"]["rho"]):
             continue
         raw_groups[int(gcin)] = group
-        if int(gcin) in stats_gcins and normalization_stats is None:
-            train_dyn.append(group.loc[warmup_days:, dynamic_cols].to_numpy("float32"))
-            srow = static.loc[static["GCIN"].astype(int) == int(gcin), static_cols]
-            if not srow.empty:
-                train_static.append(srow.to_numpy("float32"))
+        dates = pd.to_datetime(group["date"])
+        train_mask = dates.dt.year.isin(training_years).to_numpy()
+        q_train = group.loc[train_mask, target_col].to_numpy("float64")
+        q_train = q_train[np.isfinite(q_train) & (q_train >= 0)]
+        if q_train.size:
+            q10, q90 = np.quantile(q_train, [0.10, 0.90])
+            low_high[int(gcin)] = float(q10 / q90) if q90 > 0 else 0.0
+        else:
+            low_high[int(gcin)] = 0.0
+        if normalization_stats is None:
+            values = group.loc[train_mask, dynamic_cols].to_numpy("float64")
+            finite = np.isfinite(values)
+            safe = np.where(finite, values, 0.0)
+            dyn_sum += safe.sum(axis=0)
+            dyn_sum_sq += (safe**2).sum(axis=0)
+            dyn_count += finite.sum(axis=0)
+
+    if "low_high_ratio" in static.columns:
+        static["low_high_ratio"] = static["GCIN"].astype(int).map(low_high).fillna(0.0)
 
     if normalization_stats is None:
-        if not train_dyn or not train_static:
-            raise RuntimeError("No training basins were available for normalization statistics")
-        dyn_mean, dyn_std = finalize_stats(np.vstack(train_dyn))
-        static_mean, static_std = finalize_stats(np.vstack(train_static))
+        if not raw_groups or np.any(dyn_count == 0):
+            raise RuntimeError("No training dates were available for normalization statistics")
+        dyn_mean = (dyn_sum / dyn_count).astype("float32")
+        dyn_var = np.maximum(dyn_sum_sq / dyn_count - dyn_mean.astype("float64") ** 2, 0.0)
+        dyn_std = np.sqrt(dyn_var).astype("float32")
+        dyn_std[~np.isfinite(dyn_std) | (dyn_std < EPS)] = 1.0
+        static_values = static.loc[static["GCIN"].astype(int).isin(raw_groups), static_cols].to_numpy("float32")
+        static_mean, static_std = finalize_stats(static_values)
     else:
         dyn_mean = np.asarray(normalization_stats["dynamic_mean"], dtype="float32")
         dyn_std = np.asarray(normalization_stats["dynamic_std"], dtype="float32")
@@ -300,9 +296,16 @@ def build_dataset(
         rec = apply_snow_mask(rec.astype(bool), group["date"], gcin, snow_df, snow_threshold).astype("float32")
         rec = apply_cold_temperature_mask(rec.astype(bool), group["temperature_C"].to_numpy(), cold_threshold).astype("float32")
         start, _ = generate_state_reset_tensors(rec.astype(bool))
-        train_start, train_end = warmup_days, len(group)
-        labels = np.array(["eval"] * len(group), dtype=object)
-        labels[:train_start] = "warmup"
+        dates = pd.to_datetime(group["date"])
+        train_day = dates.dt.year.isin(training_years).to_numpy()
+        labels = np.where(train_day, "train", "test").astype(object)
+        labels[:warmup_days] = "warmup"
+        rho = int(cfg["physics"]["rho"])
+        candidates = np.arange(warmup_days, len(group) - rho + 1, dtype="int32")
+        cumulative = np.concatenate([[0], np.cumsum(train_day.astype("int32"))])
+        window_counts = cumulative[candidates + rho] - cumulative[candidates - warmup_days]
+        required_days = warmup_days + rho
+        valid_starts = candidates[window_counts == required_days]
         basins[gcin] = BasinSeries(
             gcin=gcin,
             dates=group["date"].to_numpy(),
@@ -314,8 +317,7 @@ def build_dataset(
             start_mask=start,
             bounds=bounds[gcin],
             split_labels=labels,
-            train_start=train_start,
-            train_end=train_end,
+            train_starts=valid_starts,
         )
 
     stats = {
@@ -330,11 +332,7 @@ def build_dataset(
 
 
 def valid_train_gcins(basins: dict[int, BasinSeries], rho: int, bufftime: int) -> list[int]:
-    out = []
-    for gcin, basin in basins.items():
-        if basin.train_end - max(basin.train_start, bufftime) >= rho:
-            out.append(gcin)
-    return sorted(out)
+    return sorted(gcin for gcin, basin in basins.items() if len(basin.train_starts) > 0)
 
 
 def build_dynamic_batch(
@@ -355,11 +353,10 @@ def build_dynamic_batch(
     x_list, z_list, y_list, rec_list, start_list, bounds_list = [], [], [], [], [], []
     for gcin in selected:
         basin = basins[gcin]
-        start_min = max(basin.train_start, bufftime)
         if rng is None:
-            i_t = np.random.randint(start_min, basin.train_end - rho + 1)
+            i_t = int(np.random.choice(basin.train_starts))
         else:
-            i_t = int(rng.integers(start_min, basin.train_end - rho + 1))
+            i_t = int(rng.choice(basin.train_starts))
         x = basin.x_raw[i_t - bufftime : i_t + rho, :]
         z_dyn = basin.z_norm[i_t - bufftime : i_t + rho, :]
         c_rep = np.repeat(basin.c_norm.reshape(1, -1), bufftime + rho, axis=0)
@@ -392,87 +389,10 @@ def build_dynamic_batch(
 def compute_epoch_iterations(train_gcins: list[int], basins: dict[int, BasinSeries], batch_size: int, rho: int, bufftime: int) -> int:
     total = 0
     for gcin in train_gcins:
-        basin = basins[gcin]
-        total += max(0, basin.train_end - max(basin.train_start, bufftime))
+        total += len(basins[gcin].train_starts)
     effective_batch = min(batch_size, len(train_gcins))
     p = min(max((effective_batch * rho) / float(max(total, 1)), 1e-6), 0.99)
     return max(1, int(np.ceil(np.log(0.01) / np.log(1.0 - p))))
-
-
-def evaluate_validation(
-    model: EpsilonStateResetModel,
-    criterion: PhysicsInformedLoss,
-    validation_gcins: list[int],
-    basins: dict[int, BasinSeries],
-    batch_size: int,
-    rho: int,
-    bufftime: int,
-    device: torch.device,
-    n_batches: int,
-    seed: int,
-) -> dict[str, float]:
-    model.eval()
-    totals = {"total": 0.0, "l_path": 0.0, "l_rhs": 0.0, "l_smooth": 0.0, "l_q0": 0.0}
-    basin_skill: dict[int, dict[str, float]] = {}
-    rng = np.random.default_rng(seed)
-    with torch.no_grad():
-        for _ in range(n_batches):
-            x_batch, z_batch, y_batch, rec_mask, start_mask, bounds, selected = build_dynamic_batch(
-                validation_gcins,
-                basins,
-                batch_size,
-                rho,
-                bufftime,
-                device,
-                rng=rng,
-            )
-            pet_seq = x_batch[:, :, 2:3]
-            sm_seq = x_batch[:, :, 3:4]
-            model_out = model(z_batch, pet_seq, sm_seq, rec_mask, start_mask, bounds, bufftime=bufftime)
-            loss_dict = criterion(model_out, y_batch, rec_mask, start_mask)
-            for key in totals:
-                totals[key] += float(loss_dict[key].detach().cpu())
-
-            q_hat = model_out["q_hat"]
-            valid = (rec_mask > 0.5) & torch.isfinite(y_batch) & torch.isfinite(q_hat)
-            obs = torch.where(valid, y_batch, torch.zeros_like(y_batch))
-            squared_error = torch.where(valid, (q_hat - y_batch) ** 2, torch.zeros_like(y_batch))
-            counts = valid.sum(dim=0).squeeze(-1).detach().cpu().numpy()
-            obs_sum = obs.sum(dim=0).squeeze(-1).detach().cpu().numpy()
-            obs_sum_sq = (obs**2).sum(dim=0).squeeze(-1).detach().cpu().numpy()
-            error_sum_sq = squared_error.sum(dim=0).squeeze(-1).detach().cpu().numpy()
-            for i, gcin in enumerate(selected):
-                stats = basin_skill.setdefault(
-                    int(gcin),
-                    {"count": 0.0, "obs_sum": 0.0, "obs_sum_sq": 0.0, "error_sum_sq": 0.0},
-                )
-                stats["count"] += float(counts[i])
-                stats["obs_sum"] += float(obs_sum[i])
-                stats["obs_sum_sq"] += float(obs_sum_sq[i])
-                stats["error_sum_sq"] += float(error_sum_sq[i])
-
-    validation = {key: value / n_batches for key, value in totals.items()}
-    basin_nse = []
-    pooled = {"count": 0.0, "obs_sum": 0.0, "obs_sum_sq": 0.0, "error_sum_sq": 0.0}
-    for stats in basin_skill.values():
-        for key in pooled:
-            pooled[key] += stats[key]
-        if stats["count"] < 2:
-            continue
-        denominator = stats["obs_sum_sq"] - (stats["obs_sum"] ** 2) / stats["count"]
-        if denominator > EPS:
-            basin_nse.append(1.0 - stats["error_sum_sq"] / denominator)
-
-    pooled_denominator = pooled["obs_sum_sq"] - (pooled["obs_sum"] ** 2) / max(pooled["count"], 1.0)
-    validation["median_nse"] = float(np.median(basin_nse)) if basin_nse else float("nan")
-    validation["mean_nse"] = float(np.mean(basin_nse)) if basin_nse else float("nan")
-    validation["pooled_nse"] = (
-        float(1.0 - pooled["error_sum_sq"] / pooled_denominator)
-        if pooled_denominator > EPS
-        else float("nan")
-    )
-    validation["nse_basins"] = float(len(basin_nse))
-    return validation
 
 
 def run() -> None:
@@ -489,40 +409,34 @@ def run() -> None:
 
     years = list(range(int(cfg["data"]["start_year"]), int(cfg["data"]["end_year"]) + 1))
     if args.smoke:
-        years = [int(y) for y in cfg["smoke"]["years"]]
+        years = list(range(int(cfg["smoke"]["year_start"]), int(cfg["smoke"]["year_end"]) + 1))
     if args.year_start is not None:
         years = [y for y in years if y >= args.year_start]
     if args.year_end is not None:
         years = [y for y in years if y <= args.year_end]
 
-    roles = split_gcins_by_role(cfg, args.fold, args.smoke)
-    fitting_gcins = roles["train"] | roles["validation"]
-    frame = load_physics_frame(cfg, years, fitting_gcins)
-    basins, stats = build_dataset(cfg, frame, fitting_gcins, stats_gcins=roles["train"])
+    all_gcins = set(pd.read_parquet(cfg["paths"]["static_attributes"], columns=["GCIN"])["GCIN"].astype(int))
+    if args.smoke:
+        all_gcins = set(sorted(all_gcins)[: int(cfg["smoke"].get("max_catchments", 32))])
+    frame = load_physics_frame(cfg, years, all_gcins)
+    fold_train_years = train_years(cfg, args.fold)
+    fold_test_years = test_years(cfg, args.fold)
+    basins, stats = build_dataset(cfg, frame, all_gcins, training_years=fold_train_years)
     rho = int(cfg["physics"]["rho"])
     bufftime = int(cfg["physics"]["bufftime"])
-    train_gcins = [gcin for gcin in valid_train_gcins(basins, rho, bufftime) if gcin in roles["train"]]
-    validation_gcins = [gcin for gcin in valid_train_gcins(basins, rho, bufftime) if gcin in roles["validation"]]
-    if args.smoke:
-        max_train = int(cfg["smoke"].get("max_catchments", 128))
-        train_gcins = train_gcins[:max_train]
-        validation_gcins = validation_gcins[: max(1, max_train // 4)]
-    if not train_gcins or not validation_gcins:
-        raise RuntimeError("No basins have enough data for physics training or validation")
+    train_gcins = valid_train_gcins(basins, rho, bufftime)
+    if not train_gcins:
+        raise RuntimeError("No basins have enough purged training windows")
 
     training_cfg = cfg["training"].copy()
     if args.smoke:
         training_cfg["epochs"] = int(cfg["smoke"]["epochs"])
         training_cfg["batch_size"] = int(cfg["smoke"]["batch_size"])
         training_cfg["iters_per_epoch"] = int(cfg["smoke"].get("iters_per_epoch", 2))
-        training_cfg["validation_batches"] = int(cfg["smoke"].get("validation_batches", 1))
-        training_cfg["early_stopping_min_epochs"] = int(training_cfg["epochs"])
-        training_cfg["early_stopping_patience"] = int(training_cfg["epochs"])
     for argument, key in (
         (args.epochs, "epochs"),
         (args.batch_size, "batch_size"),
         (args.iters_per_epoch, "iters_per_epoch"),
-        (args.validation_batches, "validation_batches"),
     ):
         if argument is not None:
             training_cfg[key] = int(argument)
@@ -530,9 +444,8 @@ def run() -> None:
     batch_size = int(training_cfg["batch_size"])
     iters_per_epoch = int(training_cfg.get("iters_per_epoch") or compute_epoch_iterations(train_gcins, basins, batch_size, rho, bufftime))
     log(
-        f"basins={len(basins)} train_basins={len(train_gcins)} "
-        f"validation_basins={len(validation_gcins)} test_basins={len(roles['test'])} "
-        f"years={years[0]}-{years[-1]} iters_per_epoch={iters_per_epoch}"
+        f"basins={len(basins)} train_basins={len(train_gcins)} years={years[0]}-{years[-1]} "
+        f"test_years={sorted(set(years) & fold_test_years)} iters_per_epoch={iters_per_epoch}"
     )
 
     input_dim = len(cfg["physics"]["dynamic_columns"]) + len(cfg["data"]["static_columns"])
@@ -553,14 +466,6 @@ def run() -> None:
 
     metrics = []
     run_started_at = time.time()
-    best_validation_nse = -float("inf")
-    best_validation_total = float("nan")
-    best_epoch = 0
-    epochs_without_improvement = 0
-    validation_batches = int(training_cfg.get("validation_batches", 8))
-    min_epochs = int(training_cfg.get("early_stopping_min_epochs", 20))
-    patience = int(training_cfg.get("early_stopping_patience", 8))
-    min_delta = float(training_cfg.get("early_stopping_min_delta", 0.0))
     for epoch in range(1, int(training_cfg["epochs"]) + 1):
         model.train()
         totals = {"total": 0.0, "l_path": 0.0, "l_rhs": 0.0, "l_smooth": 0.0, "l_q0": 0.0}
@@ -580,48 +485,15 @@ def run() -> None:
             for key in totals:
                 totals[key] += float(loss_dict[key].detach().cpu())
         train_average = {key: value / iters_per_epoch for key, value in totals.items()}
-        validation_average = evaluate_validation(
-            model,
-            criterion,
-            validation_gcins,
-            basins,
-            batch_size,
-            rho,
-            bufftime,
-            device,
-            validation_batches,
-            seed=int(cfg["seed"]) + 10_000 + int(args.fold),
-        )
         row = {f"train_{key}": value for key, value in train_average.items()}
-        row.update({f"validation_{key}": value for key, value in validation_average.items()})
         row["epoch"] = epoch
         row["epoch_seconds"] = time.time() - epoch_t0
         metrics.append(row)
         pd.DataFrame(metrics).to_csv(run_dir / "metrics.csv", index=False)
-        log(
-            f"epoch={epoch} train_loss={train_average['total']:.6f} "
-            f"validation_loss={validation_average['total']:.6f} "
-            f"validation_median_nse={validation_average['median_nse']:.4f} "
-            f"validation_pooled_nse={validation_average['pooled_nse']:.4f}"
-        )
-
-        validation_nse = validation_average["median_nse"]
-        if best_epoch == 0 or (np.isfinite(validation_nse) and validation_nse > best_validation_nse + min_delta):
-            best_validation_nse = validation_nse
-            best_validation_total = validation_average["total"]
-            best_epoch = epoch
-            epochs_without_improvement = 0
-            torch.save(model.state_dict(), run_dir / "best_model.pt")
-        else:
-            epochs_without_improvement += 1
-        if epoch >= min_epochs and epochs_without_improvement >= patience:
-            log(
-                f"early stopping at epoch={epoch}; best_epoch={best_epoch} "
-                f"best_validation_median_nse={best_validation_nse:.4f}"
-            )
-            break
+        log(f"epoch={epoch} train_loss={train_average['total']:.6f}")
 
     pd.DataFrame(metrics).to_csv(run_dir / "metrics.csv", index=False)
+    torch.save(model.state_dict(), run_dir / "final_model.pt")
     with (run_dir / "run_metadata.json").open("w", encoding="utf-8") as f:
         json.dump(
             {
@@ -629,26 +501,23 @@ def run() -> None:
                 "smoke": args.smoke,
                 "device": str(device),
                 "years": years,
+                "train_years": sorted(set(years) & fold_train_years),
+                "test_years": sorted(set(years) & fold_test_years),
                 "n_basins": len(basins),
                 "n_train_basins": len(train_gcins),
-                "n_validation_basins": len(validation_gcins),
-                "n_test_basins": len(roles["test"]),
-                "best_epoch": best_epoch,
-                "best_validation_median_nse": best_validation_nse,
-                "best_validation_total": best_validation_total,
+                "n_test_basins": len(basins),
+                "final_epoch": int(training_cfg["epochs"]),
                 "elapsed_seconds": time.time() - run_started_at,
                 "rho": rho,
                 "bufftime": bufftime,
                 "stats": stats,
                 "training": training_cfg,
                 "seed": int(cfg["seed"]) + int(args.fold),
-                "role_column": f"role_fold_{int(args.fold)}",
-                "normalization_scope": "train basins only",
-                "validation_sampling": "fixed deterministic windows across epochs",
-                "checkpoint_selection": "maximum median catchment NSE on validation recession days",
+                "normalization_scope": "training years only; all catchments",
+                "checkpoint_selection": "fixed final epoch; no validation or test tuning",
                 "method": "physics-informed epsilon-core state-reset LSTM",
                 "reference": "arabayati/LSTM-epsilon",
-                "split_protocol": "five-fold basin cross-fitting with train-only normalization",
+                "split_protocol": "five paired pre/post temporal folds with purged training windows",
             },
             f,
             indent=2,
