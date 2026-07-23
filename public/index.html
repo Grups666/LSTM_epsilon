@@ -1746,6 +1746,7 @@
         } else if (stepId === 'overview-open') {
           module.closeDistributionModal?.();
           sidebar.classList.remove('hidden');
+          await new Promise(resolve => setTimeout(resolve, 240));
           inspector.classList.remove('visible');
           document.querySelector('[data-section="layers"]')?.parentElement.classList.remove('collapsed');
           this.layerManager.setVisibility(module.overviewLayerId, false);
@@ -1848,8 +1849,10 @@
             callout.style.top = '12px';
             return;
           }
-          const sidebarRect = document.getElementById('leftPanel')?.getBoundingClientRect();
-          const sidebarRight = sidebarRect?.right || rect.right;
+          const sidebar = document.getElementById('leftPanel');
+          const sidebarRight = sidebar
+            ? sidebar.offsetLeft + sidebar.offsetWidth
+            : rect.right;
           callout.style.left = `${Math.min(window.innerWidth - cardWidth - 12, sidebarRight + 16)}px`;
           callout.style.top = `${Math.max(12, Math.min(window.innerHeight - cardHeight - 12, rect.top))}px`;
           return;
