@@ -1619,6 +1619,7 @@
             copy: '<p>Overview is a clickable row under Layers. It contains the reliability filter, the nine-class summary, and the full data and inference method.</p>',
             hint: 'Click the highlighted Overview row to continue.',
             target: '[data-id="epsilon-change-overview"]',
+            calloutPlacement: 'top-right',
             requiresAction: true
           },
           {
@@ -1837,6 +1838,12 @@
 
         callout.style.right = 'auto';
         callout.style.bottom = 'auto';
+        if (step.calloutPlacement === 'top-right') {
+          callout.style.left = 'auto';
+          callout.style.right = window.innerWidth < 700 ? '12px' : '60px';
+          callout.style.top = '12px';
+          return;
+        }
         if (window.innerWidth < 700) {
           callout.style.left = '12px';
           callout.style.top = 'auto';
