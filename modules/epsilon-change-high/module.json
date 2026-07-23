@@ -2,7 +2,7 @@
   "id": "epsilon-change-high",
   "name": "Epsilon Change (High Flow)",
   "version": "0.1.0",
-  "assetVersion": "2026-07-23-guided-help-v3",
+  "assetVersion": "2026-07-23-method-audit-v4",
   "description": "Catchment-scale continuous high-flow epsilon change before and after 1990.",
   "author": "Spatial Research Team",
   "icon": "activity",

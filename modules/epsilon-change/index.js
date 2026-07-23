@@ -312,7 +312,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           The map displays the reliability-filtered subset where both pre-period and post-period catchment ${this.skillFilter.metric.toUpperCase()} are greater than ${this.formatNumber(this.skillFilter.threshold, 2)}; the underlying data file still retains all evaluated catchments.
         </p>
         <p>
-          Epsilon was inferred with the Ara-style physics-informed LSTM-epsilon workflow. The model directly predicts the daily recession coefficient inside the governing differential equation.
+          Epsilon was inferred with the Ara LSTM-epsilon physics core, not a separate surrogate formulation. The retained core includes the dynamic epsilon and reset-flow heads, bounded alpha/LP/gamma AET terms, state-reset closed-form recession integration, and the four-part physics-informed objective.
+        </p>
+        <p>
+          Study-specific changes are limited to the pure-GCIN data contract, the cold-day recession mask, five-fold temporal cross-fitting, batch size 512, and a fixed 30-epoch schedule. The governing equation, physical state update, and loss construction are unchanged from the reference training workflow.
         </p>
       </section>
       ${this.renderMethodStory()}
@@ -434,13 +437,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.renderStoryPanel({
           index: "04",
           title: "Infer epsilon inside the physics-informed LSTM",
-          body: "Following the epsilon-model reference implementation, the recurrent network directly estimates daily epsilon and auxiliary physical terms. Epsilon is a learned recession parameter inside the governing equation, and the simulated recession path supplies the streamflow supervision.",
+          body: "The recurrent physics core matches the Ara reference implementation: one LSTM feeds dynamic epsilon and reset-flow heads plus bounded static alpha, LP and gamma heads. Ten component recession paths are averaged, and epsilon remains a learned daily coefficient inside the governing equation.",
           figure: this.renderModelFigure()
         })}
         ${this.renderStoryPanel({
           index: "05",
           title: "Constrain streamflow with the recession equation",
-          body: "The inferred epsilon is used to integrate the recession equation forward through each sequence. Training penalizes mismatch between simulated and observed Q, inconsistency with the differential-equation right-hand side, unrealistic day-to-day epsilon roughness, and reset-flow mismatch at the sequence start.",
+          body: "The inferred epsilon is used in the same state-reset, piecewise closed-form recession update as the reference code. Its four-term objective is also retained exactly: 25 L_path + 10 L_rhs + 0.1 L_smooth + 5 L_q0. These terms constrain the simulated Q path, local equation tendency, epsilon smoothness and reset-flow estimate.",
           figure: this.renderEquationFigure()
         })}
         ${this.renderStoryPanel({
