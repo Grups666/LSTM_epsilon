@@ -528,6 +528,18 @@
         background: #111827;
         clip-path: polygon(50% 0, 100% 42%, 82% 42%, 82% 100%, 18% 100%, 18% 42%, 0 42%);
       }
+      .map-icon-help::before {
+        content: "?";
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #111827;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1;
+      }
 
       .map-status {
         position: absolute;
@@ -602,6 +614,135 @@
       }
       .toast.visible { opacity: 1; transform: translateY(0); }
 
+      /* Guided help */
+      .tutorial-spotlight {
+        position: fixed;
+        display: none;
+        border: 2px solid #38bdf8;
+        border-radius: 8px;
+        box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.66), 0 0 0 5px rgba(56, 189, 248, 0.2);
+        pointer-events: none;
+        z-index: 500;
+        transition: left .22s ease, top .22s ease, width .22s ease, height .22s ease;
+      }
+      .tutorial-spotlight.visible { display: block; }
+      .tutorial-spotlight.is-point {
+        border-radius: 50%;
+        animation: tutorial-pulse 1.45s ease-in-out infinite;
+      }
+      @keyframes tutorial-pulse {
+        0%, 100% { box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.66), 0 0 0 5px rgba(56, 189, 248, 0.18); }
+        50% { box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.66), 0 0 0 11px rgba(56, 189, 248, 0.08); }
+      }
+      .tutorial-callout {
+        position: fixed;
+        display: none;
+        width: min(340px, calc(100vw - 24px));
+        box-sizing: border-box;
+        padding: 16px;
+        border: 1px solid #dbe3ef;
+        border-radius: 8px;
+        background: #fff;
+        color: #334155;
+        box-shadow: 0 18px 46px rgba(15, 23, 42, 0.28);
+        z-index: 502;
+      }
+      .tutorial-callout.visible { display: block; }
+      .tutorial-close {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: #64748b;
+        cursor: pointer;
+      }
+      .tutorial-close:hover { background: #f1f5f9; color: #0f172a; }
+      .tutorial-close::before,
+      .tutorial-close::after {
+        content: "";
+        position: absolute;
+        left: 9px;
+        top: 14px;
+        width: 12px;
+        height: 1.5px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+      .tutorial-close::before { transform: rotate(45deg); }
+      .tutorial-close::after { transform: rotate(-45deg); }
+      .tutorial-kicker {
+        padding-right: 30px;
+        color: #64748b;
+        font-size: 10px;
+        line-height: 1.3;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+      }
+      .tutorial-progress {
+        height: 4px;
+        margin: 8px 0 14px;
+        overflow: hidden;
+        border-radius: 2px;
+        background: #e2e8f0;
+      }
+      .tutorial-progress span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: #2563eb;
+        transition: width .2s ease;
+      }
+      .tutorial-title {
+        margin: 0 0 7px;
+        color: #0f172a;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+      .tutorial-copy {
+        min-height: 66px;
+        color: #475569;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .tutorial-copy p { margin: 0; }
+      .tutorial-copy p + p { margin-top: 7px; }
+      .tutorial-hint {
+        margin-top: 9px;
+        padding: 7px 9px;
+        border-left: 3px solid #38bdf8;
+        background: #f0f9ff;
+        color: #334155;
+        font-size: 11px;
+        line-height: 1.45;
+      }
+      .tutorial-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 15px;
+      }
+      .tutorial-btn {
+        min-height: 32px;
+        padding: 6px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        background: #fff;
+        color: #334155;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .tutorial-btn:hover { background: #f8fafc; border-color: #94a3b8; }
+      .tutorial-btn.primary { border-color: #2563eb; background: #2563eb; color: #fff; }
+      .tutorial-btn.primary:hover { background: #1d4ed8; }
+      .tutorial-btn[disabled] { visibility: hidden; }
+      body.tutorial-active .map-btn#btnHelp { background: #dbeafe; }
+
       /* Global dark UI theme, activated by Theme > Dark */
       body.theme-dark {
         color: #dbe7f3;
@@ -653,10 +794,21 @@
       body.theme-dark .map-btn,
       body.theme-dark .legend-card,
       body.theme-dark .import-dialog,
-      body.theme-dark .inspector-panel {
+      body.theme-dark .inspector-panel,
+      body.theme-dark .tutorial-callout {
         background: #0f172a;
         color: #dbe7f3;
       }
+      body.theme-dark .tutorial-title { color: #e5edf7; }
+      body.theme-dark .tutorial-copy,
+      body.theme-dark .tutorial-kicker { color: #94a3b8; }
+      body.theme-dark .tutorial-callout { border-color: #334155; }
+      body.theme-dark .tutorial-progress { background: #334155; }
+      body.theme-dark .tutorial-close:hover { background: #1e293b; color: #f8fafc; }
+      body.theme-dark .tutorial-hint { background: #10213a; color: #cbd5e1; }
+      body.theme-dark .tutorial-btn { background: #111827; border-color: #475569; color: #dbe7f3; }
+      body.theme-dark .tutorial-btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+      body.theme-dark .map-icon-help::before { color: #e5edf7; }
       body.theme-dark .module-item.loaded {
         background: #17335f;
       }
@@ -821,6 +973,7 @@
       <button class="map-btn" id="btnZoomIn" aria-label="Zoom in"><span class="map-icon map-icon-plus" aria-hidden="true"></span></button>
       <button class="map-btn" id="btnZoomOut" aria-label="Zoom out"><span class="map-icon map-icon-minus" aria-hidden="true"></span></button>
       <button class="map-btn" id="btnReset" aria-label="Reset view"><span class="map-icon map-icon-home" aria-hidden="true"></span></button>
+      <button class="map-btn" id="btnHelp" aria-label="Open guided help" title="Guided help"><span class="map-icon map-icon-help" aria-hidden="true"></span></button>
     </div>
 
     <!-- Map Status -->
@@ -841,6 +994,20 @@
 
     <!-- Toast -->
     <div class="toast" id="toast"></div>
+
+    <!-- Guided help -->
+    <div class="tutorial-spotlight" id="tutorialSpotlight" aria-hidden="true"></div>
+    <section class="tutorial-callout" id="tutorialCallout" role="dialog" aria-modal="false" aria-labelledby="tutorialTitle" aria-live="polite">
+      <button class="tutorial-close" id="btnTutorialClose" aria-label="Exit tutorial" title="Exit tutorial"></button>
+      <div class="tutorial-kicker" id="tutorialKicker">Step 1 of 8</div>
+      <div class="tutorial-progress" aria-hidden="true"><span id="tutorialProgress"></span></div>
+      <h2 class="tutorial-title" id="tutorialTitle">Guided help</h2>
+      <div class="tutorial-copy" id="tutorialCopy"></div>
+      <div class="tutorial-actions">
+        <button class="tutorial-btn" id="btnTutorialBack" type="button">Back</button>
+        <button class="tutorial-btn primary" id="btnTutorialNext" type="button">Next</button>
+      </div>
+    </section>
 
     <!-- Import Modal -->
     <div class="import-modal" id="importModal">
@@ -943,6 +1110,7 @@
       remoteImportRequestId: 0,
       remoteImportTimer: null,
       pendingConfirm: null,
+      tutorial: { active: false, index: 0 },
       staticModules: [
         { id: 'epsilon-change', name: 'Epsilon Change', defaultLoad: true, exclusiveGroup: 'epsilon-change' },
         { id: 'epsilon-change-low', name: 'Epsilon Change (Low Flow)', defaultLoad: false, exclusiveGroup: 'epsilon-change' },
@@ -1015,6 +1183,13 @@
           } else if (payload.layer?.moduleId === 'foundation' && payload.layer?.id === 'outlines-countries') {
             this.showCountryInspector(payload.feature);
           }
+          if (
+            this.tutorial.active
+            && this.getTutorialSteps()[this.tutorial.index]?.id === 'select'
+            && payload.layer?.moduleId === 'epsilon-change'
+          ) {
+            setTimeout(() => this.nextTutorialStep(), 280);
+          }
         });
 
         // Add basemap display layer
@@ -1067,7 +1242,10 @@
         this.resize();
         await this.loadDefaultModules();
         await this.loadUrlModules();
-        window.addEventListener('resize', () => this.resize());
+        window.addEventListener('resize', () => {
+          this.resize();
+          if (this.tutorial.active) this.updateTutorialPosition();
+        });
       },
 
       // Canvas bounding rect (updated on resize)
@@ -1075,6 +1253,21 @@
 
       setupCanvasEvents() {
         window.addEventListener('keydown', (e) => {
+          if (this.tutorial.active && e.key === 'Escape') {
+            e.preventDefault();
+            this.exitTutorial();
+            return;
+          }
+          if (this.tutorial.active && e.key === 'ArrowRight') {
+            e.preventDefault();
+            this.nextTutorialStep();
+            return;
+          }
+          if (this.tutorial.active && e.key === 'ArrowLeft') {
+            e.preventDefault();
+            this.previousTutorialStep();
+            return;
+          }
           if (e.key !== 'Tab') return;
           const tag = e.target?.tagName;
           if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target?.isContentEditable) return;
@@ -1215,6 +1408,10 @@
           this.viewport = { ...this.viewport, scale: this.getMinViewportScale(), offsetX: 0, offsetY: 0 };
           this.draw();
         };
+        document.getElementById('btnHelp').onclick = () => {
+          if (this.tutorial.active) this.exitTutorial();
+          else this.startTutorial();
+        };
 
         // Panel toggle - show button is covered by panel, reveals when panel hides
         const showBtn = document.getElementById('btnShowPanel');
@@ -1234,6 +1431,12 @@
         document.getElementById('btnCloseInspector').onclick = () => {
           document.getElementById('inspectorPanel').classList.remove('visible');
         };
+        document.getElementById('btnTutorialClose').onclick = () => this.exitTutorial();
+        document.getElementById('btnTutorialBack').onclick = () => this.previousTutorialStep();
+        document.getElementById('btnTutorialNext').onclick = () => this.nextTutorialStep();
+        document.getElementById('inspectorBody').addEventListener('scroll', () => {
+          if (this.tutorial.active) this.updateTutorialPosition();
+        });
 
         // Import modal
         const importModal = document.getElementById('importModal');
@@ -1326,6 +1529,248 @@
 
       toggleSidebar() {
         document.getElementById('leftPanel').classList.toggle('hidden');
+        if (this.tutorial.active) setTimeout(() => this.updateTutorialPosition(), 220);
+      },
+
+      getTutorialSteps() {
+        return [
+          {
+            id: 'map',
+            title: 'Navigate the map',
+            copy: '<p>Drag the map to move around. Use the mouse wheel or the + and - controls to zoom; the home control returns to the global view.</p>',
+            hint: 'This tour takes about 2 minutes. You can exit at any time with the close button or Esc.',
+            target: '.map-controls'
+          },
+          {
+            id: 'select',
+            title: 'Select a catchment',
+            copy: '<p>The highlighted point is a catchment. Click it to open its detail panel. Any visible catchment point works the same way.</p>',
+            hint: 'Click the pulsing point, or choose Next to continue with the example.',
+            target: 'tutorial-basin'
+          },
+          {
+            id: 'inspector',
+            title: 'Read the catchment summary',
+            copy: '<p>The detail panel starts with catchment attributes and pre/post model skill. NSE and KGE values use a low-to-high color scale, ending in green.</p><p>The class combines low-flow and high-flow epsilon change: low flow uses observed Q at or below Q10; high flow uses Q at or above Q90.</p>',
+            target: '#inspectorPanel'
+          },
+          {
+            id: 'details',
+            title: 'Check data and estimates',
+            copy: '<p>The completeness check identifies observed-streamflow gaps, while the tables below summarize pre- and post-1990 epsilon for all recession, low-flow, and high-flow days.</p>',
+            hint: 'Long gaps list only continuous missing periods of 30 days or more.',
+            target: '.epsilon-streamflow-completeness'
+          },
+          {
+            id: 'cdf',
+            title: 'Explore the CDF',
+            copy: '<p>The compact CDF preview in the detail panel is clickable. It opens these three larger distributions for all recession, low-flow, and high-flow conditions.</p><p>Move the pointer across a chart to read the exact epsilon and cumulative probability.</p>',
+            target: '.epsilon-dialog'
+          },
+          {
+            id: 'sidebar',
+            title: 'Use or hide the sidebar',
+            copy: '<p>The left sidebar contains Modules, Layers, and the legend. Press Tab or use the panel toggle to hide it, giving the map more room; repeat to restore it.</p>',
+            target: '#leftPanel'
+          },
+          {
+            id: 'overview',
+            title: 'Set the reliability filter',
+            copy: '<p>Open Overview under Layers to choose NSE or KGE and set the minimum pre/post score. A catchment is shown only when both periods pass the threshold.</p><p>The same Overview window continues with the full data and physics-constrained method.</p>',
+            hint: 'The filter changes display eligibility; it does not retrain the model.',
+            target: '.epsilon-overview-filter'
+          },
+          {
+            id: 'modes',
+            title: 'Switch epsilon views',
+            copy: '<p>Epsilon Change is the bivariate main view. The Low Flow and High Flow modules switch to continuous maps for each regime; loading one replaces the current epsilon view.</p>',
+            hint: 'You are ready to explore. The ? control restarts this tour whenever needed.',
+            target: '#moduleList'
+          }
+        ];
+      },
+
+      async ensureTutorialMainMode() {
+        for (const id of ['epsilon-change-low', 'epsilon-change-high']) {
+          if (this.moduleLoader.isLoaded(id)) this.unloadModule(id, { quiet: true });
+        }
+        if (!this.moduleLoader.isLoaded('epsilon-change')) {
+          const manifest = await this.fetchModuleManifest(this.modules.find(module => module.id === 'epsilon-change'));
+          await this.loadModuleFromManifest(manifest);
+        }
+        this.updateModuleList();
+        this.draw();
+        return this.moduleLoader.get('epsilon-change');
+      },
+
+      async startTutorial() {
+        const module = await this.ensureTutorialMainMode();
+        if (!module) {
+          this.toast('Guided help could not load the epsilon module');
+          return;
+        }
+        module.updateSkillFilter?.('nse', 0.5, false);
+        if (module.overviewLayerId) this.layerManager.setVisibility(module.overviewLayerId, false);
+        this.tutorial = { active: true, index: 0 };
+        document.body.classList.add('tutorial-active');
+        document.getElementById('leftPanel').classList.remove('hidden');
+        await this.showTutorialStep(0);
+      },
+
+      async showTutorialStep(index) {
+        if (!this.tutorial.active) return;
+        const steps = this.getTutorialSteps();
+        this.tutorial.index = Math.max(0, Math.min(steps.length - 1, index));
+        const step = steps[this.tutorial.index];
+        await this.prepareTutorialStep(step.id);
+
+        document.getElementById('tutorialKicker').textContent = `Step ${this.tutorial.index + 1} of ${steps.length}`;
+        document.getElementById('tutorialProgress').style.width = `${((this.tutorial.index + 1) / steps.length) * 100}%`;
+        document.getElementById('tutorialTitle').textContent = step.title;
+        document.getElementById('tutorialCopy').innerHTML =
+          `${step.copy}${step.hint ? `<div class="tutorial-hint">${step.hint}</div>` : ''}`;
+        document.getElementById('btnTutorialBack').disabled = this.tutorial.index === 0;
+        document.getElementById('btnTutorialNext').textContent =
+          this.tutorial.index === steps.length - 1 ? 'Finish' : 'Next';
+        document.getElementById('tutorialCallout').classList.add('visible');
+        requestAnimationFrame(() => requestAnimationFrame(() => this.updateTutorialPosition()));
+      },
+
+      async prepareTutorialStep(stepId) {
+        const module = await this.ensureTutorialMainMode();
+        const inspector = document.getElementById('inspectorPanel');
+        const sidebar = document.getElementById('leftPanel');
+        if (!module) return;
+
+        if (stepId === 'map') {
+          module.closeDistributionModal?.();
+          module.closeOverview?.();
+          inspector.classList.remove('visible');
+          this.viewport = { ...this.viewport, scale: this.getMinViewportScale(), offsetX: 0, offsetY: 0 };
+          this.draw();
+        } else if (stepId === 'select') {
+          module.focusTutorialBasin?.();
+          inspector.classList.remove('visible');
+        } else if (stepId === 'inspector') {
+          module.showTutorialBasin?.();
+          document.getElementById('inspectorBody').scrollTop = 0;
+        } else if (stepId === 'details') {
+          module.showTutorialBasin?.();
+          setTimeout(() => {
+            document.querySelector('.epsilon-streamflow-completeness')?.scrollIntoView({ block: 'center' });
+            this.updateTutorialPosition();
+          }, 0);
+        } else if (stepId === 'cdf') {
+          const basin = module.showTutorialBasin?.();
+          if (basin) module.openDistributionModal?.(String(basin.GCIN), 'all');
+        } else if (stepId === 'sidebar') {
+          module.closeDistributionModal?.();
+          module.closeOverview?.();
+          sidebar.classList.remove('hidden');
+          inspector.classList.remove('visible');
+        } else if (stepId === 'overview') {
+          module.closeDistributionModal?.();
+          sidebar.classList.remove('hidden');
+          inspector.classList.remove('visible');
+          this.layerManager.setVisibility(module.overviewLayerId, true);
+          this.updateLayerList();
+          module.showOverview?.();
+        } else if (stepId === 'modes') {
+          module.closeOverview?.();
+          this.layerManager.setVisibility(module.overviewLayerId, false);
+          sidebar.classList.remove('hidden');
+          this.updateLayerList();
+        }
+      },
+
+      getTutorialTargetRect(step) {
+        if (step.target === 'tutorial-basin') {
+          return this.moduleLoader.get('epsilon-change')?.tutorialBasinRect?.() || null;
+        }
+        const element = document.querySelector(step.target);
+        if (!element) return null;
+        return element.getBoundingClientRect();
+      },
+
+      updateTutorialPosition() {
+        if (!this.tutorial.active) return;
+        const steps = this.getTutorialSteps();
+        const step = steps[this.tutorial.index];
+        const rect = this.getTutorialTargetRect(step);
+        const spotlight = document.getElementById('tutorialSpotlight');
+        const callout = document.getElementById('tutorialCallout');
+        if (!rect || rect.width <= 0 || rect.height <= 0) {
+          spotlight.classList.remove('visible');
+          return;
+        }
+
+        const isPoint = step.target === 'tutorial-basin';
+        const padding = isPoint ? 0 : 6;
+        spotlight.classList.toggle('is-point', isPoint);
+        spotlight.classList.add('visible');
+        spotlight.style.left = `${Math.max(4, rect.left - padding)}px`;
+        spotlight.style.top = `${Math.max(4, rect.top - padding)}px`;
+        spotlight.style.width = `${Math.max(20, Math.min(window.innerWidth - 8, rect.width + padding * 2))}px`;
+        spotlight.style.height = `${Math.max(20, Math.min(window.innerHeight - 8, rect.height + padding * 2))}px`;
+
+        callout.style.right = 'auto';
+        callout.style.bottom = 'auto';
+        if (window.innerWidth < 700) {
+          callout.style.left = '12px';
+          callout.style.top = 'auto';
+          callout.style.bottom = '12px';
+          return;
+        }
+
+        const gap = 16;
+        const cardWidth = callout.offsetWidth || 340;
+        const cardHeight = callout.offsetHeight || 230;
+        let left;
+        let top;
+        if (rect.right + gap + cardWidth <= window.innerWidth - 12) {
+          left = rect.right + gap;
+          top = rect.top;
+        } else if (rect.left - gap - cardWidth >= 12) {
+          left = rect.left - gap - cardWidth;
+          top = rect.top;
+        } else if (rect.bottom + gap + cardHeight <= window.innerHeight - 12) {
+          left = rect.left;
+          top = rect.bottom + gap;
+        } else {
+          left = rect.left;
+          top = rect.top - gap - cardHeight;
+        }
+        callout.style.left = `${Math.max(12, Math.min(window.innerWidth - cardWidth - 12, left))}px`;
+        callout.style.top = `${Math.max(12, Math.min(window.innerHeight - cardHeight - 12, top))}px`;
+      },
+
+      nextTutorialStep() {
+        if (!this.tutorial.active) return;
+        const lastIndex = this.getTutorialSteps().length - 1;
+        if (this.tutorial.index >= lastIndex) {
+          this.exitTutorial();
+          return;
+        }
+        this.showTutorialStep(this.tutorial.index + 1);
+      },
+
+      previousTutorialStep() {
+        if (!this.tutorial.active || this.tutorial.index === 0) return;
+        this.showTutorialStep(this.tutorial.index - 1);
+      },
+
+      exitTutorial() {
+        if (!this.tutorial.active) return;
+        const module = this.moduleLoader.get('epsilon-change');
+        module?.closeDistributionModal?.();
+        module?.closeOverview?.();
+        if (module?.overviewLayerId) this.layerManager.setVisibility(module.overviewLayerId, false);
+        this.tutorial.active = false;
+        document.body.classList.remove('tutorial-active');
+        document.getElementById('tutorialSpotlight').classList.remove('visible');
+        document.getElementById('tutorialCallout').classList.remove('visible');
+        this.updateLayerList();
+        this.draw();
       },
 
       importData: null,

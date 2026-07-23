@@ -92,6 +92,61 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     return [this.layerId, this.overviewLayerId];
   }
 
+  getTutorialBasin() {
+    if (!this.basins.length) return null;
+    const reference = { lon: 8, lat: 49 };
+    return this.basins.reduce((closest, basin) => {
+      const distance = Math.hypot(this.lonDistance(basin.lon, reference.lon), basin.lat - reference.lat);
+      return !closest || distance < closest.distance ? { basin, distance } : closest;
+    }, null)?.basin || this.basins[0];
+  }
+
+  focusTutorialBasin() {
+    const basin = this.getTutorialBasin();
+    if (!basin) return null;
+    this.closeOverview();
+    this.closeDistributionModal();
+    this.selected = null;
+    this.app.selectedFeature = null;
+    this.app.selectedLayer = null;
+    this.app.viewport.scale = Math.max(this.app.getMinViewportScale(), 4);
+    const base = this.app.getBaseScale();
+    this.app.viewport.offsetX = -basin.lon * base;
+    this.app.viewport.offsetY = basin.lat * base;
+    this.app.clampOffset();
+    this.app.draw?.();
+    return basin;
+  }
+
+  showTutorialBasin() {
+    const basin = this.getTutorialBasin();
+    if (!basin) return null;
+    const layer = this.app.layerManager.getLayer?.(this.layerId);
+    this.selected = basin;
+    this.app.selectedFeature = basin;
+    this.app.selectedLayer = layer || null;
+    this.showInspector(basin);
+    this.app.draw?.();
+    return basin;
+  }
+
+  tutorialBasinRect() {
+    const basin = this.getTutorialBasin();
+    const canvasRect = this.app.canvas?.getBoundingClientRect();
+    if (!basin || !canvasRect) return null;
+    const base = this.app.getBaseScale();
+    const x = this.app.viewport.width / 2 + basin.lon * base + this.app.viewport.offsetX;
+    const y = this.app.viewport.height / 2 - basin.lat * base + this.app.viewport.offsetY;
+    return {
+      left: canvasRect.left + x - 18,
+      top: canvasRect.top + y - 18,
+      width: 36,
+      height: 36,
+      right: canvasRect.left + x + 18,
+      bottom: canvasRect.top + y + 18,
+    };
+  }
+
   resolve(path) {
     if (/^https?:\/\//i.test(path) || path.startsWith("/")) return path;
     return this.basePath + path.replace(/^\.\//, "");
@@ -525,18 +580,18 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const curves = this.data.curves?.[String(basin.GCIN)] || {};
     const streamflowRecord = this.streamflowRecordHtml(basin);
     const cards = `
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">
+      <div class="epsilon-inspector-metrics" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">
         ${this.metricCard("Area", `${this.formatNumber(basin.area_km2, 1)} km2`)}
         ${this.metricCard("Aridity", this.formatNumber(basin.Aridity, 3))}
         ${this.metricCard("Precip.", `${this.formatNumber(basin.Prec_mm, 1)} mm`)}
-        ${this.metricCard("Temp.", `${this.formatNumber(basin.Temp_C, 1)} C`)}
+        ${this.metricCard("Temp.", `${this.formatNumber(basin.Temp_C, 1)} °C`)}
         ${this.skillMetricCard("NSE pre", this.formatNumber(basin.pre_nse, 3), basin.pre_nse)}
         ${this.skillMetricCard("NSE post", this.formatNumber(basin.post_nse, 3), basin.post_nse)}
         ${this.skillMetricCard("KGE pre", this.formatNumber(basin.pre_kge, 3), basin.pre_kge)}
         ${this.skillMetricCard("KGE post", this.formatNumber(basin.post_kge, 3), basin.post_kge)}
       </div>
-      ${this.categoryBanner(basin)}
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+      <div class="epsilon-inspector-classification">${this.categoryBanner(basin)}</div>
+      <div class="epsilon-change-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
         ${this.metricCard("All", this.formatPct(basin.all_relative_delta_pct), basin.all_relative_delta_pct)}
         ${this.metricCard("Low", this.formatPct(basin.low_relative_delta_pct), basin.low_relative_delta_pct)}
         ${this.metricCard("High", this.formatPct(basin.high_relative_delta_pct), basin.high_relative_delta_pct)}
@@ -556,14 +611,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     `;
 
     const sections = this.displayRegimes.map((regime) => `
-      <section style="margin-top:10px;padding-top:12px;border-top:1px solid #e2e8f0">
+      <section class="epsilon-stats-section" style="margin-top:10px;padding-top:12px;border-top:1px solid #e2e8f0">
         <h3 style="margin:0 0 8px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#64748b">${this.regimeLabel(regime)}</h3>
         ${this.renderStatsTable(basin, regime)}
       </section>
     `).join("");
 
     this.app.showInspector?.(title, `
-      <p style="margin:0 0 14px;color:#64748b;font-size:12px;line-height:1.6">
+      <p class="epsilon-inspector-context" style="margin:0 0 14px;color:#64748b;font-size:12px;line-height:1.6">
         Epsilon is the daily recession coefficient inferred inside the physics-constrained streamflow equation. This panel compares its distribution before and after 1990.
       </p>
       ${cards}
@@ -575,18 +630,68 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   streamflowRecordHtml(basin) {
-    const start = this.formatYearMonth(basin.qobs_start);
-    const end = this.formatYearMonth(basin.qobs_end);
+    const start = this.formatDate(basin.qobs_start);
+    const end = this.formatDate(basin.qobs_end);
     if (!start || !end) return "";
-    const validDays = Number.isFinite(Number(basin.qobs_valid_days))
-      ? ` <span class="epsilon-record-muted">(${this.formatInteger(basin.qobs_valid_days)} valid days)</span>`
-      : "";
+    const validDays = Number(basin.qobs_valid_days);
+    const calendarDays = Number(basin.qobs_calendar_days);
+    const missingDays = Number(basin.qobs_missing_days);
+    const missingPct = Number(basin.qobs_missing_pct);
+    const coveragePct = Number(basin.qobs_coverage_pct);
+    const gapRuns = Number(basin.qobs_gap_runs);
+    const longGapCount = Number(basin.qobs_long_gap_count);
+    const longGaps = Array.isArray(basin.qobs_long_gaps) ? basin.qobs_long_gaps : [];
+    const availability = Number.isFinite(validDays) && Number.isFinite(calendarDays)
+      ? `${this.formatInteger(validDays)} / ${this.formatInteger(calendarDays)} days (${this.formatNumber(coveragePct, 1)}%)`
+      : "Unavailable";
+    const missing = Number.isFinite(missingDays)
+      ? `${this.formatInteger(missingDays)} days (${this.formatNumber(missingPct, 1)}%)${Number.isFinite(gapRuns) ? ` across ${this.formatInteger(gapRuns)} gaps` : ""}`
+      : "Unavailable";
+    const longGapHtml = longGaps.length
+      ? `
+        <div class="epsilon-completeness-subtitle">Long continuous gaps (≥30 days)</div>
+        <ul class="epsilon-gap-list">
+          ${longGaps.map((gap) => `
+            <li>
+              <span>${this.escape(this.formatDate(gap.start))} to ${this.escape(this.formatDate(gap.end))}</span>
+              <span>${this.formatInteger(gap.days)} days</span>
+            </li>
+          `).join("")}
+        </ul>
+        ${Number.isFinite(longGapCount) && longGapCount > longGaps.length
+          ? `<div class="epsilon-completeness-note">Showing the ${longGaps.length} longest of ${this.formatInteger(longGapCount)} long gaps.</div>`
+          : ""}
+      `
+      : `<div class="epsilon-completeness-note">No continuous gaps of 30 days or longer.</div>`;
     return `
-      <div class="epsilon-streamflow-record">
-        <span>Streamflow record</span>
-        <strong>${this.escape(start)} to ${this.escape(end)}</strong>${validDays}
+      <div class="epsilon-streamflow-completeness">
+        <div class="epsilon-completeness-title">Time-series completeness</div>
+        <div class="epsilon-completeness-row">
+          <span>Missing variable</span>
+          <span>Observed streamflow</span>
+        </div>
+        <div class="epsilon-completeness-row">
+          <span>Record range</span>
+          <span>${this.escape(start)} to ${this.escape(end)}</span>
+        </div>
+        <div class="epsilon-completeness-row">
+          <span>Available</span>
+          <span>${this.escape(availability)}</span>
+        </div>
+        <div class="epsilon-completeness-row">
+          <span>Missing</span>
+          <span>${this.escape(missing)}</span>
+        </div>
+        ${longGapHtml}
+        <div class="epsilon-completeness-note">Gap statistics refer to observed streamflow. Meteorological forcing is complete on retained model dates.</div>
       </div>
     `;
+  }
+
+  formatDate(value) {
+    if (!value || typeof value !== "string") return "";
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return match ? `${match[1]}-${match[2]}-${match[3]}` : "";
   }
 
   formatYearMonth(value) {
@@ -991,14 +1096,20 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-curve-preview{box-sizing:border-box;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#fbfdff;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
       .epsilon-curve-preview:hover{background:#eef7ff;border-color:#60a5fa!important;box-shadow:0 0 0 1px rgba(96,165,250,.26),0 0 18px rgba(96,165,250,.18)}
       .epsilon-metric-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px}
-      .epsilon-metric-value{font-size:17px;font-weight:500;color:#0f172a}
+      .epsilon-metric-value{font-size:17px;font-weight:400;color:#64748b}
       .epsilon-metric-value--emphasis,
       .epsilon-metric-value--skill{font-weight:700}
       .epsilon-metric-value--skill{color:var(--epsilon-skill-light)}
       .epsilon-metric-label{font-size:11px;color:#64748b;margin-top:3px}
-      .epsilon-streamflow-record{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:-4px 0 14px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;font-size:11px;color:#64748b}
-      .epsilon-streamflow-record strong{font-size:12px;color:#0f172a}
-      .epsilon-record-muted{color:#64748b}
+      .epsilon-streamflow-completeness{margin:-4px 0 14px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;font-size:11px;line-height:1.45;color:#64748b}
+      .epsilon-completeness-title{margin-bottom:7px;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+      .epsilon-completeness-row{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px;padding:2px 0}
+      .epsilon-completeness-row span:last-child{color:#475569}
+      .epsilon-completeness-subtitle{margin-top:8px;padding-top:7px;border-top:1px solid #e2e8f0;color:#64748b}
+      .epsilon-gap-list{list-style:none;margin:4px 0 0;padding:0}
+      .epsilon-gap-list li{display:flex;justify-content:space-between;gap:8px;padding:2px 0;color:#475569}
+      .epsilon-gap-list li span:last-child{white-space:nowrap;color:#64748b}
+      .epsilon-completeness-note{margin-top:6px;color:#64748b}
       .epsilon-overview-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:150;pointer-events:none}
       .epsilon-overview-modal.visible{display:flex}
       .epsilon-overview-dialog{width:min(940px,calc(100vw - 64px));max-height:min(800px,calc(100vh - 64px));background:#fff;border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
@@ -1061,7 +1172,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-overview-body section + section{border-top-color:#263449}
       body.theme-dark .epsilon-overview-close:hover{background:#1e293b;color:#f8fafc}
       body.theme-dark .epsilon-metric-card,
-      body.theme-dark .epsilon-streamflow-record,
+      body.theme-dark .epsilon-streamflow-completeness,
       body.theme-dark .epsilon-story-figure{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-metric-value--skill{color:var(--epsilon-skill-dark)}
       body.theme-dark .epsilon-overview-filter{background:#111827;border-color:#263449}
@@ -1070,9 +1181,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-filter-field select,
       body.theme-dark .epsilon-filter-field input{background:#0f172a;border-color:#334155;color:#e5edf7}
       body.theme-dark .epsilon-filter-count{color:#94a3b8}
-      body.theme-dark .epsilon-streamflow-record strong{color:#e5edf7}
-      body.theme-dark .epsilon-streamflow-record,
-      body.theme-dark .epsilon-record-muted{color:#94a3b8}
+      body.theme-dark .epsilon-streamflow-completeness,
+      body.theme-dark .epsilon-completeness-title,
+      body.theme-dark .epsilon-completeness-row span:last-child,
+      body.theme-dark .epsilon-completeness-subtitle,
+      body.theme-dark .epsilon-gap-list li,
+      body.theme-dark .epsilon-gap-list li span:last-child,
+      body.theme-dark .epsilon-completeness-note{color:#94a3b8}
+      body.theme-dark .epsilon-completeness-subtitle{border-top-color:#263449}
       body.theme-dark .epsilon-story-index{box-shadow:0 0 0 5px rgba(15,23,42,.97)}
       body.theme-dark .epsilon-svg-box,
       body.theme-dark .epsilon-svg-formula{fill:#0f172a;stroke:#334155}
