@@ -1611,6 +1611,7 @@
             copy: '<p>The double-chevron control at the very top collapses the left sidebar. The Tab key performs the same action and can also restore the panel.</p>',
             hint: 'Click the highlighted chevrons or press Tab to continue.',
             target: '#btnHidePanel',
+            calloutPlacement: 'sidebar-right',
             requiresAction: true
           },
           {
@@ -1619,7 +1620,7 @@
             copy: '<p>Overview is a clickable row under Layers. It contains the reliability filter, the nine-class summary, and the full data and inference method.</p>',
             hint: 'Click the highlighted Overview row to continue.',
             target: '[data-id="epsilon-change-overview"]',
-            calloutPlacement: 'top-right',
+            calloutPlacement: 'sidebar-right',
             requiresAction: true
           },
           {
@@ -1838,10 +1839,19 @@
 
         callout.style.right = 'auto';
         callout.style.bottom = 'auto';
-        if (step.calloutPlacement === 'top-right') {
-          callout.style.left = 'auto';
-          callout.style.right = window.innerWidth < 700 ? '12px' : '60px';
-          callout.style.top = '12px';
+        if (step.calloutPlacement === 'sidebar-right') {
+          const cardWidth = callout.offsetWidth || 340;
+          const cardHeight = callout.offsetHeight || 230;
+          if (window.innerWidth < 700) {
+            callout.style.left = 'auto';
+            callout.style.right = '12px';
+            callout.style.top = '12px';
+            return;
+          }
+          const sidebarRect = document.getElementById('leftPanel')?.getBoundingClientRect();
+          const sidebarRight = sidebarRect?.right || rect.right;
+          callout.style.left = `${Math.min(window.innerWidth - cardWidth - 12, sidebarRight + 16)}px`;
+          callout.style.top = `${Math.max(12, Math.min(window.innerHeight - cardHeight - 12, rect.top))}px`;
           return;
         }
         if (window.innerWidth < 700) {

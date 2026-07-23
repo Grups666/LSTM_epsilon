@@ -94,7 +94,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   getTutorialBasin() {
     if (!this.basins.length) return null;
-    const reference = { lon: 8, lat: 49 };
+    const preferred = this.byId.get("3859");
+    if (preferred) return preferred;
+    const reference = { lon: -98, lat: 32 };
     return this.basins.reduce((closest, basin) => {
       const distance = Math.hypot(this.lonDistance(basin.lon, reference.lon), basin.lat - reference.lat);
       return !closest || distance < closest.distance ? { basin, distance } : closest;
