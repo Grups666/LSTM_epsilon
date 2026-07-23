@@ -87,6 +87,31 @@ L = 25.0 * L_path
   +  5.0 * L_q0
 ```
 
+### Reference-implementation audit
+
+The retained physics core was checked against `arabayati/LSTM-epsilon` commit
+`c38830895002284fe47e1679ad956f0f15d704f7`. The comparison covers the model,
+loss, and production training settings.
+
+Retained without changing the physical formulation:
+
+- one-layer LSTM with dynamic `epsilon_t` and `q_base_t` heads;
+- bounded static `alpha`, `LP`, and `gamma` heads;
+- in-model AET calculation and the AET <= PET constraint;
+- recession-start state reset and piecewise closed-form daily Q update;
+- ten component recession paths collapsed by their mean;
+- log-Q Huber path loss, observed-Q RHS loss, epsilon smoothness loss, and Q0 anchor loss;
+- the reference production weights `25`, `10`, `0.1`, and `5`, Adam learning rate `1e-4`, dropout `0.4`, hidden size `256`, and gradient clipping at `1.0`.
+
+An identical-weight numerical parity test returned zero maximum absolute
+difference for `q_hat`, component Q, `q_base`, epsilon, AET, alpha, LP, gamma,
+and all five reported loss values.
+
+Study-specific adaptations are the pure-GCIN inputs, the cold-day recession
+mask, paired pre/post temporal cross-fitting, batch size `512`, and a fixed
+30-epoch schedule. These adaptations change the data and evaluation protocol,
+not the governing equation, state update, or physics-loss construction.
+
 ## Training
 
 ```text
