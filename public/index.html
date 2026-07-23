@@ -528,17 +528,14 @@
         background: #111827;
         clip-path: polygon(50% 0, 100% 42%, 82% 42%, 82% 100%, 18% 100%, 18% 42%, 0 42%);
       }
-      .map-icon-help::before {
-        content: "?";
-        position: absolute;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #111827;
-        font-size: 15px;
-        font-weight: 700;
-        line-height: 1;
+      .map-icon-help {
+        width: 17px;
+        height: 17px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
 
       .map-status {
@@ -808,7 +805,6 @@
       body.theme-dark .tutorial-hint { background: #10213a; color: #cbd5e1; }
       body.theme-dark .tutorial-btn { background: #111827; border-color: #475569; color: #dbe7f3; }
       body.theme-dark .tutorial-btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
-      body.theme-dark .map-icon-help::before { color: #e5edf7; }
       body.theme-dark .module-item.loaded {
         background: #17335f;
       }
@@ -928,7 +924,7 @@
     <!-- Left Panel - Floating overlay -->
     <aside class="left-panel" id="leftPanel">
       <div class="panel-header">
-        <button class="panel-toggle-btn" id="btnHidePanel"></button>
+        <button class="panel-toggle-btn" id="btnHidePanel" aria-label="Hide sidebar" title="Hide sidebar (Tab)"></button>
       </div>
       <div class="panel-main">
       <div class="panel-section">
@@ -966,14 +962,20 @@
     </aside>
 
     <!-- Show panel button - appears when panel hidden -->
-    <button class="panel-show-btn" id="btnShowPanel"></button>
+    <button class="panel-show-btn" id="btnShowPanel" aria-label="Show sidebar" title="Show sidebar (Tab)"></button>
 
     <!-- Map Controls -->
     <div class="map-controls">
       <button class="map-btn" id="btnZoomIn" aria-label="Zoom in"><span class="map-icon map-icon-plus" aria-hidden="true"></span></button>
       <button class="map-btn" id="btnZoomOut" aria-label="Zoom out"><span class="map-icon map-icon-minus" aria-hidden="true"></span></button>
       <button class="map-btn" id="btnReset" aria-label="Reset view"><span class="map-icon map-icon-home" aria-hidden="true"></span></button>
-      <button class="map-btn" id="btnHelp" aria-label="Open guided help" title="Guided help"><span class="map-icon map-icon-help" aria-hidden="true"></span></button>
+      <button class="map-btn" id="btnHelp" aria-label="Open guided help" title="Guided help">
+        <svg class="map-icon map-icon-help" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 3-3 3"></path>
+          <path d="M12 18h.01"></path>
+        </svg>
+      </button>
     </div>
 
     <!-- Map Status -->
@@ -999,7 +1001,7 @@
     <div class="tutorial-spotlight" id="tutorialSpotlight" aria-hidden="true"></div>
     <section class="tutorial-callout" id="tutorialCallout" role="dialog" aria-modal="false" aria-labelledby="tutorialTitle" aria-live="polite">
       <button class="tutorial-close" id="btnTutorialClose" aria-label="Exit tutorial" title="Exit tutorial"></button>
-      <div class="tutorial-kicker" id="tutorialKicker">Step 1 of 8</div>
+      <div class="tutorial-kicker" id="tutorialKicker">Step 1 of 12</div>
       <div class="tutorial-progress" aria-hidden="true"><span id="tutorialProgress"></span></div>
       <h2 class="tutorial-title" id="tutorialTitle">Guided help</h2>
       <div class="tutorial-copy" id="tutorialCopy"></div>
@@ -1174,7 +1176,17 @@
         // Event listeners
         this.eventBus.on(Foundation.Events.LAYER_ADD, () => this.updateLayerList());
         this.eventBus.on(Foundation.Events.LAYER_REMOVE, () => this.updateLayerList());
-        this.eventBus.on(Foundation.Events.LAYER_TOGGLE, () => this.updateLayerList());
+        this.eventBus.on(Foundation.Events.LAYER_TOGGLE, (payload) => {
+          this.updateLayerList();
+          if (
+            this.tutorial.active
+            && this.getTutorialSteps()[this.tutorial.index]?.id === 'overview-open'
+            && payload.layerId === 'epsilon-change-overview'
+            && payload.visible
+          ) {
+            setTimeout(() => this.completeTutorialAction(), 180);
+          }
+        });
 
         // Foundation-level feature click handler
         this.eventBus.on(Foundation.Events.FEATURE_CLICK, (payload) => {
@@ -1188,7 +1200,7 @@
             && this.getTutorialSteps()[this.tutorial.index]?.id === 'select'
             && payload.layer?.moduleId === 'epsilon-change'
           ) {
-            setTimeout(() => this.nextTutorialStep(), 280);
+            setTimeout(() => this.completeTutorialAction(), 280);
           }
         });
 
@@ -1415,11 +1427,8 @@
 
         // Panel toggle - show button is covered by panel, reveals when panel hides
         const showBtn = document.getElementById('btnShowPanel');
-        const panel = document.getElementById('leftPanel');
 
-        document.getElementById('btnHidePanel').onclick = () => {
-          panel.classList.add('hidden');
-        };
+        document.getElementById('btnHidePanel').onclick = () => this.toggleSidebar();
         showBtn.onclick = () => this.toggleSidebar();
 
         // Section toggle
@@ -1436,6 +1445,18 @@
         document.getElementById('btnTutorialNext').onclick = () => this.nextTutorialStep();
         document.getElementById('inspectorBody').addEventListener('scroll', () => {
           if (this.tutorial.active) this.updateTutorialPosition();
+        });
+        document.addEventListener('scroll', () => {
+          if (this.tutorial.active) requestAnimationFrame(() => this.updateTutorialPosition());
+        }, true);
+        document.addEventListener('click', (event) => {
+          if (
+            this.tutorial.active
+            && this.getTutorialSteps()[this.tutorial.index]?.id === 'cdf-open'
+            && event.target.closest?.('.epsilon-curve-preview')
+          ) {
+            setTimeout(() => this.completeTutorialAction(), 180);
+          }
         });
 
         // Import modal
@@ -1528,7 +1549,16 @@
       },
 
       toggleSidebar() {
-        document.getElementById('leftPanel').classList.toggle('hidden');
+        const panel = document.getElementById('leftPanel');
+        panel.classList.toggle('hidden');
+        if (
+          this.tutorial.active
+          && this.getTutorialSteps()[this.tutorial.index]?.id === 'sidebar'
+          && panel.classList.contains('hidden')
+        ) {
+          setTimeout(() => this.completeTutorialAction(), 220);
+          return;
+        }
         if (this.tutorial.active) setTimeout(() => this.updateTutorialPosition(), 220);
       },
 
@@ -1538,47 +1568,77 @@
             id: 'map',
             title: 'Navigate the map',
             copy: '<p>Drag the map to move around. Use the mouse wheel or the + and - controls to zoom; the home control returns to the global view.</p>',
-            hint: 'This tour takes about 2 minutes. You can exit at any time with the close button or Esc.',
+            hint: 'This tour takes about 3 minutes. You can exit at any time with the close button or Esc.',
             target: '.map-controls'
           },
           {
             id: 'select',
             title: 'Select a catchment',
             copy: '<p>The highlighted point is a catchment. Click it to open its detail panel. Any visible catchment point works the same way.</p>',
-            hint: 'Click the pulsing point, or choose Next to continue with the example.',
-            target: 'tutorial-basin'
+            hint: 'Click the pulsing point to continue.',
+            target: 'tutorial-basin',
+            requiresAction: true
           },
           {
-            id: 'inspector',
-            title: 'Read the catchment summary',
-            copy: '<p>The detail panel starts with catchment attributes and pre/post model skill. NSE and KGE values use a low-to-high color scale, ending in green.</p><p>The class combines low-flow and high-flow epsilon change: low flow uses observed Q at or below Q10; high flow uses Q at or above Q90.</p>',
-            target: '#inspectorPanel'
+            id: 'skill',
+            title: 'Check model reliability',
+            copy: '<p>NSE and KGE evaluate how well streamflow reconstructed from the inferred epsilon agrees with observations. Pre and post scores are reported separately.</p><p>Values below zero share the lowest color; higher scores move toward green.</p>',
+            target: 'skill-metrics'
           },
           {
-            id: 'details',
-            title: 'Check data and estimates',
-            copy: '<p>The completeness check identifies observed-streamflow gaps, while the tables below summarize pre- and post-1990 epsilon for all recession, low-flow, and high-flow days.</p>',
-            hint: 'Long gaps list only continuous missing periods of 30 days or more.',
-            target: '.epsilon-streamflow-completeness'
+            id: 'classification',
+            title: 'Interpret the nine classes',
+            copy: '<p>Each catchment combines three low-flow states with three high-flow states: lower, stable, or higher post-1990 epsilon. Together they form nine possible classes.</p><p>Low flow uses observed Q at or below Q10; high flow uses Q at or above Q90.</p>',
+            target: 'classification-summary'
           },
           {
-            id: 'cdf',
+            id: 'cdf-open',
+            title: 'Open the CDF',
+            copy: '<p>This compact CDF preview is interactive. Click the highlighted thumbnail to open the full distributions.</p>',
+            hint: 'Click the CDF thumbnail to continue.',
+            target: '.epsilon-curve-preview',
+            requiresAction: true
+          },
+          {
+            id: 'cdf-view',
             title: 'Explore the CDF',
-            copy: '<p>The compact CDF preview in the detail panel is clickable. It opens these three larger distributions for all recession, low-flow, and high-flow conditions.</p><p>Move the pointer across a chart to read the exact epsilon and cumulative probability.</p>',
+            copy: '<p>The expanded view compares pre- and post-1990 epsilon for all recession, low-flow, and high-flow conditions.</p><p>Move the pointer across a chart to read the exact epsilon and cumulative probability.</p>',
             target: '.epsilon-dialog'
           },
           {
             id: 'sidebar',
-            title: 'Use or hide the sidebar',
-            copy: '<p>The left sidebar contains Modules, Layers, and the legend. Press Tab or use the panel toggle to hide it, giving the map more room; repeat to restore it.</p>',
-            target: '#leftPanel'
+            title: 'Hide the sidebar',
+            copy: '<p>The double-chevron control at the very top collapses the left sidebar. The Tab key performs the same action and can also restore the panel.</p>',
+            hint: 'Click the highlighted chevrons or press Tab to continue.',
+            target: '#btnHidePanel',
+            requiresAction: true
           },
           {
-            id: 'overview',
-            title: 'Set the reliability filter',
-            copy: '<p>Open Overview under Layers to choose NSE or KGE and set the minimum pre/post score. A catchment is shown only when both periods pass the threshold.</p><p>The same Overview window continues with the full data and physics-constrained method.</p>',
-            hint: 'The filter changes display eligibility; it does not retrain the model.',
+            id: 'overview-open',
+            title: 'Open Overview',
+            copy: '<p>Overview is a clickable row under Layers. It contains the reliability filter, the nine-class summary, and the full data and inference method.</p>',
+            hint: 'Click the highlighted Overview row to continue.',
+            target: '[data-id="epsilon-change-overview"]',
+            requiresAction: true
+          },
+          {
+            id: 'overview-filter',
+            title: 'Filter by reliability',
+            copy: '<p>Choose NSE or KGE and set a minimum score. A catchment remains on the map only when both its pre- and post-period scores exceed the threshold.</p>',
+            hint: 'This changes display eligibility only; it does not retrain the model.',
             target: '.epsilon-overview-filter'
+          },
+          {
+            id: 'overview-classification',
+            title: 'Review the nine-class summary',
+            copy: '<p>This 3 x 3 matrix counts the displayed catchments by low-flow and high-flow epsilon state. Rows describe low flow and columns describe high flow.</p>',
+            target: '.epsilon-overview-classification'
+          },
+          {
+            id: 'overview-method',
+            title: 'Read the method',
+            copy: '<p>Continue down the Overview window for the data provenance, time split, flow definitions, physics-constrained equation, cross-fitting design, and epsilon comparison workflow.</p>',
+            target: '.epsilon-story'
           },
           {
             id: 'modes',
@@ -1630,6 +1690,7 @@
         document.getElementById('tutorialCopy').innerHTML =
           `${step.copy}${step.hint ? `<div class="tutorial-hint">${step.hint}</div>` : ''}`;
         document.getElementById('btnTutorialBack').disabled = this.tutorial.index === 0;
+        document.getElementById('btnTutorialNext').disabled = Boolean(step.requiresAction);
         document.getElementById('btnTutorialNext').textContent =
           this.tutorial.index === steps.length - 1 ? 'Finish' : 'Next';
         document.getElementById('tutorialCallout').classList.add('visible');
@@ -1651,45 +1712,106 @@
         } else if (stepId === 'select') {
           module.focusTutorialBasin?.();
           inspector.classList.remove('visible');
-        } else if (stepId === 'inspector') {
-          module.showTutorialBasin?.();
-          document.getElementById('inspectorBody').scrollTop = 0;
-        } else if (stepId === 'details') {
+        } else if (stepId === 'skill') {
           module.showTutorialBasin?.();
           setTimeout(() => {
-            document.querySelector('.epsilon-streamflow-completeness')?.scrollIntoView({ block: 'center' });
+            document.querySelector('.epsilon-metric-card--skill')?.scrollIntoView({ block: 'center' });
             this.updateTutorialPosition();
           }, 0);
-        } else if (stepId === 'cdf') {
-          const basin = module.showTutorialBasin?.();
-          if (basin) module.openDistributionModal?.(String(basin.GCIN), 'all');
+        } else if (stepId === 'classification') {
+          module.showTutorialBasin?.();
+          setTimeout(() => {
+            document.querySelector('.epsilon-inspector-classification')?.scrollIntoView({ block: 'center' });
+            this.updateTutorialPosition();
+          }, 0);
+        } else if (stepId === 'cdf-open') {
+          module.closeDistributionModal?.();
+          module.showTutorialBasin?.();
+          setTimeout(() => {
+            document.querySelector('.epsilon-curve-preview')?.scrollIntoView({ block: 'center' });
+            this.updateTutorialPosition();
+          }, 0);
+        } else if (stepId === 'cdf-view') {
+          if (!module.distributionModal?.classList.contains('visible')) {
+            const basin = module.showTutorialBasin?.();
+            if (basin) module.openDistributionModal?.(String(basin.GCIN), 'all');
+          }
         } else if (stepId === 'sidebar') {
           module.closeDistributionModal?.();
           module.closeOverview?.();
           sidebar.classList.remove('hidden');
           inspector.classList.remove('visible');
-        } else if (stepId === 'overview') {
+        } else if (stepId === 'overview-open') {
           module.closeDistributionModal?.();
           sidebar.classList.remove('hidden');
           inspector.classList.remove('visible');
-          this.layerManager.setVisibility(module.overviewLayerId, true);
+          document.querySelector('[data-section="layers"]')?.parentElement.classList.remove('collapsed');
+          this.layerManager.setVisibility(module.overviewLayerId, false);
           this.updateLayerList();
-          module.showOverview?.();
+          setTimeout(() => {
+            document.querySelector(`[data-id="${module.overviewLayerId}"]`)?.scrollIntoView({ block: 'center' });
+            this.updateTutorialPosition();
+          }, 0);
+        } else if (stepId === 'overview-filter') {
+          this.ensureTutorialOverview(module);
+          setTimeout(() => {
+            document.querySelector('.epsilon-overview-filter')?.scrollIntoView({ block: 'center' });
+            this.updateTutorialPosition();
+          }, 0);
+        } else if (stepId === 'overview-classification') {
+          this.ensureTutorialOverview(module);
+          setTimeout(() => {
+            document.querySelector('.epsilon-overview-classification')?.scrollIntoView({ block: 'center' });
+            this.updateTutorialPosition();
+          }, 0);
+        } else if (stepId === 'overview-method') {
+          this.ensureTutorialOverview(module);
+          setTimeout(() => {
+            document.querySelector('.epsilon-story')?.scrollIntoView({ block: 'start' });
+            this.updateTutorialPosition();
+          }, 0);
         } else if (stepId === 'modes') {
           module.closeOverview?.();
           this.layerManager.setVisibility(module.overviewLayerId, false);
           sidebar.classList.remove('hidden');
+          document.querySelector('[data-section="modules"]')?.parentElement.classList.remove('collapsed');
           this.updateLayerList();
         }
+      },
+
+      ensureTutorialOverview(module) {
+        document.getElementById('leftPanel').classList.remove('hidden');
+        const layer = this.layerManager.getLayer?.(module.overviewLayerId);
+        if (!layer?.visible) this.layerManager.setVisibility(module.overviewLayerId, true);
+        module.showOverview?.();
+        this.updateLayerList();
       },
 
       getTutorialTargetRect(step) {
         if (step.target === 'tutorial-basin') {
           return this.moduleLoader.get('epsilon-change')?.tutorialBasinRect?.() || null;
         }
+        if (step.target === 'skill-metrics') {
+          return this.combinedTutorialRect(document.querySelectorAll('.epsilon-metric-card--skill'));
+        }
+        if (step.target === 'classification-summary') {
+          return this.combinedTutorialRect(document.querySelectorAll('.epsilon-inspector-classification, .epsilon-change-cards'));
+        }
         const element = document.querySelector(step.target);
         if (!element) return null;
         return element.getBoundingClientRect();
+      },
+
+      combinedTutorialRect(elements) {
+        const rects = Array.from(elements)
+          .map(element => element.getBoundingClientRect())
+          .filter(rect => rect.width > 0 && rect.height > 0);
+        if (!rects.length) return null;
+        const left = Math.min(...rects.map(rect => rect.left));
+        const top = Math.min(...rects.map(rect => rect.top));
+        const right = Math.max(...rects.map(rect => rect.right));
+        const bottom = Math.max(...rects.map(rect => rect.bottom));
+        return { left, top, right, bottom, width: right - left, height: bottom - top };
       },
 
       updateTutorialPosition() {
@@ -1746,11 +1868,19 @@
 
       nextTutorialStep() {
         if (!this.tutorial.active) return;
+        if (this.getTutorialSteps()[this.tutorial.index]?.requiresAction) return;
         const lastIndex = this.getTutorialSteps().length - 1;
         if (this.tutorial.index >= lastIndex) {
           this.exitTutorial();
           return;
         }
+        this.showTutorialStep(this.tutorial.index + 1);
+      },
+
+      completeTutorialAction() {
+        if (!this.tutorial.active) return;
+        const step = this.getTutorialSteps()[this.tutorial.index];
+        if (!step?.requiresAction) return;
         this.showTutorialStep(this.tutorial.index + 1);
       },
 

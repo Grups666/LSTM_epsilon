@@ -295,7 +295,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           ${this.metricCard("Low-flow mean", this.formatPct(this.mean(low)), this.mean(low))}
           ${this.metricCard("High-flow mean", this.formatPct(this.mean(high)), this.mean(high))}
         </div>
-        ${this.renderOverviewLegend(counts)}
+        <div class="epsilon-overview-classification">
+          ${this.renderOverviewLegend(counts)}
+        </div>
         <p class="epsilon-overview-note">${this.escape(this.legendNote())}</p>
       </section>
       <section>
@@ -711,7 +713,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       ? "epsilon-metric-value epsilon-metric-value--emphasis"
       : "epsilon-metric-value";
     return `
-      <div class="epsilon-metric-card">
+      <div class="epsilon-metric-card epsilon-metric-card--skill">
         <div class="${valueClass}"${color}>${this.escape(value)}</div>
         <div class="epsilon-metric-label">${this.escape(label)}</div>
       </div>
