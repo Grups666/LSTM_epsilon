@@ -167,6 +167,28 @@ def read_qobs_coverage(path: Path) -> pd.DataFrame:
     return coverage.set_index("GCIN")
 
 
+def parse_gap_ranges(value: object, limit: int = 3) -> list[dict[str, object]]:
+    if value is None or pd.isna(value):
+        return []
+    try:
+        gaps = json.loads(str(value))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return []
+    if not isinstance(gaps, list):
+        return []
+    clean = []
+    for gap in gaps:
+        if not isinstance(gap, dict):
+            continue
+        start = gap.get("start")
+        end = gap.get("end")
+        days = gap.get("days")
+        if not start or not end or not isinstance(days, (int, float)):
+            continue
+        clean.append({"start": str(start), "end": str(end), "days": int(days)})
+    return clean[:limit]
+
+
 def build_payload(sim: pd.DataFrame, static_path: Path, qobs_coverage_path: Path, bins: int, cfg: dict, run_label: str) -> dict[str, object]:
     static_columns = [
         "GCIN",
@@ -213,6 +235,13 @@ def build_payload(sim: pd.DataFrame, static_path: Path, qobs_coverage_path: Path
             basin["qobs_end"] = None if pd.isna(cov.get("last_valid_date")) else str(cov.get("last_valid_date"))
             basin["qobs_valid_days"] = int(cov.get("valid_days")) if pd.notna(cov.get("valid_days")) else None
             basin["qobs_sources"] = None if pd.isna(cov.get("sources")) else str(cov.get("sources"))
+            basin["qobs_calendar_days"] = int(cov.get("calendar_days")) if pd.notna(cov.get("calendar_days")) else None
+            basin["qobs_missing_days"] = int(cov.get("missing_q_days")) if pd.notna(cov.get("missing_q_days")) else None
+            basin["qobs_coverage_pct"] = finite_or_none(cov.get("qobs_coverage_pct"), digits=4)
+            basin["qobs_missing_pct"] = finite_or_none(cov.get("qobs_missing_pct"), digits=4)
+            basin["qobs_gap_runs"] = int(cov.get("qobs_gap_runs")) if pd.notna(cov.get("qobs_gap_runs")) else None
+            basin["qobs_long_gap_count"] = int(cov.get("qobs_long_gap_count")) if pd.notna(cov.get("qobs_long_gap_count")) else None
+            basin["qobs_long_gaps"] = parse_gap_ranges(cov.get("qobs_long_gaps_json"))
         if basin["lon"] is None or basin["lat"] is None:
             continue
 
