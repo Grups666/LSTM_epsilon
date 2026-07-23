@@ -530,10 +530,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.metricCard("Aridity", this.formatNumber(basin.Aridity, 3))}
         ${this.metricCard("Precip.", `${this.formatNumber(basin.Prec_mm, 1)} mm`)}
         ${this.metricCard("Temp.", `${this.formatNumber(basin.Temp_C, 1)} C`)}
-        ${this.metricCard("NSE pre", this.formatNumber(basin.pre_nse, 3))}
-        ${this.metricCard("NSE post", this.formatNumber(basin.post_nse, 3))}
-        ${this.metricCard("KGE pre", this.formatNumber(basin.pre_kge, 3))}
-        ${this.metricCard("KGE post", this.formatNumber(basin.post_kge, 3))}
+        ${this.skillMetricCard("NSE pre", this.formatNumber(basin.pre_nse, 3), basin.pre_nse)}
+        ${this.skillMetricCard("NSE post", this.formatNumber(basin.post_nse, 3), basin.post_nse)}
+        ${this.skillMetricCard("KGE pre", this.formatNumber(basin.pre_kge, 3), basin.pre_kge)}
+        ${this.skillMetricCard("KGE post", this.formatNumber(basin.post_kge, 3), basin.post_kge)}
       </div>
       ${this.categoryBanner(basin)}
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
@@ -595,16 +595,69 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     return match ? `${match[1]}-${match[2]}` : "";
   }
 
-  metricCard(label, value, signedValue = null) {
-    const color = Number.isFinite(Number(signedValue))
+  metricCard(label, value, signedValue = undefined) {
+    const hasSignedValue = signedValue !== null
+      && signedValue !== undefined
+      && Number.isFinite(Number(signedValue));
+    const color = hasSignedValue
       ? ` style="color:${Number(signedValue) < 0 ? "#2563eb" : "#b84235"}"`
       : "";
+    const valueClass = hasSignedValue
+      ? "epsilon-metric-value epsilon-metric-value--emphasis"
+      : "epsilon-metric-value";
     return `
       <div class="epsilon-metric-card">
-        <div class="epsilon-metric-value"${color}>${this.escape(value)}</div>
+        <div class="${valueClass}"${color}>${this.escape(value)}</div>
         <div class="epsilon-metric-label">${this.escape(label)}</div>
       </div>
     `;
+  }
+
+  skillMetricCard(label, value, score) {
+    const numeric = Number(score);
+    const finite = Number.isFinite(numeric);
+    const clamped = finite ? Math.max(0, Math.min(1, numeric)) : 0;
+    const lightColor = finite ? this.skillScoreColor(clamped, "light") : "#64748b";
+    const darkColor = finite ? this.skillScoreColor(clamped, "dark") : "#94a3b8";
+    const title = finite
+      ? `${label}: ${value}; color scale ${clamped.toFixed(3)} of 1.000`
+      : `${label}: unavailable`;
+    return `
+      <div class="epsilon-metric-card">
+        <div
+          class="epsilon-metric-value epsilon-metric-value--skill"
+          data-skill-score="${clamped.toFixed(6)}"
+          title="${this.escape(title)}"
+          style="--epsilon-skill-light:${lightColor};--epsilon-skill-dark:${darkColor}"
+        >${this.escape(value)}</div>
+        <div class="epsilon-metric-label">${this.escape(label)}</div>
+      </div>
+    `;
+  }
+
+  skillScoreColor(score, theme = "light") {
+    const palettes = {
+      light: [
+        { at: 0, rgb: [190, 61, 82] },
+        { at: 0.5, rgb: [158, 119, 0] },
+        { at: 1, rgb: [0, 148, 73] },
+      ],
+      dark: [
+        { at: 0, rgb: [251, 113, 133] },
+        { at: 0.5, rgb: [250, 204, 21] },
+        { at: 1, rgb: [74, 222, 128] },
+      ],
+    };
+    const stops = palettes[theme] || palettes.light;
+    const value = Math.max(0, Math.min(1, Number(score) || 0));
+    const upperIndex = value <= stops[1].at ? 1 : 2;
+    const lower = stops[upperIndex - 1];
+    const upper = stops[upperIndex];
+    const ratio = (value - lower.at) / (upper.at - lower.at);
+    const rgb = lower.rgb.map((channel, index) => (
+      Math.round(channel + (upper.rgb[index] - channel) * ratio)
+    ));
+    return `rgb(${rgb.join(",")})`;
   }
 
   categoryBanner(basin) {
@@ -938,7 +991,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-curve-preview{box-sizing:border-box;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#fbfdff;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
       .epsilon-curve-preview:hover{background:#eef7ff;border-color:#60a5fa!important;box-shadow:0 0 0 1px rgba(96,165,250,.26),0 0 18px rgba(96,165,250,.18)}
       .epsilon-metric-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px}
-      .epsilon-metric-value{font-size:17px;font-weight:700;color:#0f172a}
+      .epsilon-metric-value{font-size:17px;font-weight:500;color:#0f172a}
+      .epsilon-metric-value--emphasis,
+      .epsilon-metric-value--skill{font-weight:700}
+      .epsilon-metric-value--skill{color:var(--epsilon-skill-light)}
       .epsilon-metric-label{font-size:11px;color:#64748b;margin-top:3px}
       .epsilon-streamflow-record{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:-4px 0 14px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;font-size:11px;color:#64748b}
       .epsilon-streamflow-record strong{font-size:12px;color:#0f172a}
@@ -1007,6 +1063,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-metric-card,
       body.theme-dark .epsilon-streamflow-record,
       body.theme-dark .epsilon-story-figure{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-metric-value--skill{color:var(--epsilon-skill-dark)}
       body.theme-dark .epsilon-overview-filter{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-filter-title{color:#e5edf7}
       body.theme-dark .epsilon-filter-field{color:#94a3b8}
