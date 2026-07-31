@@ -244,8 +244,36 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ctx.lineWidth = selected ? 2.2 : hovered ? 2.0 : 0.7;
         ctx.strokeStyle = selected ? "#0f172a" : hovered ? "#1d4ed8" : "rgba(15,23,42,0.24)";
         ctx.stroke();
+        this.drawAttributionRing(ctx, x, y, radius, basin, selected || hovered);
       }
     }
+  }
+
+  drawAttributionRing(ctx, x, y, radius, basin, emphasized = false) {
+    const ringRadius = radius + (emphasized ? 3.3 : 2.5);
+    const lineWidth = emphasized ? 2.2 : 1.5;
+    if (this.viewMode === "low" || this.viewMode === "high") {
+      const regime = this.focusRegime || this.viewMode;
+      this.drawDriverArc(ctx, x, y, ringRadius, 0, Math.PI * 2, basin[`${regime}_driver`], lineWidth);
+      return;
+    }
+    this.drawDriverArc(ctx, x, y, ringRadius, Math.PI / 2, Math.PI * 1.5, basin.low_driver, lineWidth);
+    this.drawDriverArc(ctx, x, y, ringRadius, -Math.PI / 2, Math.PI / 2, basin.high_driver, lineWidth);
+  }
+
+  drawDriverArc(ctx, x, y, radius, start, end, driver, lineWidth) {
+    const color = this.driverColor(driver);
+    if (!color) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, radius, start, end);
+    ctx.lineWidth = lineWidth;
+    ctx.strokeStyle = color;
+    ctx.lineCap = "butt";
+    ctx.setLineDash(driver === "offsetting" ? [2.2, 1.5] : []);
+    ctx.globalAlpha = 0.95;
+    ctx.stroke();
+    ctx.restore();
   }
 
   pointRadius(basin, viewport) {
@@ -301,6 +329,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           ${this.renderOverviewLegend(counts)}
         </div>
         ${this.renderLegendDefinitions()}
+        <div class="epsilon-overview-attribution">
+          ${this.renderDriverLegend(false)}
+        </div>
       </section>
       <section>
         <h3>Data and inference</h3>
@@ -313,6 +344,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         </p>
         <p>
           Epsilon was inferred with the Ara LSTM-epsilon physics core, not a separate surrogate formulation. The retained core includes the dynamic epsilon and reset-flow heads, bounded alpha/LP/gamma AET terms, state-reset closed-form recession integration, and the four-part physics-informed objective.
+        </p>
+        <p>
+          Component attribution is calculated after inference on the same out-of-fold recession days. Effective daily GQ is epsilon multiplied by simulated Q. Pre/post changes are compared in log space, where delta log epsilon equals delta log GQ minus delta log Q. This is an algebraic decomposition of epsilon change, not a causal attribution to climate forcing.
         </p>
         <p>
           Study-specific changes are limited to the pure-GCIN data contract, the cold-day recession mask, five-fold temporal cross-fitting, batch size 512, and a fixed 30-epoch schedule. The governing equation, physical state update, and loss construction are unchanged from the reference training workflow.
@@ -452,6 +486,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           body: "Five-fold temporal cross-fitting gives each eligible day an out-of-time epsilon estimate. In every rotation, one contiguous pre-1990 block and one contiguous post-1990 block are excluded from model fitting for all catchments. Observed Q is still used to identify recession days, define flow regimes and evaluate skill. The map compares 1950-1990 against 1991-2019; low- and high-flow classes use each basin's own Q10 and Q90 rather than a global discharge cutoff.",
           figure: this.renderOutputFigure()
         })}
+        ${this.renderStoryPanel({
+          index: "07",
+          title: "Decompose epsilon change into GQ and Q components",
+          body: "For every out-of-fold recession day, effective GQ is calculated as epsilon_effective multiplied by simulated Q. Period changes are summarized with geometric means so that delta log epsilon = delta log GQ - delta log Q closes exactly. Marker rings distinguish GQ-dominant, Q-dominant, combined and offsetting component changes; they do not claim climate causality or statistical significance.",
+          figure: this.renderAttributionFigure()
+        })}
       </section>
     `;
   }
@@ -556,6 +596,23 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     `;
   }
 
+  renderAttributionFigure() {
+    return `
+      <svg viewBox="0 0 520 190" role="img" aria-label="GQ and Q component attribution">
+        ${this.svgBox(24, 68, 112, 54, "epsilon(t)", "OOF daily")}
+        <text x="154" y="100" class="epsilon-svg-equation">x</text>
+        ${this.svgBox(180, 68, 112, 54, "Qsim(t)", "OOF daily")}
+        ${this.svgArrow(302, 95, 358, 95)}
+        ${this.svgBox(366, 68, 126, 54, "GQ(t)", "epsilon x Q")}
+        <text x="72" y="154" class="epsilon-svg-muted">delta log epsilon</text>
+        <text x="214" y="154" class="epsilon-svg-equation">=</text>
+        <text x="252" y="154" class="epsilon-svg-muted">delta log GQ</text>
+        <text x="374" y="154" class="epsilon-svg-equation">-</text>
+        <text x="402" y="154" class="epsilon-svg-muted">delta log Q</text>
+      </svg>
+    `;
+  }
+
   svgBox(x, y, w, h, title, subtitle) {
     return `
       <g>
@@ -598,6 +655,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.skillMetricCard("KGE post", this.formatNumber(basin.post_kge, 3), basin.post_kge)}
       </div>
       <div class="epsilon-inspector-classification">${this.categoryBanner(basin)}</div>
+      ${this.attributionPanel(basin)}
       <div class="epsilon-change-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
         ${this.metricCard("All", this.formatPct(basin.all_relative_delta_pct), basin.all_relative_delta_pct)}
         ${this.metricCard("Low", this.formatPct(basin.low_relative_delta_pct), basin.low_relative_delta_pct)}
@@ -784,6 +842,69 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           <span aria-label="${this.escape(this.basinLabel(basin))}">${label}</span>
         </div>
         <div style="font-size:11px;color:#64748b;margin-top:5px">${this.escape(this.basinLabelSubtitle())}</div>
+      </div>
+    `;
+  }
+
+  attributionPanel(basin) {
+    const regimes = this.viewMode === "low" || this.viewMode === "high"
+      ? [this.focusRegime || this.viewMode]
+      : ["low", "high"];
+    return `
+      <div class="epsilon-attribution-panel">
+        <div class="epsilon-attribution-title">GQ / Q component attribution</div>
+        ${regimes.map((regime) => {
+          const driver = basin[`${regime}_driver`] || "insufficient";
+          return `
+            <div class="epsilon-attribution-row">
+              <span class="epsilon-attribution-ring" style="--driver-color:${this.driverColor(driver) || "#cbd5e1"}"></span>
+              <span class="epsilon-attribution-regime">${regime === "low" ? "Low flow" : "High flow"}</span>
+              <span class="epsilon-attribution-driver">${this.driverLabel(driver)}</span>
+              <span class="epsilon-attribution-values">GQ ${this.formatPct(basin[`${regime}_gq_change_pct`])} / Q ${this.formatPct(basin[`${regime}_qsim_change_pct`])}</span>
+            </div>
+          `;
+        }).join("")}
+        <div class="epsilon-attribution-note">Pre/post geometric-mean decomposition. The ring is descriptive, not a significance or causal-climate claim.</div>
+      </div>
+    `;
+  }
+
+  driverColor(driver) {
+    return {
+      gq: "#00897b",
+      q: "#d97706",
+      combined: "#111827",
+      offsetting: "#64748b"
+    }[driver] || null;
+  }
+
+  driverLabel(driver) {
+    return {
+      gq: "GQ-dominant",
+      q: "Q-dominant",
+      combined: "Combined",
+      offsetting: "Offsetting",
+      insufficient: "Insufficient"
+    }[driver] || "Insufficient";
+  }
+
+  renderDriverLegend(compact = true) {
+    const items = ["gq", "q", "combined", "offsetting"];
+    const regimeNote = this.viewMode === "low" || this.viewMode === "high"
+      ? `The full outer ring shows ${this.focusTitle().toLowerCase()} attribution.`
+      : "The left semicircle is low flow; the right semicircle is high flow.";
+    return `
+      <div class="epsilon-driver-legend${compact ? " epsilon-driver-legend--compact" : ""}">
+        <div class="epsilon-driver-legend-title">GQ / Q component ring</div>
+        <div class="epsilon-driver-legend-items">
+          ${items.map((driver) => `
+            <span class="epsilon-driver-legend-item">
+              <span class="epsilon-driver-ring-swatch${driver === "offsetting" ? " is-dashed" : ""}" style="--driver-color:${this.driverColor(driver)}"></span>
+              ${this.driverLabel(driver)}
+            </span>
+          `).join("")}
+        </div>
+        <div class="epsilon-driver-legend-note">${regimeNote} GQ = epsilon x simulated Q; categories describe pre/post component dominance.</div>
       </div>
     `;
   }
@@ -1182,6 +1303,20 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-definition{position:relative;padding-left:14px}
       .epsilon-overview-definition::before{content:"";position:absolute;left:1px;top:7px;width:5px;height:5px;border-radius:50%;background:#64748b}
       .epsilon-overview-definition-title{display:block;margin-bottom:1px;color:#0f172a;font-weight:700}
+      .epsilon-overview-attribution{margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0}
+      .epsilon-attribution-panel{margin:0 0 14px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
+      .epsilon-attribution-title,.epsilon-driver-legend-title{font-size:11px;font-weight:800;color:#0f172a;margin-bottom:7px}
+      .epsilon-attribution-row{display:grid;grid-template-columns:16px 58px minmax(82px,.8fr) minmax(0,1.35fr);gap:6px;align-items:center;padding:4px 0;font-size:10.5px;color:#475569}
+      .epsilon-attribution-ring,.epsilon-driver-ring-swatch{width:12px;height:12px;border-radius:50%;border:2px solid var(--driver-color);box-sizing:border-box;display:inline-block;flex:0 0 auto}
+      .epsilon-driver-ring-swatch.is-dashed{border-style:dashed}
+      .epsilon-attribution-regime{color:#64748b}
+      .epsilon-attribution-driver{font-weight:700;color:#334155}
+      .epsilon-attribution-values{text-align:right;color:#64748b;white-space:nowrap}
+      .epsilon-attribution-note,.epsilon-driver-legend-note{margin-top:6px;font-size:10px;line-height:1.45;color:#64748b}
+      .epsilon-driver-legend{margin-top:12px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
+      .epsilon-driver-legend--compact{padding:8px;margin-top:10px}
+      .epsilon-driver-legend-items{display:flex;flex-wrap:wrap;gap:7px 12px}
+      .epsilon-driver-legend-item{display:inline-flex;align-items:center;gap:5px;color:#475569;font-size:10.5px;white-space:nowrap}
       .epsilon-regime-state{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
       .epsilon-regime-state--matrix{gap:2px;line-height:1}
       .epsilon-regime-epsilon{font-family:Arial,sans-serif;font-size:1em;font-style:italic;font-weight:700;white-space:nowrap}
@@ -1233,6 +1368,18 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-metric-label{color:#94a3b8}
       body.theme-dark .epsilon-overview-body section + section{border-top-color:#263449}
       body.theme-dark .epsilon-overview-definition-title{color:#e5edf7}
+      body.theme-dark .epsilon-overview-attribution{border-top-color:#263449}
+      body.theme-dark .epsilon-attribution-panel,
+      body.theme-dark .epsilon-driver-legend{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-attribution-title,
+      body.theme-dark .epsilon-driver-legend-title,
+      body.theme-dark .epsilon-attribution-driver{color:#e5edf7}
+      body.theme-dark .epsilon-attribution-row,
+      body.theme-dark .epsilon-attribution-regime,
+      body.theme-dark .epsilon-attribution-values,
+      body.theme-dark .epsilon-attribution-note,
+      body.theme-dark .epsilon-driver-legend-item,
+      body.theme-dark .epsilon-driver-legend-note{color:#94a3b8}
       body.theme-dark .epsilon-overview-close:hover{background:#1e293b;color:#f8fafc}
       body.theme-dark .epsilon-metric-card,
       body.theme-dark .epsilon-streamflow-completeness,
@@ -1564,6 +1711,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
             <span>Insufficient ${this.focusTitle().toLowerCase()} data</span>
           </div>
           <div style="font-size:10px;color:#64748b;margin-top:8px">Relative epsilon change after 1990; values are clipped to the displayed scale.</div>
+          ${this.renderDriverLegend(true)}
         `
       });
       return;
@@ -1578,6 +1726,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           <span>Insufficient low-flow / high-flow data</span>
         </div>
         <div style="font-size:10px;color:#64748b;margin-top:8px">Decr. = Decrease · Stab. = Stable · Incr. = Increase. Stable is within +/-${this.stableThresholdPct}%.</div>
+        ${this.renderDriverLegend(true)}
       `
     });
   }
