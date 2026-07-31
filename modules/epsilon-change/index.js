@@ -830,21 +830,21 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   renderBivariateMatrix(counts, compact = true) {
     const states = ["decrease", "stable", "increase"];
-    const cell = compact ? 48 : 72;
+    const cell = compact ? 44 : 72;
     const gap = compact ? 5 : 7;
-    const rowHeight = compact ? 28 : 38;
+    const rowHeight = compact ? 32 : 38;
     const fontSize = compact ? 10 : 12;
-    const labelLeft = compact ? -38 : -58;
-    const labelWidth = compact ? 32 : 50;
+    const labelLeft = compact ? -48 : -58;
+    const labelWidth = compact ? 42 : 50;
     const matrixWidth = cell * 3 + gap * 2;
     return `
       <div style="position:relative;width:${matrixWidth}px;margin:0 auto;font-size:${compact ? 9 : 11}px;color:#64748b">
         <div style="display:grid;grid-template-columns:repeat(3,${cell}px);gap:${gap}px;margin-left:0;margin-bottom:${gap}px">
-          ${states.map((state) => `<div title="High-flow epsilon ${this.stateLabel(state)}" style="text-align:center">${this.regimeStateHtml("HF", state)}</div>`).join("")}
+          ${states.map((state) => `<div title="High-flow epsilon ${this.stateLabel(state)}" style="text-align:center">${this.regimeStateHtml("HF", state, true)}</div>`).join("")}
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,${cell}px);gap:${gap}px">
           ${states.map((low, rowIndex) => `
-            <div title="Low-flow epsilon ${this.stateLabel(low)}" style="position:absolute;left:${labelLeft}px;top:${(compact ? 17 : 22) + rowIndex * (rowHeight + gap)}px;width:${labelWidth}px;text-align:right">${this.regimeStateHtml("LF", low)}</div>
+            <div title="Low-flow epsilon ${this.stateLabel(low)}" style="position:absolute;left:${labelLeft}px;top:${(compact ? 24 : 22) + rowIndex * (rowHeight + gap)}px;width:${labelWidth}px;text-align:right">${this.regimeStateHtml("LF", low, true)}</div>
             ${states.map((high) => `
               <div title="epsilon_LF ${this.stateLabel(low)} / epsilon_HF ${this.stateLabel(high)}" style="height:${rowHeight}px;border-radius:4px;background:${this.categoryColorByStates(low, high)};border:1px solid rgba(15,23,42,.16);display:flex;align-items:center;justify-content:center;color:${this.categoryTextColor(low, high)};font-weight:700;font-size:${fontSize}px">
                 ${counts[`${low}_${high}`] || 0}
@@ -944,7 +944,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         </div>
         <div class="epsilon-overview-definition">
           <span class="epsilon-overview-definition-title">Change classes</span>
-          <span>Relative change is 100 x (post-1990 mean epsilon - pre-1990 mean epsilon) / pre-1990 mean epsilon. Decrease (↓) is below -${this.stableThresholdPct}%; Stable (≈) is from -${this.stableThresholdPct}% through +${this.stableThresholdPct}%, including both limits; Increase (↑) is above +${this.stableThresholdPct}%.</span>
+          <span>Relative change is 100 x (post-1990 mean epsilon - pre-1990 mean epsilon) / pre-1990 mean epsilon. Decrease is below -${this.stableThresholdPct}%; Stable is from -${this.stableThresholdPct}% through +${this.stableThresholdPct}%, including both limits; Increase is above +${this.stableThresholdPct}%.</span>
         </div>
       </div>
     `;
@@ -982,26 +982,18 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   stateLabel(state) {
     return {
-      decrease: "decrease",
-      stable: "stable",
-      increase: "increase"
+      decrease: "Decrease",
+      stable: "Stable",
+      increase: "Increase"
     }[state] || "insufficient";
-  }
-
-  stateSymbol(state) {
-    return {
-      decrease: "↓",
-      stable: "≈",
-      increase: "↑"
-    }[state] || "?";
   }
 
   epsilonRegimeHtml(regime) {
     return `<span class="epsilon-regime-epsilon">ε<sub>${regime}</sub></span>`;
   }
 
-  regimeStateHtml(regime, state) {
-    return `<span class="epsilon-regime-state">${this.epsilonRegimeHtml(regime)}<span class="epsilon-regime-arrow">${this.stateSymbol(state)}</span></span>`;
+  regimeStateHtml(regime, state, matrix = false) {
+    return `<span class="epsilon-regime-state${matrix ? " epsilon-regime-state--matrix" : ""}">${this.epsilonRegimeHtml(regime)}<span class="epsilon-regime-label">${this.stateLabel(state)}</span></span>`;
   }
 
   basinColor(basin) {
@@ -1185,10 +1177,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-definition{position:relative;padding-left:14px}
       .epsilon-overview-definition::before{content:"";position:absolute;left:1px;top:7px;width:5px;height:5px;border-radius:50%;background:#64748b}
       .epsilon-overview-definition-title{display:block;margin-bottom:1px;color:#0f172a;font-weight:700}
-      .epsilon-regime-state{display:inline-flex;align-items:baseline;gap:3px;white-space:nowrap}
+      .epsilon-regime-state{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
+      .epsilon-regime-state--matrix{display:inline-grid;justify-items:center;gap:0;line-height:1.15;text-transform:capitalize}
       .epsilon-regime-epsilon{font-family:Georgia,"Times New Roman",serif;font-style:italic;white-space:nowrap}
       .epsilon-regime-epsilon sub{margin-left:1px;font-family:Arial,sans-serif;font-size:.62em;font-style:normal;vertical-align:-.28em;letter-spacing:0}
-      .epsilon-regime-arrow{font-family:Arial,sans-serif;font-weight:800;font-style:normal}
+      .epsilon-regime-label{font-family:Arial,sans-serif;font-weight:700;font-style:normal}
       .epsilon-class-separator{margin:0 2px;color:#94a3b8}
       .epsilon-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
       .epsilon-overview-filter{margin:14px 0 16px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
@@ -1579,7 +1572,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           <span style="width:12px;height:12px;border-radius:50%;background:#d8dee8;border:1px solid rgba(15,23,42,.16)"></span>
           <span>Insufficient low-flow / high-flow data</span>
         </div>
-        <div style="font-size:10px;color:#64748b;margin-top:8px">↓ decrease · ≈ stable · ↑ increase. Stable is within +/-${this.stableThresholdPct}%.</div>
+        <div style="font-size:10px;color:#64748b;margin-top:8px">Decrease · Stable · Increase. Stable is within +/-${this.stableThresholdPct}%.</div>
       `
     });
   }
