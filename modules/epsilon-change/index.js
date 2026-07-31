@@ -300,7 +300,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         <div class="epsilon-overview-classification">
           ${this.renderOverviewLegend(counts)}
         </div>
-        <p class="epsilon-overview-note">${this.escape(this.legendNote())}</p>
+        ${this.renderLegendDefinitions()}
       </section>
       <section>
         <h3>Data and inference</h3>
@@ -906,14 +906,47 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; color classifies each catchment by low-flow and high-flow epsilon change after 1990.`;
   }
 
-  legendNote() {
+  renderLegendDefinitions() {
     if (this.viewMode === "low") {
-      return "Low-flow epsilon uses recession days with Q_obs at or below each catchment's Q10. Cyan-blue indicates lower post-1990 epsilon, neutral gray indicates little change, and magenta indicates higher post-1990 epsilon.";
+      return `
+        <div class="epsilon-overview-definitions">
+          <div class="epsilon-overview-definition">
+            <span class="epsilon-overview-definition-title">Flow regime</span>
+            <span>Low-flow epsilon uses recession days with Q_obs at or below each catchment's Q10.</span>
+          </div>
+          <div class="epsilon-overview-definition">
+            <span class="epsilon-overview-definition-title">Color scale</span>
+            <span>Cyan-blue indicates lower post-1990 epsilon, neutral gray indicates little change, and magenta indicates higher post-1990 epsilon.</span>
+          </div>
+        </div>
+      `;
     }
     if (this.viewMode === "high") {
-      return "High-flow epsilon uses recession days with Q_obs at or above each catchment's Q90. Cyan-blue indicates lower post-1990 epsilon, neutral gray indicates little change, and magenta indicates higher post-1990 epsilon.";
+      return `
+        <div class="epsilon-overview-definitions">
+          <div class="epsilon-overview-definition">
+            <span class="epsilon-overview-definition-title">Flow regime</span>
+            <span>High-flow epsilon uses recession days with Q_obs at or above each catchment's Q90.</span>
+          </div>
+          <div class="epsilon-overview-definition">
+            <span class="epsilon-overview-definition-title">Color scale</span>
+            <span>Cyan-blue indicates lower post-1990 epsilon, neutral gray indicates little change, and magenta indicates higher post-1990 epsilon.</span>
+          </div>
+        </div>
+      `;
     }
-    return `Stable means relative epsilon change within +/-${this.stableThresholdPct}%. Low-flow epsilon uses recession days with Q_obs at or below each catchment's Q10; high-flow uses days at or above Q90.`;
+    return `
+      <div class="epsilon-overview-definitions">
+        <div class="epsilon-overview-definition">
+          <span class="epsilon-overview-definition-title">Flow regimes</span>
+          <span>Low-flow epsilon uses recession days with Q_obs at or below each catchment's Q10. High-flow epsilon uses recession days with Q_obs at or above each catchment's Q90.</span>
+        </div>
+        <div class="epsilon-overview-definition">
+          <span class="epsilon-overview-definition-title">Change classes</span>
+          <span>Relative change is 100 x (post-1990 mean epsilon - pre-1990 mean epsilon) / pre-1990 mean epsilon. Lower (low) is below -${this.stableThresholdPct}%; Stable (stb) is from -${this.stableThresholdPct}% through +${this.stableThresholdPct}%, including both limits; Higher (high) is above +${this.stableThresholdPct}%.</span>
+        </div>
+      </div>
+    `;
   }
 
   categoryLabel(basin) {
@@ -1132,7 +1165,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-body h3{margin:0 0 8px;font-size:13px;color:#0f172a;letter-spacing:.03em;text-transform:uppercase}
       .epsilon-overview-body p{margin:0 0 10px}
       .epsilon-overview-lead{color:#475569}
-      .epsilon-overview-note{font-size:12px;color:#475569;margin-top:10px}
+      .epsilon-overview-definitions{display:grid;gap:9px;margin-top:10px;color:#475569;font-size:12px;line-height:1.55}
+      .epsilon-overview-definition{position:relative;padding-left:14px}
+      .epsilon-overview-definition::before{content:"";position:absolute;left:1px;top:7px;width:5px;height:5px;border-radius:50%;background:#64748b}
+      .epsilon-overview-definition-title{display:block;margin-bottom:1px;color:#0f172a;font-weight:700}
       .epsilon-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
       .epsilon-overview-filter{margin:14px 0 16px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
       .epsilon-filter-title{font-size:12px;font-weight:800;margin-bottom:8px;color:#0f172a}
@@ -1171,12 +1207,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-metric-value{color:#e5edf7}
       body.theme-dark .epsilon-overview-body,
       body.theme-dark .epsilon-overview-lead,
-      body.theme-dark .epsilon-overview-note,
+      body.theme-dark .epsilon-overview-definitions,
       body.theme-dark .epsilon-story-lead,
       body.theme-dark .epsilon-story-copy p,
       body.theme-dark .epsilon-svg-muted,
       body.theme-dark .epsilon-metric-label{color:#94a3b8}
       body.theme-dark .epsilon-overview-body section + section{border-top-color:#263449}
+      body.theme-dark .epsilon-overview-definition-title{color:#e5edf7}
       body.theme-dark .epsilon-overview-close:hover{background:#1e293b;color:#f8fafc}
       body.theme-dark .epsilon-metric-card,
       body.theme-dark .epsilon-streamflow-completeness,
