@@ -59,8 +59,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         lon: Number(basin.lon),
         lat: Number(basin.lat),
         area_km2: Number(basin.area_km2 || 0),
-        low_change_state: this.changeState(basin.low_relative_delta_pct),
-        high_change_state: this.changeState(basin.high_relative_delta_pct)
+        low_change_state: this.trendState(basin.low_epsilon_trend_class),
+        high_change_state: this.trendState(basin.high_epsilon_trend_class)
       }));
     this.applySkillFilter();
     this.colorScaleExtent = this.computeContinuousExtent();
@@ -349,6 +349,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           Component attribution is calculated after inference on the same out-of-fold recession days. Effective daily GQ is epsilon multiplied by simulated Q. Pre/post changes are compared in log space, where delta log epsilon equals delta log GQ minus delta log Q. This is an algebraic decomposition of epsilon change, not a causal attribution to climate forcing.
         </p>
         <p>
+          Continuous trends use annual medians with at least five recession days and require at least 20 usable years. Log annual values are centered within temporal fold to remove model-specific intercepts, then summarized by a Theil-Sen slope. Trend-free prewhitening reduces lag-1 autocorrelation before Kendall testing. Increase and Decrease require significance after Benjamini-Hochberg false-discovery-rate correction at q &lt; 0.05; all other adequately sampled series are labelled No significant trend.
+        </p>
+        <p>
           Study-specific changes are limited to the pure-GCIN data contract, the cold-day recession mask, five-fold temporal cross-fitting, batch size 512, and a fixed 30-epoch schedule. The governing equation, physical state update, and loss construction are unchanged from the reference training workflow.
         </p>
       </section>
@@ -492,6 +495,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           body: "For every out-of-fold recession day, effective GQ is calculated as epsilon_effective multiplied by simulated Q. Period changes are summarized with geometric means so that delta log epsilon = delta log GQ - delta log Q closes exactly. Marker rings distinguish GQ-dominant, Q-dominant, combined and offsetting component changes; they do not claim climate causality or statistical significance.",
           figure: this.renderAttributionFigure()
         })}
+        ${this.renderStoryPanel({
+          index: "08",
+          title: "Estimate continuous trends with significance control",
+          body: "Daily values are reduced to annual regime medians when at least five recession days are available. Series with at least 20 years are centered within OOF fold and assigned a Theil-Sen percent change per decade. Trend-free prewhitening reduces lag-1 autocorrelation before Kendall testing. Benjamini-Hochberg correction controls false discoveries; Increase and Decrease require q below 0.05, otherwise the label is No significant trend.",
+          figure: this.renderTrendFigure()
+        })}
       </section>
     `;
   }
@@ -613,6 +622,21 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     `;
   }
 
+  renderTrendFigure() {
+    return `
+      <svg viewBox="0 0 520 190" role="img" aria-label="Continuous trend and significance workflow">
+        ${this.svgBox(22, 60, 112, 58, "Daily OOF", "epsilon / GQ / Q")}
+        ${this.svgArrow(144, 89, 198, 89)}
+        ${this.svgBox(206, 60, 112, 58, "Annual median", ">= 5 days")}
+        ${this.svgArrow(328, 89, 382, 89)}
+        ${this.svgBox(390, 38, 108, 48, "Theil-Sen", "% / decade")}
+        ${this.svgBox(390, 102, 108, 48, "Kendall + FDR", "q < 0.05")}
+        <text x="108" y="154" class="epsilon-svg-muted">at least 20 years</text>
+        <text x="216" y="154" class="epsilon-svg-muted">fold-centered log series</text>
+      </svg>
+    `;
+  }
+
   svgBox(x, y, w, h, title, subtitle) {
     return `
       <g>
@@ -656,6 +680,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       </div>
       <div class="epsilon-inspector-classification">${this.categoryBanner(basin)}</div>
       ${this.attributionPanel(basin)}
+      ${this.trendPanel(basin)}
       <div class="epsilon-change-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
         ${this.metricCard("All", this.formatPct(basin.all_relative_delta_pct), basin.all_relative_delta_pct)}
         ${this.metricCard("Low", this.formatPct(basin.low_relative_delta_pct), basin.low_relative_delta_pct)}
@@ -869,6 +894,34 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     `;
   }
 
+  trendPanel(basin) {
+    const regimes = this.viewMode === "low" || this.viewMode === "high"
+      ? [this.focusRegime || this.viewMode]
+      : ["low", "high"];
+    return `
+      <div class="epsilon-trend-panel">
+        <div class="epsilon-attribution-title">Continuous epsilon trend</div>
+        ${regimes.map((regime) => {
+          const state = this.trendState(basin[`${regime}_epsilon_trend_class`]);
+          const years = Number(basin[`${regime}_epsilon_n_years`]);
+          const slope = basin[`${regime}_epsilon_slope_pct_decade`];
+          const qValue = basin[`${regime}_epsilon_q_value`];
+          return `
+            <div class="epsilon-trend-row">
+              <span class="epsilon-trend-regime">${regime === "low" ? "Low flow" : "High flow"}</span>
+              <span class="epsilon-trend-class">${state ? this.stateLabel(state) : "Insufficient"}</span>
+              <span>${this.formatPct(slope)} / decade</span>
+              <span>FDR q ${this.formatSmall(qValue)}</span>
+              <span>${Number.isFinite(years) ? `${years} years` : "NA"}</span>
+              <span>${this.driverLabel(basin[`${regime}_trend_driver`])}</span>
+            </div>
+          `;
+        }).join("")}
+        <div class="epsilon-attribution-note">Annual medians require at least 5 recession days; classification requires at least 20 years and FDR q &lt; 0.05.</div>
+      </div>
+    `;
+  }
+
   driverColor(driver) {
     return {
       gq: "#00897b",
@@ -884,6 +937,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       q: "Q-dominant",
       combined: "Combined",
       offsetting: "Offsetting",
+      nonsignificant: "No significant driver",
+      unresolved: "Unresolved",
       insufficient: "Insufficient"
     }[driver] || "Insufficient";
   }
@@ -919,7 +974,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   renderContinuousOverviewLegend() {
     const regime = this.focusRegime || this.viewMode;
     const values = this.basins
-      .map((basin) => Number(basin[`${regime}_relative_delta_pct`]))
+      .map((basin) => this.trendValue(basin, regime))
       .filter(Number.isFinite);
     const mean = this.mean(values);
     const median = this.median(values);
@@ -928,7 +983,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       : NaN;
     return `
       <div style="margin:0 0 14px">
-        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">${this.escape(this.focusTitle())} relative epsilon change</div>
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">${this.escape(this.focusTitle())} epsilon trend per decade</div>
         ${this.renderContinuousLegendBar()}
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px">
           ${this.metricCard("Mean", this.formatPct(mean), mean)}
@@ -942,7 +997,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   renderCategoryMatrix(counts) {
     return `
       <div style="margin:0 0 14px">
-        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">${this.epsilonRegimeHtml("LF")} &times; ${this.epsilonRegimeHtml("HF")} change classes</div>
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">${this.epsilonRegimeHtml("LF")} &times; ${this.epsilonRegimeHtml("HF")} trend classes</div>
         ${this.renderBivariateMatrix(counts, false)}
         <div style="font-size:11px;color:#64748b;margin-top:7px">${counts.insufficient || 0} catchments have insufficient low-flow or high-flow information for this bivariate class.</div>
       </div>
@@ -996,6 +1051,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     return "stable";
   }
 
+  trendState(value) {
+    if (value === "increase" || value === "decrease") return value;
+    if (value === "no_significant_trend") return "stable";
+    return null;
+  }
+
   layerName() {
     if (this.viewMode === "low") return "Low-flow epsilon change";
     if (this.viewMode === "high") return "High-flow epsilon change";
@@ -1016,12 +1077,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   overviewText() {
     if (this.viewMode === "low") {
-      return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; points are colored by continuous low-flow relative epsilon change after 1990.`;
+      return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; points are colored by the fold-centered low-flow Theil-Sen trend per decade.`;
     }
     if (this.viewMode === "high") {
-      return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; points are colored by continuous high-flow relative epsilon change after 1990.`;
+      return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; points are colored by the fold-centered high-flow Theil-Sen trend per decade.`;
     }
-    return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; color classifies each catchment by low-flow and high-flow epsilon change after 1990.`;
+    return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; color classifies low-flow and high-flow epsilon trends after false-discovery-rate correction.`;
   }
 
   renderLegendDefinitions() {
@@ -1034,7 +1095,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           </div>
           <div class="epsilon-overview-definition">
             <span class="epsilon-overview-definition-title">Color scale</span>
-            <span>Cyan-blue indicates lower post-1990 epsilon, neutral gray indicates little change, and magenta indicates higher post-1990 epsilon.</span>
+            <span>Cyan-blue indicates a negative Theil-Sen slope, neutral gray is near zero, and magenta indicates a positive slope. Values are percent change per decade.</span>
           </div>
         </div>
       `;
@@ -1048,7 +1109,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           </div>
           <div class="epsilon-overview-definition">
             <span class="epsilon-overview-definition-title">Color scale</span>
-            <span>Cyan-blue indicates lower post-1990 epsilon, neutral gray indicates little change, and magenta indicates higher post-1990 epsilon.</span>
+            <span>Cyan-blue indicates a negative Theil-Sen slope, neutral gray is near zero, and magenta indicates a positive slope. Values are percent change per decade.</span>
           </div>
         </div>
       `;
@@ -1060,8 +1121,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           <span>Low-flow epsilon uses recession days with Q_obs at or below each catchment's Q10. High-flow epsilon uses recession days with Q_obs at or above each catchment's Q90.</span>
         </div>
         <div class="epsilon-overview-definition">
-          <span class="epsilon-overview-definition-title">Change classes</span>
-          <span>Relative change is 100 x (post-1990 mean epsilon - pre-1990 mean epsilon) / pre-1990 mean epsilon. Decrease is below -${this.stableThresholdPct}%; Stable is from -${this.stableThresholdPct}% through +${this.stableThresholdPct}%, including both limits; Increase is above +${this.stableThresholdPct}%.</span>
+          <span class="epsilon-overview-definition-title">Trend classes</span>
+          <span>Annual medians require at least five recession days and each series requires at least 20 years. Increase or Decrease requires a positive or negative fold-centered Theil-Sen slope with Benjamini-Hochberg FDR q &lt; 0.05. Otherwise the class is No significant trend; this does not prove exact stability.</span>
         </div>
       </div>
     `;
@@ -1084,23 +1145,23 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   basinLabel(basin) {
     if (this.viewMode === "low" || this.viewMode === "high") {
       const regime = this.focusRegime || this.viewMode;
-      const value = Number(basin[`${regime}_relative_delta_pct`]);
-      return `${this.focusTitle()} epsilon change: ${this.formatPct(value)}`;
+      const value = this.trendValue(basin, regime);
+      return `${this.focusTitle()} epsilon trend: ${this.formatPct(value)} per decade`;
     }
     return this.categoryLabel(basin);
   }
 
   basinLabelSubtitle() {
     if (this.viewMode === "low" || this.viewMode === "high") {
-      return "Continuous color scale from post-1990 relative epsilon change.";
+      return "Fold-centered Theil-Sen slope; significance is classified after FDR correction.";
     }
-    return "Bivariate class from low-flow and high-flow relative epsilon change.";
+    return "Bivariate class from low-flow and high-flow significance-controlled trends.";
   }
 
   stateLabel(state) {
     return {
       decrease: "Decrease",
-      stable: "Stable",
+      stable: "No significant trend",
       increase: "Increase"
     }[state] || "insufficient";
   }
@@ -1108,7 +1169,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   stateAbbreviation(state) {
     return {
       decrease: "Decr.",
-      stable: "Stab.",
+      stable: "N.S.",
       increase: "Incr."
     }[state] || "NA";
   }
@@ -1118,14 +1179,16 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   regimeStateHtml(regime, state, matrix = false, compact = false) {
-    const label = matrix && compact ? this.stateAbbreviation(state) : this.stateLabel(state);
+    const label = matrix
+      ? (compact ? this.stateAbbreviation(state) : (state === "stable" ? "No trend" : this.stateLabel(state)))
+      : this.stateLabel(state);
     return `<span class="epsilon-regime-state${matrix ? " epsilon-regime-state--matrix" : ""}">${this.epsilonRegimeHtml(regime)}<span class="epsilon-regime-label">${label}</span></span>`;
   }
 
   basinColor(basin) {
     if (this.viewMode === "low" || this.viewMode === "high") {
       const regime = this.focusRegime || this.viewMode;
-      return this.continuousColor(Number(basin[`${regime}_relative_delta_pct`]));
+      return this.continuousColor(this.trendValue(basin, regime));
     }
     return this.categoryColorByStates(basin.low_change_state, basin.high_change_state);
   }
@@ -1134,7 +1197,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const regime = this.focusRegime || this.viewMode;
     if (!(regime === "low" || regime === "high")) return 50;
     const values = this.basins
-      .map((basin) => Number(basin[`${regime}_relative_delta_pct`]))
+      .map((basin) => this.trendValue(basin, regime))
       .filter(Number.isFinite)
       .map(Math.abs)
       .sort((a, b) => a - b);
@@ -1150,6 +1213,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     if (Math.abs(t) < 0.02) return "#cbd5e1";
     if (t < 0) return this.mix("#00d7ff", "#cbd5e1", t + 1);
     return this.mix("#cbd5e1", "#ff3bbd", t);
+  }
+
+  trendValue(basin, regime) {
+    return Number(basin?.[`${regime}_epsilon_slope_pct_decade`]);
   }
 
   renderContinuousLegendBar() {
@@ -1313,6 +1380,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-attribution-driver{font-weight:700;color:#334155}
       .epsilon-attribution-values{text-align:right;color:#64748b;white-space:nowrap}
       .epsilon-attribution-note,.epsilon-driver-legend-note{margin-top:6px;font-size:10px;line-height:1.45;color:#64748b}
+      .epsilon-trend-panel{margin:0 0 14px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
+      .epsilon-trend-row{display:grid;grid-template-columns:58px minmax(100px,1fr) minmax(72px,.8fr) minmax(58px,.65fr) 46px minmax(72px,.8fr);gap:6px;align-items:center;padding:4px 0;font-size:10px;color:#64748b}
+      .epsilon-trend-regime{color:#64748b}
+      .epsilon-trend-class{font-weight:700;color:#334155}
       .epsilon-driver-legend{margin-top:12px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
       .epsilon-driver-legend--compact{padding:8px;margin-top:10px}
       .epsilon-driver-legend-items{display:flex;flex-wrap:wrap;gap:7px 12px}
@@ -1370,16 +1441,20 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-overview-definition-title{color:#e5edf7}
       body.theme-dark .epsilon-overview-attribution{border-top-color:#263449}
       body.theme-dark .epsilon-attribution-panel,
-      body.theme-dark .epsilon-driver-legend{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-driver-legend,
+      body.theme-dark .epsilon-trend-panel{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-attribution-title,
       body.theme-dark .epsilon-driver-legend-title,
-      body.theme-dark .epsilon-attribution-driver{color:#e5edf7}
+      body.theme-dark .epsilon-attribution-driver,
+      body.theme-dark .epsilon-trend-class{color:#e5edf7}
       body.theme-dark .epsilon-attribution-row,
       body.theme-dark .epsilon-attribution-regime,
       body.theme-dark .epsilon-attribution-values,
       body.theme-dark .epsilon-attribution-note,
       body.theme-dark .epsilon-driver-legend-item,
-      body.theme-dark .epsilon-driver-legend-note{color:#94a3b8}
+      body.theme-dark .epsilon-driver-legend-note,
+      body.theme-dark .epsilon-trend-row,
+      body.theme-dark .epsilon-trend-regime{color:#94a3b8}
       body.theme-dark .epsilon-overview-close:hover{background:#1e293b;color:#f8fafc}
       body.theme-dark .epsilon-metric-card,
       body.theme-dark .epsilon-streamflow-completeness,
@@ -1710,7 +1785,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
             <span style="width:12px;height:12px;border-radius:50%;background:#d8dee8;border:1px solid rgba(15,23,42,.16)"></span>
             <span>Insufficient ${this.focusTitle().toLowerCase()} data</span>
           </div>
-          <div style="font-size:10px;color:#64748b;margin-top:8px">Relative epsilon change after 1990; values are clipped to the displayed scale.</div>
+          <div style="font-size:10px;color:#64748b;margin-top:8px">Fold-centered Theil-Sen epsilon change per decade; values are clipped to the displayed scale.</div>
           ${this.renderDriverLegend(true)}
         `
       });
@@ -1718,14 +1793,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     }
     const counts = this.categoryCounts();
     this.app.registerLegend?.(this.legendId, {
-      title: "Epsilon change classes",
+      title: "Epsilon trend classes",
       html: `
         ${this.renderBivariateMatrix(counts, true)}
         <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:#64748b;margin-top:8px">
           <span style="width:12px;height:12px;border-radius:50%;background:#d8dee8;border:1px solid rgba(15,23,42,.16)"></span>
           <span>Insufficient low-flow / high-flow data</span>
         </div>
-        <div style="font-size:10px;color:#64748b;margin-top:8px">Decr. = Decrease · Stab. = Stable · Incr. = Increase. Stable is within +/-${this.stableThresholdPct}%.</div>
+        <div style="font-size:10px;color:#64748b;margin-top:8px">Decr. = significant decrease · N.S. = no significant trend · Incr. = significant increase. Significance uses FDR q &lt; 0.05.</div>
         ${this.renderDriverLegend(true)}
       `
     });
