@@ -774,11 +774,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   categoryBanner(basin) {
     const color = this.basinColor(basin);
+    const label = (this.viewMode === "low" || this.viewMode === "high")
+      ? this.escape(this.basinLabel(basin))
+      : this.categoryLabelHtml(basin);
     return `
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#0f172a;line-height:1.35">
           <span style="width:15px;height:15px;border-radius:50%;background:${color};border:1px solid rgba(15,23,42,.24);flex:0 0 auto"></span>
-          <span>${this.escape(this.basinLabel(basin))}</span>
+          <span aria-label="${this.escape(this.basinLabel(basin))}">${label}</span>
         </div>
         <div style="font-size:11px;color:#64748b;margin-top:5px">${this.escape(this.basinLabelSubtitle())}</div>
       </div>
@@ -818,9 +821,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   renderCategoryMatrix(counts) {
     return `
       <div style="margin:0 0 14px">
-        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">Low-flow x high-flow classes</div>
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">${this.epsilonRegimeHtml("LF")} &times; ${this.epsilonRegimeHtml("HF")} change classes</div>
         ${this.renderBivariateMatrix(counts, false)}
-        <div style="font-size:11px;color:#64748b;margin-top:7px">${counts.insufficient || 0} catchments have insufficient low/high information for this bivariate class.</div>
+        <div style="font-size:11px;color:#64748b;margin-top:7px">${counts.insufficient || 0} catchments have insufficient low-flow or high-flow information for this bivariate class.</div>
       </div>
     `;
   }
@@ -833,19 +836,17 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const fontSize = compact ? 10 : 12;
     const labelLeft = compact ? -38 : -58;
     const labelWidth = compact ? 32 : 50;
-    const headerPrefix = compact ? "H " : "High ";
-    const rowPrefix = compact ? "L " : "Low ";
     const matrixWidth = cell * 3 + gap * 2;
     return `
       <div style="position:relative;width:${matrixWidth}px;margin:0 auto;font-size:${compact ? 9 : 11}px;color:#64748b">
         <div style="display:grid;grid-template-columns:repeat(3,${cell}px);gap:${gap}px;margin-left:0;margin-bottom:${gap}px">
-          ${states.map((state) => `<div style="text-align:center">${headerPrefix}${this.stateShortLabel(state)}</div>`).join("")}
+          ${states.map((state) => `<div title="High-flow epsilon ${this.stateLabel(state)}" style="text-align:center">${this.regimeStateHtml("HF", state)}</div>`).join("")}
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,${cell}px);gap:${gap}px">
           ${states.map((low, rowIndex) => `
-            <div style="position:absolute;left:${labelLeft}px;top:${(compact ? 17 : 22) + rowIndex * (rowHeight + gap)}px;width:${labelWidth}px;text-align:right">${rowPrefix}${this.stateShortLabel(low)}</div>
+            <div title="Low-flow epsilon ${this.stateLabel(low)}" style="position:absolute;left:${labelLeft}px;top:${(compact ? 17 : 22) + rowIndex * (rowHeight + gap)}px;width:${labelWidth}px;text-align:right">${this.regimeStateHtml("LF", low)}</div>
             ${states.map((high) => `
-              <div title="low ${this.stateLabel(low)} / high ${this.stateLabel(high)}" style="height:${rowHeight}px;border-radius:4px;background:${this.categoryColorByStates(low, high)};border:1px solid rgba(15,23,42,.16);display:flex;align-items:center;justify-content:center;color:${this.categoryTextColor(low, high)};font-weight:700;font-size:${fontSize}px">
+              <div title="epsilon_LF ${this.stateLabel(low)} / epsilon_HF ${this.stateLabel(high)}" style="height:${rowHeight}px;border-radius:4px;background:${this.categoryColorByStates(low, high)};border:1px solid rgba(15,23,42,.16);display:flex;align-items:center;justify-content:center;color:${this.categoryTextColor(low, high)};font-weight:700;font-size:${fontSize}px">
                 ${counts[`${low}_${high}`] || 0}
               </div>
             `).join("")}
@@ -943,7 +944,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         </div>
         <div class="epsilon-overview-definition">
           <span class="epsilon-overview-definition-title">Change classes</span>
-          <span>Relative change is 100 x (post-1990 mean epsilon - pre-1990 mean epsilon) / pre-1990 mean epsilon. Lower (low) is below -${this.stableThresholdPct}%; Stable (stb) is from -${this.stableThresholdPct}% through +${this.stableThresholdPct}%, including both limits; Higher (high) is above +${this.stableThresholdPct}%.</span>
+          <span>Relative change is 100 x (post-1990 mean epsilon - pre-1990 mean epsilon) / pre-1990 mean epsilon. Decrease (↓) is below -${this.stableThresholdPct}%; Stable (≈) is from -${this.stableThresholdPct}% through +${this.stableThresholdPct}%, including both limits; Increase (↑) is above +${this.stableThresholdPct}%.</span>
         </div>
       </div>
     `;
@@ -953,7 +954,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const low = basin.low_change_state;
     const high = basin.high_change_state;
     if (!low || !high) return "insufficient";
-    return `Low-flow ${this.stateLabel(low)} / high-flow ${this.stateLabel(high)}`;
+    return `\u03b5_LF ${this.stateLabel(low)} / \u03b5_HF ${this.stateLabel(high)}`;
+  }
+
+  categoryLabelHtml(basin) {
+    const low = basin.low_change_state;
+    const high = basin.high_change_state;
+    if (!low || !high) return "Insufficient flow-regime data";
+    return `${this.regimeStateHtml("LF", low)} <span class="epsilon-class-separator">·</span> ${this.regimeStateHtml("HF", high)}`;
   }
 
   basinLabel(basin) {
@@ -974,18 +982,26 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   stateLabel(state) {
     return {
-      decrease: "lower",
+      decrease: "decrease",
       stable: "stable",
-      increase: "higher"
+      increase: "increase"
     }[state] || "insufficient";
   }
 
-  stateShortLabel(state) {
+  stateSymbol(state) {
     return {
-      decrease: "low",
-      stable: "stb",
-      increase: "high"
-    }[state] || "NA";
+      decrease: "↓",
+      stable: "≈",
+      increase: "↑"
+    }[state] || "?";
+  }
+
+  epsilonRegimeHtml(regime) {
+    return `<span class="epsilon-regime-epsilon">ε<sub>${regime}</sub></span>`;
+  }
+
+  regimeStateHtml(regime, state) {
+    return `<span class="epsilon-regime-state">${this.epsilonRegimeHtml(regime)}<span class="epsilon-regime-arrow">${this.stateSymbol(state)}</span></span>`;
   }
 
   basinColor(basin) {
@@ -1169,6 +1185,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-definition{position:relative;padding-left:14px}
       .epsilon-overview-definition::before{content:"";position:absolute;left:1px;top:7px;width:5px;height:5px;border-radius:50%;background:#64748b}
       .epsilon-overview-definition-title{display:block;margin-bottom:1px;color:#0f172a;font-weight:700}
+      .epsilon-regime-state{display:inline-flex;align-items:baseline;gap:3px;white-space:nowrap}
+      .epsilon-regime-epsilon{font-family:Georgia,"Times New Roman",serif;font-style:italic;white-space:nowrap}
+      .epsilon-regime-epsilon sub{margin-left:1px;font-family:Arial,sans-serif;font-size:.62em;font-style:normal;vertical-align:-.28em;letter-spacing:0}
+      .epsilon-regime-arrow{font-family:Arial,sans-serif;font-weight:800;font-style:normal}
+      .epsilon-class-separator{margin:0 2px;color:#94a3b8}
       .epsilon-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
       .epsilon-overview-filter{margin:14px 0 16px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
       .epsilon-filter-title{font-size:12px;font-weight:800;margin-bottom:8px;color:#0f172a}
@@ -1551,14 +1572,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     }
     const counts = this.categoryCounts();
     this.app.registerLegend?.(this.legendId, {
-      title: "Low x high epsilon class",
+      title: "Epsilon change classes",
       html: `
         ${this.renderBivariateMatrix(counts, true)}
         <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:#64748b;margin-top:8px">
           <span style="width:12px;height:12px;border-radius:50%;background:#d8dee8;border:1px solid rgba(15,23,42,.16)"></span>
-          <span>Insufficient low/high data</span>
+          <span>Insufficient low-flow / high-flow data</span>
         </div>
-        <div style="font-size:10px;color:#64748b;margin-top:8px">Stable: relative change within +/-${this.stableThresholdPct}%.</div>
+        <div style="font-size:10px;color:#64748b;margin-top:8px">↓ decrease · ≈ stable · ↑ increase. Stable is within +/-${this.stableThresholdPct}%.</div>
       `
     });
   }
