@@ -830,18 +830,18 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   renderBivariateMatrix(counts, compact = true) {
     const states = ["decrease", "stable", "increase"];
-    const cell = compact ? 42 : 72;
+    const cell = compact ? 42 : 88;
     const gap = compact ? 5 : 7;
     const rowHeight = compact ? 30 : 38;
     const fontSize = compact ? 10 : 12;
-    const labelWidth = compact ? 48 : 64;
+    const labelWidth = compact ? 48 : 88;
     const matrixWidth = labelWidth + cell * 3 + gap * 3;
     return `
       <div style="width:${matrixWidth}px;margin:0 auto;display:grid;grid-template-columns:${labelWidth}px repeat(3,${cell}px);grid-template-rows:auto repeat(3,${rowHeight}px);gap:${gap}px;font-size:${compact ? 9 : 11}px;color:#64748b">
         <div aria-hidden="true"></div>
-        ${states.map((state) => `<div title="High-flow epsilon ${this.stateLabel(state)}" style="display:flex;align-items:center;justify-content:center;min-width:0">${this.regimeStateHtml("HF", state, true)}</div>`).join("")}
+        ${states.map((state) => `<div title="High-flow epsilon ${this.stateLabel(state)}" style="display:flex;align-items:center;justify-content:center;min-width:0">${this.regimeStateHtml("HF", state, true, compact)}</div>`).join("")}
         ${states.map((low) => `
-          <div title="Low-flow epsilon ${this.stateLabel(low)}" style="height:${rowHeight}px;display:flex;align-items:center;justify-content:flex-end;min-width:0">${this.regimeStateHtml("LF", low, true)}</div>
+          <div title="Low-flow epsilon ${this.stateLabel(low)}" style="height:${rowHeight}px;display:flex;align-items:center;justify-content:flex-end;min-width:0">${this.regimeStateHtml("LF", low, true, compact)}</div>
           ${states.map((high) => `
             <div title="epsilon_LF ${this.stateLabel(low)} / epsilon_HF ${this.stateLabel(high)}" style="height:${rowHeight}px;border-radius:4px;background:${this.categoryColorByStates(low, high)};border:1px solid rgba(15,23,42,.16);display:flex;align-items:center;justify-content:center;color:${this.categoryTextColor(low, high)};font-weight:700;font-size:${fontSize}px">
               ${counts[`${low}_${high}`] || 0}
@@ -986,9 +986,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   stateAbbreviation(state) {
     return {
-      decrease: "Dec.",
-      stable: "Stb.",
-      increase: "Inc."
+      decrease: "Decr.",
+      stable: "Stab.",
+      increase: "Incr."
     }[state] || "NA";
   }
 
@@ -996,8 +996,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     return `<span class="epsilon-regime-epsilon">ε<sub>${regime}</sub></span>`;
   }
 
-  regimeStateHtml(regime, state, matrix = false) {
-    const label = matrix ? this.stateAbbreviation(state) : this.stateLabel(state);
+  regimeStateHtml(regime, state, matrix = false, compact = false) {
+    const label = matrix && compact ? this.stateAbbreviation(state) : this.stateLabel(state);
     return `<span class="epsilon-regime-state${matrix ? " epsilon-regime-state--matrix" : ""}">${this.epsilonRegimeHtml(regime)}<span class="epsilon-regime-label">${label}</span></span>`;
   }
 
@@ -1184,8 +1184,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-definition-title{display:block;margin-bottom:1px;color:#0f172a;font-weight:700}
       .epsilon-regime-state{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
       .epsilon-regime-state--matrix{gap:2px;line-height:1}
-      .epsilon-regime-epsilon{font-family:Georgia,"Times New Roman",serif;font-style:italic;white-space:nowrap}
-      .epsilon-regime-epsilon sub{margin-left:1px;font-family:Arial,sans-serif;font-size:.62em;font-style:normal;vertical-align:-.28em;letter-spacing:0}
+      .epsilon-regime-epsilon{font-family:Arial,sans-serif;font-size:1em;font-style:italic;font-weight:700;white-space:nowrap}
+      .epsilon-regime-epsilon sub{margin-left:1px;font-family:Arial,sans-serif;font-size:.62em;font-style:normal;font-weight:700;vertical-align:-.28em;letter-spacing:0}
       .epsilon-regime-label{font-family:Arial,sans-serif;font-weight:700;font-style:normal}
       .epsilon-class-separator{margin:0 2px;color:#94a3b8}
       .epsilon-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
@@ -1577,7 +1577,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           <span style="width:12px;height:12px;border-radius:50%;background:#d8dee8;border:1px solid rgba(15,23,42,.16)"></span>
           <span>Insufficient low-flow / high-flow data</span>
         </div>
-        <div style="font-size:10px;color:#64748b;margin-top:8px">Dec. = Decrease · Stb. = Stable · Inc. = Increase. Stable is within +/-${this.stableThresholdPct}%.</div>
+        <div style="font-size:10px;color:#64748b;margin-top:8px">Decr. = Decrease · Stab. = Stable · Incr. = Increase. Stable is within +/-${this.stableThresholdPct}%.</div>
       `
     });
   }
