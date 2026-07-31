@@ -76,6 +76,26 @@ def main() -> None:
     run(
         [
             python,
+            str(scripts / "analyze_gq_attribution.py"),
+            "--config",
+            str(args.config),
+            "--run-label",
+            args.run_label,
+        ]
+    )
+    run(
+        [
+            python,
+            str(scripts / "analyze_continuous_trends.py"),
+            "--config",
+            str(args.config),
+            "--run-label",
+            args.run_label,
+        ]
+    )
+    run(
+        [
+            python,
             str(scripts / "audit_production_run.py"),
             "--config",
             str(args.config),

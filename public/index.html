@@ -1588,7 +1588,7 @@
           {
             id: 'classification',
             title: 'Interpret the nine classes',
-            copy: '<p>Each class combines low-flow epsilon, &epsilon;<sub>LF</sub>, with high-flow epsilon, &epsilon;<sub>HF</sub>. Each is labeled Decrease, Stable, or Increase after 1990.</p><p>Low flow uses observed Q at or below Q10; high flow uses Q at or above Q90.</p>',
+            copy: '<p>Each class combines low-flow epsilon, &epsilon;<sub>LF</sub>, with high-flow epsilon, &epsilon;<sub>HF</sub>. Each is labeled significant Decrease, significant Increase, or No significant trend after FDR correction.</p><p>Low flow uses observed Q at or below Q10; high flow uses Q at or above Q90.</p>',
             target: 'classification-summary'
           },
           {
@@ -1633,13 +1633,13 @@
           {
             id: 'overview-classification',
             title: 'Review the nine-class summary',
-            copy: '<p>This 3 x 3 matrix counts the displayed catchments by epsilon-change class. Rows are &epsilon;<sub>LF</sub>; columns are &epsilon;<sub>HF</sub>. The Overview uses the full labels Decrease, Stable, and Increase; the compact map legend uses Decr., Stab., and Incr.</p>',
+            copy: '<p>This 3 x 3 matrix counts the displayed catchments by continuous epsilon-trend class. Rows are &epsilon;<sub>LF</sub>; columns are &epsilon;<sub>HF</sub>. The compact map legend uses Decr., N.S., and Incr.; N.S. means no significant trend after FDR correction.</p>',
             target: '.epsilon-overview-classification'
           },
           {
             id: 'overview-method',
             title: 'Read the method',
-            copy: '<p>Continue down the Overview window for the data provenance, time split, flow definitions, physics-constrained equation, cross-fitting design, epsilon comparison, and GQ / Q component attribution workflow.</p>',
+            copy: '<p>Continue down the Overview window for data provenance, time split, flow definitions, the physics-constrained equation, cross-fitting, GQ / Q component attribution, and the annual Theil-Sen, Kendall, and FDR trend workflow.</p>',
             target: '.epsilon-story'
           },
           {

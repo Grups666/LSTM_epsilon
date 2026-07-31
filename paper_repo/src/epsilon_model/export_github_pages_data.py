@@ -19,6 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-label", type=str, default="temporal_crossfit_1990")
     parser.add_argument("--static", type=Path)
     parser.add_argument("--attribution", type=Path)
+    parser.add_argument("--trends", type=Path)
     parser.add_argument(
         "--qobs-coverage",
         type=Path,
@@ -221,11 +222,30 @@ def read_attribution(path: Path) -> dict[tuple[int, str], dict[str, object]]:
     return records
 
 
+def read_trends(path: Path) -> dict[tuple[int, str], dict[str, object]]:
+    if not path.exists():
+        return {}
+    frame = pd.read_parquet(path) if path.suffix.lower() == ".parquet" else pd.read_csv(path)
+    required = {"GCIN", "regime", "epsilon_trend_class", "trend_driver"}
+    if not required.issubset(frame.columns):
+        raise ValueError(f"Trend file is missing columns: {sorted(required - set(frame.columns))}")
+    records: dict[tuple[int, str], dict[str, object]] = {}
+    for row in frame.itertuples(index=False):
+        record = row._asdict()
+        records[(int(record["GCIN"]), str(record["regime"]))] = {
+            field: value
+            for field, value in record.items()
+            if field not in {"GCIN", "regime"}
+        }
+    return records
+
+
 def build_payload(
     sim: pd.DataFrame,
     static_path: Path,
     qobs_coverage_path: Path,
     attribution: dict[tuple[int, str], dict[str, object]],
+    trends: dict[tuple[int, str], dict[str, object]],
     bins: int,
     cfg: dict,
     run_label: str,
@@ -336,6 +356,17 @@ def build_payload(
                     basin[key] = bool(value)
                 else:
                     basin[key] = finite_or_none(value)
+            trend_row = trends.get((int(gcin), regime), {})
+            for field, value in trend_row.items():
+                key = f"{prefix}_{field}"
+                if field in {"epsilon_trend_class", "gq_trend_class", "qsim_trend_class", "trend_driver"}:
+                    basin[key] = str(value)
+                elif field in {"epsilon_significant", "gq_significant", "qsim_significant"}:
+                    basin[key] = bool(value)
+                elif field.endswith("_n_years") or field.endswith("_start_year") or field.endswith("_end_year"):
+                    basin[key] = int(value) if pd.notna(value) else None
+                else:
+                    basin[key] = finite_or_none(value)
             basin_curves[regime] = density_curve(pre.to_numpy(float), post.to_numpy(float), bins)
             if regime == "all" and delta is not None:
                 all_delta_is_valid = True
@@ -372,6 +403,12 @@ def build_payload(
                 "decomposition": "delta log epsilon = delta log GQ - delta log Q",
                 "classification": "pre/post component dominance; not a causal climate attribution",
             },
+            "continuousTrend": {
+                "annualStatistic": "median of at least 5 recession days",
+                "minimumYears": 20,
+                "slope": "fold-centered log-space Theil-Sen slope",
+                "significance": "trend-free prewhitened Kendall test with Benjamini-Hochberg FDR q < 0.05",
+            },
             "module": "epsilon-change",
         },
         "basins": basins,
@@ -385,10 +422,12 @@ def main() -> None:
     run_root = args.run_root or (Path(cfg["paths"]["output_dir"]) / args.run_label)
     static = args.static or Path(cfg["paths"]["static_attributes"])
     attribution_path = args.attribution or (run_root / "analysis" / "gq_q_attribution_by_catchment.parquet")
+    trends_path = args.trends or (run_root / "analysis" / "continuous_trends_by_catchment.parquet")
     sim = read_simulations(run_root)
     sim = label_regimes(label_periods(sim, cfg))
     attribution = read_attribution(attribution_path)
-    payload = build_payload(sim, static, args.qobs_coverage, attribution, args.bins, cfg, args.run_label)
+    trends = read_trends(trends_path)
+    payload = build_payload(sim, static, args.qobs_coverage, attribution, trends, args.bins, cfg, args.run_label)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, separators=(",", ":"), allow_nan=False), encoding="utf-8")
     print(f"wrote {args.out} with {payload['meta']['nCatchments']:,} catchments")

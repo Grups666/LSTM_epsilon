@@ -173,6 +173,28 @@ GQ-dominant, Q-dominant, combined, and offsetting changes. These classes explain
 how the epsilon ratio changed; they do not establish climate causality or
 statistical significance.
 
+### Continuous Trend and Significance
+
+The map's nine fill classes now use continuous annual trends rather than the
+former arbitrary +/-5% pre/post threshold. Annual medians require at least five
+recession days, and each series requires at least 20 years. Log annual values
+are centered within OOF fold to reduce model-specific level shifts, then fitted
+with a Theil-Sen slope. Trend-free prewhitening reduces lag-1 autocorrelation
+before Kendall's rank trend test.
+
+Benjamini-Hochberg correction controls false discoveries across catchments for
+each variable and flow regime. Increase and Decrease require FDR `q < 0.05`;
+the center class is No significant trend. That center label means the available
+series does not provide FDR-controlled evidence of a monotonic trend, not that
+epsilon is known to be exactly constant.
+
+The detail panel also reports a significance-based GQ/Q driver result. It is
+assigned only when epsilon itself passes FDR: GQ-driven, Q-driven, Combined, or
+Unresolved. Catchments without a significant epsilon trend are explicitly
+reported as No significant driver. The outer ring remains the descriptive
+pre/post component decomposition, keeping effect composition separate from
+trend significance.
+
 ### Hydroclimate Structure
 
 ![Hydroclimate gradients of epsilon change](assets/epsilon_pure_gcin_1950_2019/figure_03_hydroclimate_gradients.png)

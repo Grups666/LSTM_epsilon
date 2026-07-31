@@ -171,6 +171,39 @@ and one-third absolute-contribution boundaries. Opposing contributions are
 labelled offsetting. This is an algebraic component decomposition, not a causal
 attribution to climate forcing and not yet a statistical significance test.
 
+## Continuous Trend Inference
+
+Continuous trends are estimated separately for all-recession, low-flow, and
+high-flow epsilon, GQ, and simulated Q. Daily values are reduced to an annual
+median only when at least five eligible recession days exist. A series requires
+at least 20 annual values.
+
+Because each contiguous OOF time block was inferred by a different fold model,
+annual log values are centered within fold before trend estimation. This removes
+fold-specific intercepts while retaining the paired pre/post information carried
+by each model. The reported slope is the Theil-Sen slope of the fold-centered
+log series, converted to percent change per decade. The raw uncentered slope is
+also retained for audit.
+
+Before Kendall's rank trend test, the fold-centered series is detrended with
+its Theil-Sen slope, its lag-1 residual correlation is estimated, and the
+trend-free prewhitened series is used for the two-sided p-value. The raw Kendall
+result and residual autocorrelation are retained for audit. Benjamini-Hochberg
+correction is applied across catchments separately for every variable and flow
+regime. Epsilon is labelled Increase or Decrease only when the corrected
+`q < 0.05` and the slope has the corresponding sign. An adequately sampled
+series that does not pass FDR is labelled No significant trend, not proven
+stability.
+
+The significance-based component result is reported only when epsilon itself
+has a significant trend. Significant GQ alone is GQ-driven, significant Q alone
+is Q-driven, and significance in both is Combined. If epsilon does not pass FDR,
+the result is No significant driver; a significant epsilon trend unsupported by
+either component after FDR is retained as Unresolved rather than forced into a
+driver class. The map ring continues to show the separate descriptive pre/post
+decomposition so that statistical and effect-composition information are not
+collapsed into one symbol.
+
 ## Audited Results
 
 ```text
@@ -205,6 +238,11 @@ _private/results/epsilon_pure_gcin_1950_2019/temporal_crossfit_1990/
     epsilon_change_inference.csv
     gq_q_attribution_by_catchment.csv
     gq_q_attribution_by_catchment.parquet
+    annual_epsilon_gq_q_by_regime.parquet
+    continuous_trends_long.csv
+    continuous_trends_long.parquet
+    continuous_trends_by_catchment.csv
+    continuous_trends_by_catchment.parquet
   production_audit.csv
 ```
 
