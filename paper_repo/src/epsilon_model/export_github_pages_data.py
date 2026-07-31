@@ -18,6 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-root", type=Path)
     parser.add_argument("--run-label", type=str, default="temporal_crossfit_1990")
     parser.add_argument("--static", type=Path)
+    parser.add_argument("--attribution", type=Path)
     parser.add_argument(
         "--qobs-coverage",
         type=Path,
@@ -189,7 +190,46 @@ def parse_gap_ranges(value: object, limit: int = 3) -> list[dict[str, object]]:
     return clean[:limit]
 
 
-def build_payload(sim: pd.DataFrame, static_path: Path, qobs_coverage_path: Path, bins: int, cfg: dict, run_label: str) -> dict[str, object]:
+def read_attribution(path: Path) -> dict[tuple[int, str], dict[str, object]]:
+    if not path.exists():
+        return {}
+    frame = pd.read_parquet(path) if path.suffix.lower() == ".parquet" else pd.read_csv(path)
+    required = {"GCIN", "regime", "driver"}
+    if not required.issubset(frame.columns):
+        raise ValueError(f"Attribution file is missing columns: {sorted(required - set(frame.columns))}")
+    fields = (
+        "driver",
+        "gq_change_pct",
+        "qsim_change_pct",
+        "epsilon_change_pct",
+        "gq_component_log",
+        "q_component_log",
+        "gq_absolute_share",
+        "offsetting",
+        "closure_error_log",
+        "pre_gq_geomean",
+        "post_gq_geomean",
+        "pre_qsim_geomean",
+        "post_qsim_geomean",
+    )
+    records: dict[tuple[int, str], dict[str, object]] = {}
+    for row in frame.itertuples(index=False):
+        record = row._asdict()
+        records[(int(record["GCIN"]), str(record["regime"]))] = {
+            field: record.get(field) for field in fields if field in record
+        }
+    return records
+
+
+def build_payload(
+    sim: pd.DataFrame,
+    static_path: Path,
+    qobs_coverage_path: Path,
+    attribution: dict[tuple[int, str], dict[str, object]],
+    bins: int,
+    cfg: dict,
+    run_label: str,
+) -> dict[str, object]:
     static_columns = [
         "GCIN",
         "catchment_id",
@@ -287,6 +327,15 @@ def build_payload(sim: pd.DataFrame, static_path: Path, qobs_coverage_path: Path
             basin[f"{prefix}_post_std"] = post_stats["std"]
             basin[f"{prefix}_qobs_p10"] = q10
             basin[f"{prefix}_qobs_p90"] = q90
+            attribution_row = attribution.get((int(gcin), regime), {})
+            for field, value in attribution_row.items():
+                key = f"{prefix}_{field}"
+                if field == "driver":
+                    basin[key] = str(value)
+                elif field in {"offsetting"}:
+                    basin[key] = bool(value)
+                else:
+                    basin[key] = finite_or_none(value)
             basin_curves[regime] = density_curve(pre.to_numpy(float), post.to_numpy(float), bins)
             if regime == "all" and delta is not None:
                 all_delta_is_valid = True
@@ -318,6 +367,11 @@ def build_payload(sim: pd.DataFrame, static_path: Path, qobs_coverage_path: Path
                 "validationSet": False,
                 "checkpointSelection": cfg["training"]["checkpoint_selection"],
             },
+            "attribution": {
+                "definition": "GQ_effective = epsilon_effective x simulated_Q",
+                "decomposition": "delta log epsilon = delta log GQ - delta log Q",
+                "classification": "pre/post component dominance; not a causal climate attribution",
+            },
             "module": "epsilon-change",
         },
         "basins": basins,
@@ -330,9 +384,11 @@ def main() -> None:
     cfg = load_config(args.config)
     run_root = args.run_root or (Path(cfg["paths"]["output_dir"]) / args.run_label)
     static = args.static or Path(cfg["paths"]["static_attributes"])
+    attribution_path = args.attribution or (run_root / "analysis" / "gq_q_attribution_by_catchment.parquet")
     sim = read_simulations(run_root)
     sim = label_regimes(label_periods(sim, cfg))
-    payload = build_payload(sim, static, args.qobs_coverage, args.bins, cfg, args.run_label)
+    attribution = read_attribution(attribution_path)
+    payload = build_payload(sim, static, args.qobs_coverage, attribution, args.bins, cfg, args.run_label)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, separators=(",", ":"), allow_nan=False), encoding="utf-8")
     print(f"wrote {args.out} with {payload['meta']['nCatchments']:,} catchments")

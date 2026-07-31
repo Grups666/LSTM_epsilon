@@ -156,6 +156,23 @@ mid-flow epsilon:  Q10 < observed Q < Q90
 
 Low-flow and high-flow epsilon are evaluated separately because recession behavior under the tails of the flow distribution can reflect different storage-release controls. Their mean relative changes are `3.1%` for low flow and `8.6%` for high flow. These flow-regime summaries should be read together with the median and quartile structure in the table, because outlier catchments can move the mean.
 
+### GQ / Q Component Attribution
+
+The retained out-of-fold table contains daily effective epsilon and simulated Q
+for every evaluated recession day. Effective GQ is reconstructed as
+`epsilon_effective * Qsim`, then pre/post changes are compared in log space:
+
+```text
+delta log epsilon = delta log GQ - delta log Qsim
+```
+
+The public map preserves epsilon change as the point fill and adds an outer
+component ring. In the bivariate view, the left semicircle represents low flow
+and the right semicircle represents high flow. Ring classes distinguish
+GQ-dominant, Q-dominant, combined, and offsetting changes. These classes explain
+how the epsilon ratio changed; they do not establish climate causality or
+statistical significance.
+
 ### Hydroclimate Structure
 
 ![Hydroclimate gradients of epsilon change](assets/epsilon_pure_gcin_1950_2019/figure_03_hydroclimate_gradients.png)

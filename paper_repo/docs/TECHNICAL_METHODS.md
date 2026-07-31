@@ -146,6 +146,31 @@ delta epsilon = mean out-of-fold epsilon in 1991-2019
 
 The public explorer retains all catchments with valid contrasts and applies the user-selected NSE or KGE threshold in the browser. Its default reliability rule is that both pre-period and post-period NSE exceed 0.5.
 
+## GQ / Q Component Attribution
+
+The out-of-fold recession-day table stores `epsilon_effective`, simulated Q,
+and observed Q on the same catchment dates. Effective daily GQ is reconstructed
+without retraining:
+
+```text
+GQ_effective(t) = epsilon_effective(t) * Qsim(t)
+```
+
+Observed Q defines each catchment's low- and high-flow regimes; simulated Q is
+used in the GQ reconstruction specified by the study attribution protocol. The
+pre/post decomposition uses period geometric means, equivalently period means
+of daily logs, so that it closes numerically:
+
+```text
+delta log epsilon = delta log GQ - delta log Qsim
+```
+
+For the descriptive attribution snapshot, GQ and `-Q` contributions with the
+same sign are labelled GQ-dominant, Q-dominant, or combined using two-thirds
+and one-third absolute-contribution boundaries. Opposing contributions are
+labelled offsetting. This is an algebraic component decomposition, not a causal
+attribution to climate forcing and not yet a statistical significance test.
+
 ## Audited Results
 
 ```text
@@ -178,6 +203,8 @@ _private/results/epsilon_pure_gcin_1950_2019/temporal_crossfit_1990/
     temporal_crossfit_epsilon_change_summary.parquet
     temporal_fold_catchment_skill.csv
     epsilon_change_inference.csv
+    gq_q_attribution_by_catchment.csv
+    gq_q_attribution_by_catchment.parquet
   production_audit.csv
 ```
 
