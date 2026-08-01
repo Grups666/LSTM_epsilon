@@ -681,6 +681,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <div class="epsilon-inspector-classification">${this.categoryBanner(basin)}</div>
       ${this.attributionPanel(basin)}
       ${this.trendPanel(basin)}
+      <div class="epsilon-change-title">Pre/post epsilon change</div>
       <div class="epsilon-change-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
         ${this.metricCard("All", this.formatPct(basin.all_relative_delta_pct), basin.all_relative_delta_pct)}
         ${this.metricCard("Low", this.formatPct(basin.low_relative_delta_pct), basin.low_relative_delta_pct)}
@@ -908,12 +909,16 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           const qValue = basin[`${regime}_epsilon_q_value`];
           return `
             <div class="epsilon-trend-row">
-              <span class="epsilon-trend-regime">${regime === "low" ? "Low flow" : "High flow"}</span>
-              <span class="epsilon-trend-class">${state ? this.stateLabel(state) : "Insufficient"}</span>
-              <span>${this.formatPct(slope)} / decade</span>
-              <span>FDR q ${this.formatSmall(qValue)}</span>
-              <span>${Number.isFinite(years) ? `${years} years` : "NA"}</span>
-              <span>${this.driverLabel(basin[`${regime}_trend_driver`])}</span>
+              <div class="epsilon-trend-main">
+                <span class="epsilon-trend-regime">${regime === "low" ? "Low flow" : "High flow"}</span>
+                <span class="epsilon-trend-class">${state ? this.stateLabel(state) : "Insufficient"}</span>
+                <span class="epsilon-trend-slope">${this.formatPct(slope)} / decade</span>
+              </div>
+              <div class="epsilon-trend-meta">
+                <span>q ${this.formatSmall(qValue)}</span>
+                <span>${Number.isFinite(years) ? `${years} yr` : "NA"}</span>
+                <span>Driver ${this.trendDriverLabel(basin[`${regime}_trend_driver`])}</span>
+              </div>
             </div>
           `;
         }).join("")}
@@ -941,6 +946,18 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       unresolved: "Unresolved",
       insufficient: "Insufficient"
     }[driver] || "Insufficient";
+  }
+
+  trendDriverLabel(driver) {
+    return {
+      gq: "GQ",
+      q: "Q",
+      combined: "GQ + Q",
+      offsetting: "offsetting",
+      nonsignificant: "none",
+      unresolved: "unresolved",
+      insufficient: "NA"
+    }[driver] || "NA";
   }
 
   renderDriverLegend(compact = true) {
@@ -1381,9 +1398,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-attribution-values{text-align:right;color:#64748b;white-space:nowrap}
       .epsilon-attribution-note,.epsilon-driver-legend-note{margin-top:6px;font-size:10px;line-height:1.45;color:#64748b}
       .epsilon-trend-panel{margin:0 0 14px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
-      .epsilon-trend-row{display:grid;grid-template-columns:58px minmax(100px,1fr) minmax(72px,.8fr) minmax(58px,.65fr) 46px minmax(72px,.8fr);gap:6px;align-items:center;padding:4px 0;font-size:10px;color:#64748b}
+      .epsilon-trend-row{min-width:0;padding:5px 0;font-size:10px;color:#64748b}
+      .epsilon-trend-row+.epsilon-trend-row{border-top:1px solid #e2e8f0}
+      .epsilon-trend-main{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:7px;align-items:baseline;min-width:0}
+      .epsilon-trend-meta{display:flex;flex-wrap:wrap;gap:2px 12px;margin:3px 0 0 61px;color:#64748b}
       .epsilon-trend-regime{color:#64748b}
-      .epsilon-trend-class{font-weight:700;color:#334155}
+      .epsilon-trend-class{min-width:0;font-weight:700;color:#334155;line-height:1.3}
+      .epsilon-trend-slope{white-space:nowrap}
+      .epsilon-change-title{margin:-2px 0 7px;font-size:10px;font-weight:700;color:#475569}
       .epsilon-driver-legend{margin-top:12px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
       .epsilon-driver-legend--compact{padding:8px;margin-top:10px}
       .epsilon-driver-legend-items{display:flex;flex-wrap:wrap;gap:7px 12px}
@@ -1455,6 +1477,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-driver-legend-note,
       body.theme-dark .epsilon-trend-row,
       body.theme-dark .epsilon-trend-regime{color:#94a3b8}
+      body.theme-dark .epsilon-trend-row+.epsilon-trend-row{border-top-color:#263449}
+      body.theme-dark .epsilon-change-title{color:#cbd5e1}
       body.theme-dark .epsilon-overview-close:hover{background:#1e293b;color:#f8fafc}
       body.theme-dark .epsilon-metric-card,
       body.theme-dark .epsilon-streamflow-completeness,
