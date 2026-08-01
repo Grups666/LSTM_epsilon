@@ -879,6 +879,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     return `
       <div class="epsilon-attribution-panel">
         <div class="epsilon-attribution-title">GQ / Q component attribution</div>
+        <div class="epsilon-attribution-columns" aria-hidden="true">
+          <span></span><span></span><span>Driver</span><span>&Delta;GQ</span><span>&Delta;Q</span>
+        </div>
         ${regimes.map((regime) => {
           const driver = basin[`${regime}_driver`] || "insufficient";
           return `
@@ -886,11 +889,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
               <span class="epsilon-attribution-ring" style="--driver-color:${this.driverColor(driver) || "#cbd5e1"}"></span>
               <span class="epsilon-attribution-regime">${regime === "low" ? "Low flow" : "High flow"}</span>
               <span class="epsilon-attribution-driver">${this.driverLabel(driver)}</span>
-              <span class="epsilon-attribution-values">GQ ${this.formatPct(basin[`${regime}_gq_change_pct`])} / Q ${this.formatPct(basin[`${regime}_qsim_change_pct`])}</span>
+              <span class="epsilon-attribution-value">${this.formatPct(basin[`${regime}_gq_change_pct`])}</span>
+              <span class="epsilon-attribution-value">${this.formatPct(basin[`${regime}_qsim_change_pct`])}</span>
             </div>
           `;
         }).join("")}
-        <div class="epsilon-attribution-note">Pre/post geometric-mean decomposition. The ring is descriptive, not a significance or causal-climate claim.</div>
+        <div class="epsilon-attribution-note">Descriptive pre/post decomposition; not a significance or causal test.</div>
       </div>
     `;
   }
@@ -909,8 +913,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           const qValue = basin[`${regime}_epsilon_q_value`];
           return `
             <div class="epsilon-trend-row">
+              <div class="epsilon-trend-regime">${regime === "low" ? "Low flow" : "High flow"}</div>
               <div class="epsilon-trend-main">
-                <span class="epsilon-trend-regime">${regime === "low" ? "Low flow" : "High flow"}</span>
                 <span class="epsilon-trend-class">${state ? this.stateLabel(state) : "Insufficient"}</span>
                 <span class="epsilon-trend-slope">${this.formatPct(slope)} / decade</span>
               </div>
@@ -922,7 +926,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
             </div>
           `;
         }).join("")}
-        <div class="epsilon-attribution-note">Annual medians require at least 5 recession days; classification requires at least 20 years and FDR q &lt; 0.05.</div>
+        <div class="epsilon-attribution-note">Annual medians: &ge;5 recession days/year and &ge;20 years. Significance requires FDR q &lt; 0.05.</div>
       </div>
     `;
   }
@@ -1388,21 +1392,23 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-definition::before{content:"";position:absolute;left:1px;top:7px;width:5px;height:5px;border-radius:50%;background:#64748b}
       .epsilon-overview-definition-title{display:block;margin-bottom:1px;color:#0f172a;font-weight:700}
       .epsilon-overview-attribution{margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0}
-      .epsilon-attribution-panel{margin:0 0 14px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
-      .epsilon-attribution-title,.epsilon-driver-legend-title{font-size:11px;font-weight:800;color:#0f172a;margin-bottom:7px}
-      .epsilon-attribution-row{display:grid;grid-template-columns:16px 58px minmax(82px,.8fr) minmax(0,1.35fr);gap:6px;align-items:center;padding:4px 0;font-size:10.5px;color:#475569}
+      .epsilon-attribution-panel,.epsilon-trend-panel{margin:0 0 12px;padding:12px 3px 0;border:0;border-top:1px solid #dbe3ef;border-radius:0;background:transparent}
+      .epsilon-attribution-title,.epsilon-driver-legend-title{font-size:11px;font-weight:700;color:#0f172a;margin-bottom:8px}
+      .epsilon-attribution-columns,.epsilon-attribution-row{display:grid;grid-template-columns:14px 56px minmax(70px,1fr) 48px 48px;gap:6px;align-items:center}
+      .epsilon-attribution-columns{padding:0 0 3px;font-size:9px;color:#94a3b8;text-align:right}
+      .epsilon-attribution-columns span:nth-child(3){text-align:left}
+      .epsilon-attribution-row{padding:4px 0;font-size:10.5px;color:#475569}
       .epsilon-attribution-ring,.epsilon-driver-ring-swatch{width:12px;height:12px;border-radius:50%;border:2px solid var(--driver-color);box-sizing:border-box;display:inline-block;flex:0 0 auto}
       .epsilon-driver-ring-swatch.is-dashed{border-style:dashed}
       .epsilon-attribution-regime{color:#64748b}
       .epsilon-attribution-driver{font-weight:700;color:#334155}
-      .epsilon-attribution-values{text-align:right;color:#64748b;white-space:nowrap}
-      .epsilon-attribution-note,.epsilon-driver-legend-note{margin-top:6px;font-size:10px;line-height:1.45;color:#64748b}
-      .epsilon-trend-panel{margin:0 0 14px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
-      .epsilon-trend-row{min-width:0;padding:5px 0;font-size:10px;color:#64748b}
+      .epsilon-attribution-value{text-align:right;color:#64748b;white-space:nowrap;font-variant-numeric:tabular-nums}
+      .epsilon-attribution-note,.epsilon-driver-legend-note{margin-top:7px;font-size:9.5px;line-height:1.4;color:#64748b}
+      .epsilon-trend-row{min-width:0;padding:7px 0;font-size:10px;color:#64748b}
       .epsilon-trend-row+.epsilon-trend-row{border-top:1px solid #e2e8f0}
-      .epsilon-trend-main{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:7px;align-items:baseline;min-width:0}
-      .epsilon-trend-meta{display:flex;flex-wrap:wrap;gap:2px 12px;margin:3px 0 0 61px;color:#64748b}
-      .epsilon-trend-regime{color:#64748b}
+      .epsilon-trend-main{display:flex;align-items:baseline;justify-content:space-between;gap:10px;min-width:0;margin-top:2px}
+      .epsilon-trend-meta{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:4px;color:#64748b}
+      .epsilon-trend-regime{font-size:9px;font-weight:600;color:#64748b;text-transform:uppercase}
       .epsilon-trend-class{min-width:0;font-weight:700;color:#334155;line-height:1.3}
       .epsilon-trend-slope{white-space:nowrap}
       .epsilon-change-title{margin:-2px 0 7px;font-size:10px;font-weight:700;color:#475569}
@@ -1463,8 +1469,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-overview-definition-title{color:#e5edf7}
       body.theme-dark .epsilon-overview-attribution{border-top-color:#263449}
       body.theme-dark .epsilon-attribution-panel,
-      body.theme-dark .epsilon-driver-legend,
-      body.theme-dark .epsilon-trend-panel{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-trend-panel{background:transparent;border-color:#263449}
+      body.theme-dark .epsilon-driver-legend{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-attribution-title,
       body.theme-dark .epsilon-driver-legend-title,
       body.theme-dark .epsilon-attribution-driver,
