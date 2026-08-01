@@ -668,27 +668,15 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const curves = this.data.curves?.[String(basin.GCIN)] || {};
     const streamflowRecord = this.streamflowRecordHtml(basin);
     const cards = `
-      <div class="epsilon-inspector-summary">
-        <div class="epsilon-facts-grid">
-          ${this.inspectorFact("Area", `${this.formatNumber(basin.area_km2, 1)} km2`)}
-          ${this.inspectorFact("Aridity", this.formatNumber(basin.Aridity, 3))}
-          ${this.inspectorFact("Precipitation", `${this.formatNumber(basin.Prec_mm, 1)} mm`)}
-          ${this.inspectorFact("Temperature", `${this.formatNumber(basin.Temp_C, 1)} °C`)}
-        </div>
-        <div class="epsilon-skill-matrix">
-          <div class="epsilon-skill-matrix-title">Model reliability</div>
-          <div class="epsilon-skill-matrix-header"><span></span><span>Pre</span><span>Post</span></div>
-          <div class="epsilon-skill-matrix-row">
-            <span>NSE</span>
-            ${this.skillMatrixValue(this.formatNumber(basin.pre_nse, 3), basin.pre_nse)}
-            ${this.skillMatrixValue(this.formatNumber(basin.post_nse, 3), basin.post_nse)}
-          </div>
-          <div class="epsilon-skill-matrix-row">
-            <span>KGE</span>
-            ${this.skillMatrixValue(this.formatNumber(basin.pre_kge, 3), basin.pre_kge)}
-            ${this.skillMatrixValue(this.formatNumber(basin.post_kge, 3), basin.post_kge)}
-          </div>
-        </div>
+      <div class="epsilon-inspector-metrics">
+        ${this.metricCard("Area", `${this.formatNumber(basin.area_km2, 1)} km2`)}
+        ${this.metricCard("Aridity", this.formatNumber(basin.Aridity, 3))}
+        ${this.metricCard("Precip.", `${this.formatNumber(basin.Prec_mm, 1)} mm`)}
+        ${this.metricCard("Temp.", `${this.formatNumber(basin.Temp_C, 1)} °C`)}
+        ${this.skillMetricCard("NSE pre", this.formatNumber(basin.pre_nse, 3), basin.pre_nse)}
+        ${this.skillMetricCard("NSE post", this.formatNumber(basin.post_nse, 3), basin.post_nse)}
+        ${this.skillMetricCard("KGE pre", this.formatNumber(basin.pre_kge, 3), basin.pre_kge)}
+        ${this.skillMetricCard("KGE post", this.formatNumber(basin.post_kge, 3), basin.post_kge)}
       </div>
       <div class="epsilon-signal-panel">
         <div class="epsilon-inspector-classification">${this.categoryBanner(basin)}</div>
@@ -805,24 +793,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     if (!value || typeof value !== "string") return "";
     const match = value.match(/^(\d{4})-(\d{2})/);
     return match ? `${match[1]}-${match[2]}` : "";
-  }
-
-  inspectorFact(label, value) {
-    return `
-      <div class="epsilon-fact">
-        <span class="epsilon-fact-label">${this.escape(label)}</span>
-        <span class="epsilon-fact-value">${this.escape(value)}</span>
-      </div>
-    `;
-  }
-
-  skillMatrixValue(value, score) {
-    const numeric = Number(score);
-    const finite = Number.isFinite(numeric);
-    const clamped = finite ? Math.max(0, Math.min(1, numeric)) : 0;
-    const lightColor = finite ? this.skillScoreColor(clamped, "light") : "#64748b";
-    const darkColor = finite ? this.skillScoreColor(clamped, "dark") : "#94a3b8";
-    return `<span class="epsilon-skill-matrix-value" style="--epsilon-skill-light:${lightColor};--epsilon-skill-dark:${darkColor}">${this.escape(value)}</span>`;
   }
 
   changeMetric(label, value) {
@@ -1404,18 +1374,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-curve-preview{box-sizing:border-box;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#fbfdff;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
       .epsilon-curve-preview:hover{background:#eef7ff;border-color:#60a5fa!important;box-shadow:0 0 0 1px rgba(96,165,250,.26),0 0 18px rgba(96,165,250,.18)}
       .epsilon-inspector-context{margin:0 0 16px;color:#64748b;font-size:11.5px;line-height:1.55}
-      .epsilon-inspector-summary{margin-bottom:16px;padding:0 2px 15px;border-bottom:1px solid #dbe3ef}
-      .epsilon-facts-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px}
-      .epsilon-fact{display:grid;gap:2px;min-width:0}
-      .epsilon-fact-label{font-size:9.5px;color:#94a3b8}
-      .epsilon-fact-value{min-width:0;font-size:14px;font-weight:500;color:#475569;font-variant-numeric:tabular-nums}
-      .epsilon-skill-matrix{margin-top:14px}
-      .epsilon-skill-matrix-title{margin-bottom:5px;font-size:10.5px;font-weight:700;color:#334155}
-      .epsilon-skill-matrix-header,.epsilon-skill-matrix-row{display:grid;grid-template-columns:58px repeat(2,minmax(0,1fr));align-items:center}
-      .epsilon-skill-matrix-header{padding:0 0 3px;font-size:9px;color:#94a3b8;text-align:center}
-      .epsilon-skill-matrix-row{min-height:29px;border-top:1px solid #edf1f6;font-size:10.5px;color:#64748b}
-      .epsilon-skill-matrix-row>span:not(:first-child){text-align:center}
-      .epsilon-skill-matrix-value{font-size:13px;font-weight:700;color:var(--epsilon-skill-light);font-variant-numeric:tabular-nums}
+      .epsilon-inspector-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:16px}
       .epsilon-signal-panel{margin-bottom:16px;padding:12px;border:1px solid #dbe3ef;border-radius:7px;background:#f8fafc}
       .epsilon-classification-kicker{margin-bottom:6px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase}
       .epsilon-classification-main{display:flex;align-items:flex-start;gap:8px;color:#0f172a;font-size:12.5px;font-weight:700;line-height:1.4}
@@ -1538,20 +1497,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-svg-muted,
       body.theme-dark .epsilon-metric-label{color:#94a3b8}
       body.theme-dark .epsilon-inspector-context,
-      body.theme-dark .epsilon-fact-label,
-      body.theme-dark .epsilon-skill-matrix-header,
       body.theme-dark .epsilon-classification-kicker,
       body.theme-dark .epsilon-classification-subtitle,
       body.theme-dark .epsilon-change-label{color:#94a3b8}
-      body.theme-dark .epsilon-fact-value,
-      body.theme-dark .epsilon-skill-matrix-title,
       body.theme-dark .epsilon-classification-main,
       body.theme-dark .epsilon-change-title{color:#e5edf7}
-      body.theme-dark .epsilon-inspector-summary,
-      body.theme-dark .epsilon-skill-matrix-row,
       body.theme-dark .epsilon-streamflow-completeness{border-color:#263449}
       body.theme-dark .epsilon-signal-panel{background:#111827;border-color:#263449}
-      body.theme-dark .epsilon-skill-matrix-value{color:var(--epsilon-skill-dark)}
       body.theme-dark .epsilon-overview-body section + section{border-top-color:#263449}
       body.theme-dark .epsilon-overview-definition-title{color:#e5edf7}
       body.theme-dark .epsilon-overview-attribution{border-top-color:#263449}
