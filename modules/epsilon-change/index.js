@@ -668,24 +668,40 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const curves = this.data.curves?.[String(basin.GCIN)] || {};
     const streamflowRecord = this.streamflowRecordHtml(basin);
     const cards = `
-      <div class="epsilon-inspector-metrics" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px">
-        ${this.metricCard("Area", `${this.formatNumber(basin.area_km2, 1)} km2`)}
-        ${this.metricCard("Aridity", this.formatNumber(basin.Aridity, 3))}
-        ${this.metricCard("Precip.", `${this.formatNumber(basin.Prec_mm, 1)} mm`)}
-        ${this.metricCard("Temp.", `${this.formatNumber(basin.Temp_C, 1)} °C`)}
-        ${this.skillMetricCard("NSE pre", this.formatNumber(basin.pre_nse, 3), basin.pre_nse)}
-        ${this.skillMetricCard("NSE post", this.formatNumber(basin.post_nse, 3), basin.post_nse)}
-        ${this.skillMetricCard("KGE pre", this.formatNumber(basin.pre_kge, 3), basin.pre_kge)}
-        ${this.skillMetricCard("KGE post", this.formatNumber(basin.post_kge, 3), basin.post_kge)}
+      <div class="epsilon-inspector-summary">
+        <div class="epsilon-facts-grid">
+          ${this.inspectorFact("Area", `${this.formatNumber(basin.area_km2, 1)} km2`)}
+          ${this.inspectorFact("Aridity", this.formatNumber(basin.Aridity, 3))}
+          ${this.inspectorFact("Precipitation", `${this.formatNumber(basin.Prec_mm, 1)} mm`)}
+          ${this.inspectorFact("Temperature", `${this.formatNumber(basin.Temp_C, 1)} °C`)}
+        </div>
+        <div class="epsilon-skill-matrix">
+          <div class="epsilon-skill-matrix-title">Model reliability</div>
+          <div class="epsilon-skill-matrix-header"><span></span><span>Pre</span><span>Post</span></div>
+          <div class="epsilon-skill-matrix-row">
+            <span>NSE</span>
+            ${this.skillMatrixValue(this.formatNumber(basin.pre_nse, 3), basin.pre_nse)}
+            ${this.skillMatrixValue(this.formatNumber(basin.post_nse, 3), basin.post_nse)}
+          </div>
+          <div class="epsilon-skill-matrix-row">
+            <span>KGE</span>
+            ${this.skillMatrixValue(this.formatNumber(basin.pre_kge, 3), basin.pre_kge)}
+            ${this.skillMatrixValue(this.formatNumber(basin.post_kge, 3), basin.post_kge)}
+          </div>
+        </div>
       </div>
-      <div class="epsilon-inspector-classification">${this.categoryBanner(basin)}</div>
-      ${this.attributionPanel(basin)}
-      ${this.trendPanel(basin)}
-      <div class="epsilon-change-title">Pre/post epsilon change</div>
-      <div class="epsilon-change-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
-        ${this.metricCard("All", this.formatPct(basin.all_relative_delta_pct), basin.all_relative_delta_pct)}
-        ${this.metricCard("Low", this.formatPct(basin.low_relative_delta_pct), basin.low_relative_delta_pct)}
-        ${this.metricCard("High", this.formatPct(basin.high_relative_delta_pct), basin.high_relative_delta_pct)}
+      <div class="epsilon-signal-panel">
+        <div class="epsilon-inspector-classification">${this.categoryBanner(basin)}</div>
+        ${this.attributionPanel(basin)}
+        ${this.trendPanel(basin)}
+        <div class="epsilon-change-section">
+          <div class="epsilon-change-title">Pre/post epsilon change</div>
+          <div class="epsilon-change-summary">
+            ${this.changeMetric("All", basin.all_relative_delta_pct)}
+            ${this.changeMetric("Low flow", basin.low_relative_delta_pct)}
+            ${this.changeMetric("High flow", basin.high_relative_delta_pct)}
+          </div>
+        </div>
       </div>
     `;
 
@@ -709,8 +725,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     `).join("");
 
     this.app.showInspector?.(title, `
-      <p class="epsilon-inspector-context" style="margin:0 0 14px;color:#64748b;font-size:12px;line-height:1.6">
-        Epsilon is the daily recession coefficient inferred inside the physics-constrained streamflow equation. This panel compares its distribution before and after 1990.
+      <p class="epsilon-inspector-context">
+        Daily epsilon inferred within the physics-constrained streamflow equation. Comparison: 1950-1990 vs 1991-2019.
       </p>
       ${cards}
       ${streamflowRecord}
@@ -791,6 +807,35 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     return match ? `${match[1]}-${match[2]}` : "";
   }
 
+  inspectorFact(label, value) {
+    return `
+      <div class="epsilon-fact">
+        <span class="epsilon-fact-label">${this.escape(label)}</span>
+        <span class="epsilon-fact-value">${this.escape(value)}</span>
+      </div>
+    `;
+  }
+
+  skillMatrixValue(value, score) {
+    const numeric = Number(score);
+    const finite = Number.isFinite(numeric);
+    const clamped = finite ? Math.max(0, Math.min(1, numeric)) : 0;
+    const lightColor = finite ? this.skillScoreColor(clamped, "light") : "#64748b";
+    const darkColor = finite ? this.skillScoreColor(clamped, "dark") : "#94a3b8";
+    return `<span class="epsilon-skill-matrix-value" style="--epsilon-skill-light:${lightColor};--epsilon-skill-dark:${darkColor}">${this.escape(value)}</span>`;
+  }
+
+  changeMetric(label, value) {
+    const numeric = Number(value);
+    const color = Number.isFinite(numeric) ? (numeric < 0 ? "#2563eb" : "#b84235") : "#64748b";
+    return `
+      <div class="epsilon-change-metric">
+        <span class="epsilon-change-value" style="color:${color}">${this.formatPct(numeric)}</span>
+        <span class="epsilon-change-label">${this.escape(label)}</span>
+      </div>
+    `;
+  }
+
   metricCard(label, value, signedValue = undefined) {
     const hasSignedValue = signedValue !== null
       && signedValue !== undefined
@@ -862,12 +907,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       ? this.escape(this.basinLabel(basin))
       : this.categoryLabelHtml(basin);
     return `
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#0f172a;line-height:1.35">
-          <span style="width:15px;height:15px;border-radius:50%;background:${color};border:1px solid rgba(15,23,42,.24);flex:0 0 auto"></span>
+      <div class="epsilon-classification-banner">
+        <div class="epsilon-classification-kicker">Epsilon signal</div>
+        <div class="epsilon-classification-main">
+          <span class="epsilon-classification-dot" style="background:${color}"></span>
           <span aria-label="${this.escape(this.basinLabel(basin))}">${label}</span>
         </div>
-        <div style="font-size:11px;color:#64748b;margin-top:5px">${this.escape(this.basinLabelSubtitle())}</div>
+        <div class="epsilon-classification-subtitle">${this.escape(this.basinLabelSubtitle())}</div>
       </div>
     `;
   }
@@ -1357,14 +1403,32 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     style.textContent = `
       .epsilon-curve-preview{box-sizing:border-box;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#fbfdff;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
       .epsilon-curve-preview:hover{background:#eef7ff;border-color:#60a5fa!important;box-shadow:0 0 0 1px rgba(96,165,250,.26),0 0 18px rgba(96,165,250,.18)}
+      .epsilon-inspector-context{margin:0 0 16px;color:#64748b;font-size:11.5px;line-height:1.55}
+      .epsilon-inspector-summary{margin-bottom:16px;padding:0 2px 15px;border-bottom:1px solid #dbe3ef}
+      .epsilon-facts-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px}
+      .epsilon-fact{display:grid;gap:2px;min-width:0}
+      .epsilon-fact-label{font-size:9.5px;color:#94a3b8}
+      .epsilon-fact-value{min-width:0;font-size:14px;font-weight:500;color:#475569;font-variant-numeric:tabular-nums}
+      .epsilon-skill-matrix{margin-top:14px}
+      .epsilon-skill-matrix-title{margin-bottom:5px;font-size:10.5px;font-weight:700;color:#334155}
+      .epsilon-skill-matrix-header,.epsilon-skill-matrix-row{display:grid;grid-template-columns:58px repeat(2,minmax(0,1fr));align-items:center}
+      .epsilon-skill-matrix-header{padding:0 0 3px;font-size:9px;color:#94a3b8;text-align:center}
+      .epsilon-skill-matrix-row{min-height:29px;border-top:1px solid #edf1f6;font-size:10.5px;color:#64748b}
+      .epsilon-skill-matrix-row>span:not(:first-child){text-align:center}
+      .epsilon-skill-matrix-value{font-size:13px;font-weight:700;color:var(--epsilon-skill-light);font-variant-numeric:tabular-nums}
+      .epsilon-signal-panel{margin-bottom:16px;padding:12px;border:1px solid #dbe3ef;border-radius:7px;background:#f8fafc}
+      .epsilon-classification-kicker{margin-bottom:6px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase}
+      .epsilon-classification-main{display:flex;align-items:flex-start;gap:8px;color:#0f172a;font-size:12.5px;font-weight:700;line-height:1.4}
+      .epsilon-classification-dot{width:13px;height:13px;margin-top:2px;border:1px solid rgba(15,23,42,.2);border-radius:50%;flex:0 0 auto}
+      .epsilon-classification-subtitle{margin-top:5px;color:#64748b;font-size:10px;line-height:1.45}
       .epsilon-metric-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px}
       .epsilon-metric-value{font-size:17px;font-weight:400;color:#64748b}
       .epsilon-metric-value--emphasis,
       .epsilon-metric-value--skill{font-weight:700}
       .epsilon-metric-value--skill{color:var(--epsilon-skill-light)}
       .epsilon-metric-label{font-size:11px;color:#64748b;margin-top:3px}
-      .epsilon-streamflow-completeness{margin:-4px 0 14px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;font-size:11px;line-height:1.45;color:#64748b}
-      .epsilon-completeness-title{margin-bottom:7px;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+      .epsilon-streamflow-completeness{margin:0 0 16px;padding:14px 3px 0;border:0;border-top:1px solid #dbe3ef;border-radius:0;background:transparent;font-size:10.5px;line-height:1.45;color:#64748b}
+      .epsilon-completeness-title{margin-bottom:8px;color:#334155;font-size:10.5px;font-weight:700;text-transform:none;letter-spacing:0}
       .epsilon-completeness-row{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px;padding:2px 0}
       .epsilon-completeness-row span:last-child{color:#475569}
       .epsilon-completeness-subtitle{margin-top:8px;padding-top:7px;border-top:1px solid #e2e8f0;color:#64748b}
@@ -1392,7 +1456,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-definition::before{content:"";position:absolute;left:1px;top:7px;width:5px;height:5px;border-radius:50%;background:#64748b}
       .epsilon-overview-definition-title{display:block;margin-bottom:1px;color:#0f172a;font-weight:700}
       .epsilon-overview-attribution{margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0}
-      .epsilon-attribution-panel,.epsilon-trend-panel{margin:0 0 12px;padding:12px 3px 0;border:0;border-top:1px solid #dbe3ef;border-radius:0;background:transparent}
+      .epsilon-attribution-panel,.epsilon-trend-panel{margin:12px 0 0;padding:12px 0 0;border:0;border-top:1px solid #dbe3ef;border-radius:0;background:transparent}
       .epsilon-attribution-title,.epsilon-driver-legend-title{font-size:11px;font-weight:700;color:#0f172a;margin-bottom:8px}
       .epsilon-attribution-columns,.epsilon-attribution-row{display:grid;grid-template-columns:14px 56px minmax(70px,1fr) 48px 48px;gap:6px;align-items:center}
       .epsilon-attribution-columns{padding:0 0 3px;font-size:9px;color:#94a3b8;text-align:right}
@@ -1411,7 +1475,15 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-trend-regime{font-size:9px;font-weight:600;color:#64748b;text-transform:uppercase}
       .epsilon-trend-class{min-width:0;font-weight:700;color:#334155;line-height:1.3}
       .epsilon-trend-slope{white-space:nowrap}
-      .epsilon-change-title{margin:-2px 0 7px;font-size:10px;font-weight:700;color:#475569}
+      .epsilon-change-section{margin-top:12px;padding-top:12px;border-top:1px solid #dbe3ef}
+      .epsilon-change-title{margin:0 0 9px;font-size:10.5px;font-weight:700;color:#334155}
+      .epsilon-change-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+      .epsilon-change-metric{display:grid;gap:2px;min-width:0;padding:0 8px;text-align:center}
+      .epsilon-change-metric:first-child{padding-left:0}
+      .epsilon-change-metric:last-child{padding-right:0}
+      .epsilon-change-metric+.epsilon-change-metric{border-left:1px solid #dbe3ef}
+      .epsilon-change-value{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+      .epsilon-change-label{font-size:9px;color:#64748b}
       .epsilon-driver-legend{margin-top:12px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
       .epsilon-driver-legend--compact{padding:8px;margin-top:10px}
       .epsilon-driver-legend-items{display:flex;flex-wrap:wrap;gap:7px 12px}
@@ -1465,6 +1537,21 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-story-copy p,
       body.theme-dark .epsilon-svg-muted,
       body.theme-dark .epsilon-metric-label{color:#94a3b8}
+      body.theme-dark .epsilon-inspector-context,
+      body.theme-dark .epsilon-fact-label,
+      body.theme-dark .epsilon-skill-matrix-header,
+      body.theme-dark .epsilon-classification-kicker,
+      body.theme-dark .epsilon-classification-subtitle,
+      body.theme-dark .epsilon-change-label{color:#94a3b8}
+      body.theme-dark .epsilon-fact-value,
+      body.theme-dark .epsilon-skill-matrix-title,
+      body.theme-dark .epsilon-classification-main,
+      body.theme-dark .epsilon-change-title{color:#e5edf7}
+      body.theme-dark .epsilon-inspector-summary,
+      body.theme-dark .epsilon-skill-matrix-row,
+      body.theme-dark .epsilon-streamflow-completeness{border-color:#263449}
+      body.theme-dark .epsilon-signal-panel{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-skill-matrix-value{color:var(--epsilon-skill-dark)}
       body.theme-dark .epsilon-overview-body section + section{border-top-color:#263449}
       body.theme-dark .epsilon-overview-definition-title{color:#e5edf7}
       body.theme-dark .epsilon-overview-attribution{border-top-color:#263449}
@@ -1485,6 +1572,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-trend-regime{color:#94a3b8}
       body.theme-dark .epsilon-trend-row+.epsilon-trend-row{border-top-color:#263449}
       body.theme-dark .epsilon-change-title{color:#cbd5e1}
+      body.theme-dark .epsilon-change-section,
+      body.theme-dark .epsilon-change-metric+.epsilon-change-metric{border-color:#263449}
       body.theme-dark .epsilon-overview-close:hover{background:#1e293b;color:#f8fafc}
       body.theme-dark .epsilon-metric-card,
       body.theme-dark .epsilon-streamflow-completeness,
