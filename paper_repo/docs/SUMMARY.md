@@ -167,8 +167,8 @@ delta log epsilon = delta log GQ - delta log Qsim
 ```
 
 The public map preserves epsilon change as the point fill and adds an outer
-component ring. In the bivariate view, the left semicircle represents low flow
-and the right semicircle represents high flow. Ring classes distinguish
+component ring. In the bivariate view, the upper semicircle represents high
+flow and the lower semicircle represents low flow. Ring classes distinguish
 GQ-dominant, Q-dominant, combined, and offsetting changes. These classes explain
 how the epsilon ratio changed; they do not establish climate causality or
 statistical significance.

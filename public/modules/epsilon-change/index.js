@@ -14,6 +14,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.basins = [];
     this.byId = new Map();
     this.selected = null;
+    this.overviewNavScrollHandler = null;
     this.viewMode = manifest.viewMode || "bivariate";
     this.focusRegime = manifest.focusRegime || null;
     this.dataFile = manifest.dataFile || manifest.datasets?.[0]?.file || "./data/epsilon-catchment-distributions.json";
@@ -257,8 +258,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       this.drawDriverArc(ctx, x, y, ringRadius, 0, Math.PI * 2, basin[`${regime}_driver`], lineWidth);
       return;
     }
-    this.drawDriverArc(ctx, x, y, ringRadius, Math.PI / 2, Math.PI * 1.5, basin.low_driver, lineWidth);
-    this.drawDriverArc(ctx, x, y, ringRadius, -Math.PI / 2, Math.PI / 2, basin.high_driver, lineWidth);
+    this.drawDriverArc(ctx, x, y, ringRadius, 0, Math.PI, basin.low_driver, lineWidth);
+    this.drawDriverArc(ctx, x, y, ringRadius, Math.PI, Math.PI * 2, basin.high_driver, lineWidth);
   }
 
   drawDriverArc(ctx, x, y, radius, start, end, driver, lineWidth) {
@@ -316,49 +317,106 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     if (layer && !layer.visible) return;
     this.ensureOverviewModal();
     this.overviewModal.querySelector(".epsilon-overview-body").innerHTML = `
-      <section>
-        <p class="epsilon-overview-lead">${this.escape(this.overviewText())}</p>
-        ${this.renderOverviewFilter()}
-        <div class="epsilon-overview-metrics">
-          ${this.metricCard("Catchments", this.basins.length.toLocaleString())}
-          ${this.metricCard("All-recession mean", this.formatPct(this.mean(all)), this.mean(all))}
-          ${this.metricCard("Low-flow mean", this.formatPct(this.mean(low)), this.mean(low))}
-          ${this.metricCard("High-flow mean", this.formatPct(this.mean(high)), this.mean(high))}
+      <div class="epsilon-overview-layout">
+        ${this.renderOverviewNavigation()}
+        <div class="epsilon-overview-content">
+          <section id="epsilon-overview-snapshot">
+            <h3>Current view</h3>
+            <p class="epsilon-overview-lead">${this.escape(this.overviewText())}</p>
+            ${this.renderOverviewFilter()}
+            <div class="epsilon-overview-metrics">
+              ${this.metricCard("Catchments", this.basins.length.toLocaleString())}
+              ${this.metricCard("All-recession mean", this.formatPct(this.mean(all)), this.mean(all))}
+              ${this.metricCard("Low-flow mean", this.formatPct(this.mean(low)), this.mean(low))}
+              ${this.metricCard("High-flow mean", this.formatPct(this.mean(high)), this.mean(high))}
+            </div>
+          </section>
+          <section id="epsilon-overview-map-key">
+            <h3>Read the map</h3>
+            <div class="epsilon-overview-classification">
+              ${this.renderOverviewLegend(counts)}
+            </div>
+            ${this.renderLegendDefinitions()}
+            <div class="epsilon-overview-attribution">
+              ${this.renderDriverLegend(false)}
+              ${this.renderAttributionDefinitions()}
+            </div>
+          </section>
+          <section id="epsilon-overview-data-model">
+            <h3>Data, model and equations</h3>
+            ${this.renderMethodEssentials()}
+          </section>
+          ${this.renderMethodStory()}
         </div>
-        <div class="epsilon-overview-classification">
-          ${this.renderOverviewLegend(counts)}
-        </div>
-        ${this.renderLegendDefinitions()}
-        <div class="epsilon-overview-attribution">
-          ${this.renderDriverLegend(false)}
-        </div>
-      </section>
-      <section>
-        <h3>Data and inference</h3>
-        <p>
-          The map summarizes catchment-level daily epsilon, the recession coefficient inferred directly inside the governing streamflow equation. Streamflow comes from GCIN-indexed observed streamflow records. Meteorological forcing and land-state variables come from ERA5-Land daily catchment reductions, so each row is a catchment-day time series record rather than a gridded raster.
-        </p>
-        <p>
-          Pre-change is 1950-1990 and post-change is 1991-2019. Low-flow and high-flow regimes are defined within each catchment using its own Q10 and Q90 streamflow thresholds.
-          The map displays the reliability-filtered subset where both pre-period and post-period catchment ${this.skillFilter.metric.toUpperCase()} are greater than ${this.formatNumber(this.skillFilter.threshold, 2)}; the underlying data file still retains all evaluated catchments.
-        </p>
-        <p>
-          Epsilon was inferred with the Ara LSTM-epsilon physics core, not a separate surrogate formulation. The retained core includes the dynamic epsilon and reset-flow heads, bounded alpha/LP/gamma AET terms, state-reset closed-form recession integration, and the four-part physics-informed objective.
-        </p>
-        <p>
-          Component attribution is calculated after inference on the same out-of-fold recession days. Effective daily GQ is epsilon multiplied by simulated Q. Pre/post changes are compared in log space, where delta log epsilon equals delta log GQ minus delta log Q. This is an algebraic decomposition of epsilon change, not a causal attribution to climate forcing.
-        </p>
-        <p>
-          Continuous trends use annual medians with at least five recession days and require at least 20 usable years. Log annual values are centered within temporal fold to remove model-specific intercepts, then summarized by a Theil-Sen slope. Trend-free prewhitening reduces lag-1 autocorrelation before Kendall testing. Increase and Decrease require significance after Benjamini-Hochberg false-discovery-rate correction at q &lt; 0.05; all other adequately sampled series are labelled No significant trend.
-        </p>
-        <p>
-          Study-specific changes are limited to the pure-GCIN data contract, the cold-day recession mask, five-fold temporal cross-fitting, batch size 512, and a fixed 30-epoch schedule. The governing equation, physical state update, and loss construction are unchanged from the reference training workflow.
-        </p>
-      </section>
-      ${this.renderMethodStory()}
+      </div>
     `;
     this.bindOverviewFilter();
+    this.bindOverviewNavigation();
     this.overviewModal.classList.add("visible");
+  }
+
+  renderOverviewNavigation() {
+    const items = [
+      ["epsilon-overview-snapshot", "Snapshot"],
+      ["epsilon-overview-map-key", "Map key"],
+      ["epsilon-overview-data-model", "Data & model"],
+      ["epsilon-overview-workflow", "Workflow"],
+      ["epsilon-overview-crossfit", "Cross-fit"],
+      ["epsilon-overview-attribution-step", "Attribution"],
+      ["epsilon-overview-trends", "Trends"]
+    ];
+    return `
+      <nav class="epsilon-overview-nav" aria-label="Overview sections">
+        <div class="epsilon-overview-nav-title">On this page</div>
+        ${items.map(([id, label], index) => `<a href="#${id}"${index === 0 ? ' class="active"' : ""}>${label}</a>`).join("")}
+      </nav>
+    `;
+  }
+
+  bindOverviewNavigation() {
+    const body = this.overviewModal?.querySelector(".epsilon-overview-body");
+    const nav = body?.querySelector(".epsilon-overview-nav");
+    if (!body || !nav) return;
+    if (this.overviewNavScrollHandler) body.removeEventListener("scroll", this.overviewNavScrollHandler);
+    const links = [...nav.querySelectorAll("a")];
+    const targets = links.map((link) => body.querySelector(link.getAttribute("href"))).filter(Boolean);
+    const activate = (id) => links.forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${id}`));
+    links.forEach((link) => {
+      link.onclick = (event) => {
+        event.preventDefault();
+        const target = body.querySelector(link.getAttribute("href"));
+        if (!target) return;
+        activate(target.id);
+        const targetTop = target.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop;
+        body.scrollTo({ top: Math.max(0, targetTop - 12), behavior: "smooth" });
+      };
+    });
+    this.overviewNavScrollHandler = () => {
+      const top = body.getBoundingClientRect().top + 34;
+      let current = targets[0];
+      for (const target of targets) {
+        if (target.getBoundingClientRect().top <= top) current = target;
+      }
+      if (current) activate(current.id);
+    };
+    body.addEventListener("scroll", this.overviewNavScrollHandler, { passive: true });
+  }
+
+  renderMethodEssentials() {
+    return `
+      <div class="epsilon-method-facts">
+        <div><strong>Daily data</strong><span>GCIN observed Q joined by catchment and date to ERA5-Land precipitation, temperature, PET, soil moisture and AET-related inputs.</span></div>
+        <div><strong>Periods & regimes</strong><span>Pre 1950-1990; post 1991-2019. Low flow uses Qobs &le; catchment Q10; high flow uses Qobs &ge; catchment Q90.</span></div>
+        <div><strong>Physics core</strong><span>Daily epsilon is inferred directly by the reference Ara LSTM-epsilon core. The governing equation, state reset and four-part loss are unchanged.</span></div>
+        <div><strong>Evaluation</strong><span>Five paired temporal folds provide out-of-time estimates. NSE and KGE assess reconstructed Q and are indirect reliability checks for latent epsilon.</span></div>
+      </div>
+      <div class="epsilon-equation-grid">
+        <div class="epsilon-equation-card"><span>Recession equation</span><code>dQ/dt = -epsilon * Q^2 - epsilon * alpha * AET * Q</code></div>
+        <div class="epsilon-equation-card"><span>Component identity</span><code>GQ(t) = epsilon(t) * Qsim(t)</code><code>delta log epsilon = delta log GQ - delta log Qsim</code></div>
+        <div class="epsilon-equation-card"><span>Reliability & trend rules</span><code>skill_pre &gt; threshold AND skill_post &gt; threshold</code><code>Increase / Decrease only when FDR q &lt; 0.05</code></div>
+      </div>
+      <p class="epsilon-method-caution"><strong>Interpretation boundary.</strong> The ring decomposes a pre/post epsilon ratio; the trend driver uses significance-controlled annual trends. Neither result alone identifies an external climate cause.</p>
+    `;
   }
 
   renderOverviewFilter() {
@@ -416,6 +474,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   destroyModals() {
     this.activeDistribution = null;
+    const overviewBody = this.overviewModal?.querySelector(".epsilon-overview-body");
+    if (overviewBody && this.overviewNavScrollHandler) {
+      overviewBody.removeEventListener("scroll", this.overviewNavScrollHandler);
+    }
+    this.overviewNavScrollHandler = null;
     this.overviewModal?.remove();
     this.distributionModal?.remove();
     this.overviewModal = null;
@@ -447,7 +510,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   renderMethodStory() {
     return `
-      <section class="epsilon-story">
+      <section class="epsilon-story" id="epsilon-overview-workflow">
         <h3>Method workflow</h3>
         <p class="epsilon-story-lead">
           The analysis starts from daily catchment records, keeps only recession periods where epsilon is physically interpretable,
@@ -485,18 +548,21 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         })}
         ${this.renderStoryPanel({
           index: "06",
+          id: "epsilon-overview-crossfit",
           title: "Compare pre- and post-1990 epsilon distributions",
           body: "Five-fold temporal cross-fitting gives each eligible day an out-of-time epsilon estimate. In every rotation, one contiguous pre-1990 block and one contiguous post-1990 block are excluded from model fitting for all catchments. Observed Q is still used to identify recession days, define flow regimes and evaluate skill. The map compares 1950-1990 against 1991-2019; low- and high-flow classes use each basin's own Q10 and Q90 rather than a global discharge cutoff.",
           figure: this.renderOutputFigure()
         })}
         ${this.renderStoryPanel({
           index: "07",
+          id: "epsilon-overview-attribution-step",
           title: "Decompose epsilon change into GQ and Q components",
-          body: "For every out-of-fold recession day, effective GQ is calculated as epsilon_effective multiplied by simulated Q. Period changes are summarized with geometric means so that delta log epsilon = delta log GQ - delta log Q closes exactly. Marker rings distinguish GQ-dominant, Q-dominant, combined and offsetting component changes; they do not claim climate causality or statistical significance.",
+          body: "For every out-of-fold recession day, effective GQ is epsilon_effective multiplied by simulated Q. Period changes use geometric means so delta log epsilon = delta log GQ - delta log Q closes exactly. The ring places high flow above and low flow below. Combined means GQ and Q reinforce the same epsilon direction without one dominating; Offsetting means they push epsilon in opposite directions. The ring is descriptive, not causal or significance evidence.",
           figure: this.renderAttributionFigure()
         })}
         ${this.renderStoryPanel({
           index: "08",
+          id: "epsilon-overview-trends",
           title: "Estimate continuous trends with significance control",
           body: "Daily values are reduced to annual regime medians when at least five recession days are available. Series with at least 20 years are centered within OOF fold and assigned a Theil-Sen percent change per decade. Trend-free prewhitening reduces lag-1 autocorrelation before Kendall testing. Benjamini-Hochberg correction controls false discoveries; Increase and Decrease require q below 0.05, otherwise the label is No significant trend.",
           figure: this.renderTrendFigure()
@@ -505,9 +571,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     `;
   }
 
-  renderStoryPanel({ index, title, body, figure }) {
+  renderStoryPanel({ index, id = "", title, body, figure }) {
     return `
-      <article class="epsilon-story-panel">
+      <article class="epsilon-story-panel"${id ? ` id="${this.escape(id)}"` : ""}>
         <div class="epsilon-story-copy">
           <div class="epsilon-story-index">${this.escape(index)}</div>
           <h4>${this.escape(title)}</h4>
@@ -607,7 +673,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   renderAttributionFigure() {
     return `
-      <svg viewBox="0 0 520 190" role="img" aria-label="GQ and Q component attribution">
+      <svg viewBox="0 0 520 230" role="img" aria-label="GQ and Q component attribution">
         ${this.svgBox(24, 68, 112, 54, "epsilon(t)", "OOF daily")}
         <text x="154" y="100" class="epsilon-svg-equation">x</text>
         ${this.svgBox(180, 68, 112, 54, "Qsim(t)", "OOF daily")}
@@ -618,6 +684,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         <text x="252" y="154" class="epsilon-svg-muted">delta log GQ</text>
         <text x="374" y="154" class="epsilon-svg-equation">-</text>
         <text x="402" y="154" class="epsilon-svg-muted">delta log Q</text>
+        <circle cx="104" cy="198" r="19" class="epsilon-svg-box"/>
+        <line x1="85" y1="198" x2="123" y2="198" class="epsilon-svg-grid"/>
+        <text x="104" y="193" text-anchor="middle" class="epsilon-svg-title">H</text>
+        <text x="104" y="212" text-anchor="middle" class="epsilon-svg-title">L</text>
+        <text x="138" y="194" class="epsilon-svg-muted">outer ring: high flow above</text>
+        <text x="138" y="210" class="epsilon-svg-muted">low flow below</text>
+        <text x="350" y="202" class="epsilon-svg-muted">dominant / combined / offsetting</text>
       </svg>
     `;
   }
@@ -984,10 +1057,16 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const items = ["gq", "q", "combined", "offsetting"];
     const regimeNote = this.viewMode === "low" || this.viewMode === "high"
       ? `The full outer ring shows ${this.focusTitle().toLowerCase()} attribution.`
-      : "The left semicircle is low flow; the right semicircle is high flow.";
+      : "The upper semicircle is high flow; the lower semicircle is low flow.";
     return `
       <div class="epsilon-driver-legend${compact ? " epsilon-driver-legend--compact" : ""}">
         <div class="epsilon-driver-legend-title">GQ / Q component ring</div>
+        ${this.viewMode === "bivariate" ? `
+          <div class="epsilon-driver-orientation">
+            <span class="epsilon-regime-ring-key" aria-label="High flow upper semicircle; low flow lower semicircle"><span>H</span><span>L</span></span>
+            <span>High flow above &middot; Low flow below</span>
+          </div>
+        ` : ""}
         <div class="epsilon-driver-legend-items">
           ${items.map((driver) => `
             <span class="epsilon-driver-legend-item">
@@ -1026,6 +1105,20 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           ${this.metricCard("Mean", this.formatPct(mean), mean)}
           ${this.metricCard("Median", this.formatPct(median), median)}
           ${this.metricCard("Decrease share", this.formatPct(negativeShare), -negativeShare)}
+        </div>
+      </div>
+    `;
+  }
+
+  renderAttributionDefinitions() {
+    return `
+      <div class="epsilon-driver-guide">
+        <div class="epsilon-driver-guide-formula"><code>GQ contribution = delta log GQ</code><code>Q contribution = -delta log Qsim</code></div>
+        <div class="epsilon-driver-guide-grid">
+          <div><strong>GQ-dominant</strong><span>Both contributions reinforce the epsilon change; GQ supplies more than two thirds of their absolute total.</span></div>
+          <div><strong>Q-dominant</strong><span>Both contributions reinforce the epsilon change; Q supplies more than two thirds of their absolute total.</span></div>
+          <div><strong>Combined</strong><span>GQ and Q reinforce the same epsilon direction, and each supplies between one third and two thirds.</span></div>
+          <div><strong>Offsetting</strong><span>The contributions oppose: one pushes epsilon upward while the other pushes it downward. The dashed ring marks their net balance.</span></div>
         </div>
       </div>
     `;
@@ -1406,6 +1499,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-close::before{transform:translate(-50%,-50%) rotate(45deg)}
       .epsilon-overview-close::after{transform:translate(-50%,-50%) rotate(-45deg)}
       .epsilon-overview-body{padding:18px;overflow:auto;color:#334155;font-size:13px;line-height:1.65}
+      .epsilon-overview-layout{display:grid;grid-template-columns:116px minmax(0,1fr);align-items:start}
+      .epsilon-overview-nav{position:sticky;top:0;display:grid;gap:2px;padding:2px 14px 6px 0;border-right:1px solid #e2e8f0}
+      .epsilon-overview-nav-title{margin:0 0 6px;padding:0 8px;color:#94a3b8;font-size:9px;font-weight:700;text-transform:uppercase}
+      .epsilon-overview-nav a{display:block;padding:6px 8px;border-left:2px solid transparent;color:#64748b;font-size:10.5px;font-weight:600;line-height:1.25;text-decoration:none}
+      .epsilon-overview-nav a:hover{color:#0f172a;background:#f8fafc}
+      .epsilon-overview-nav a.active{border-left-color:#2563eb;background:#eff6ff;color:#1d4ed8}
+      .epsilon-overview-content{min-width:0;padding-left:18px}
+      .epsilon-overview-content section,.epsilon-story-panel[id]{scroll-margin-top:16px}
       .epsilon-overview-body section + section{margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0}
       .epsilon-overview-body h3{margin:0 0 8px;font-size:13px;color:#0f172a;letter-spacing:.03em;text-transform:uppercase}
       .epsilon-overview-body p{margin:0 0 10px}
@@ -1415,6 +1516,17 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-definition::before{content:"";position:absolute;left:1px;top:7px;width:5px;height:5px;border-radius:50%;background:#64748b}
       .epsilon-overview-definition-title{display:block;margin-bottom:1px;color:#0f172a;font-weight:700}
       .epsilon-overview-attribution{margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0}
+      .epsilon-method-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin-top:10px}
+      .epsilon-method-facts>div{display:grid;gap:2px;padding:8px 0;border-top:1px solid #edf1f6}
+      .epsilon-method-facts strong{color:#0f172a;font-size:10.5px}
+      .epsilon-method-facts span{color:#64748b;font-size:10.5px;line-height:1.48}
+      .epsilon-equation-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+      .epsilon-equation-card{display:grid;gap:5px;min-width:0;padding:9px;border:1px solid #dbe3ef;border-radius:6px;background:#f8fafc}
+      .epsilon-equation-card:last-child{grid-column:1/-1}
+      .epsilon-equation-card>span{color:#334155;font-size:10px;font-weight:700}
+      .epsilon-equation-card code,.epsilon-driver-guide code{display:block;overflow-wrap:anywhere;color:#0f172a;font:600 10px/1.45 Consolas,monospace}
+      .epsilon-method-caution{margin:10px 0 0!important;padding-left:10px;border-left:2px solid #94a3b8;color:#64748b;font-size:10.5px;line-height:1.5}
+      .epsilon-method-caution strong{color:#334155}
       .epsilon-attribution-panel,.epsilon-trend-panel{margin:12px 0 0;padding:12px 0 0;border:0;border-top:1px solid #dbe3ef;border-radius:0;background:transparent}
       .epsilon-attribution-title,.epsilon-driver-legend-title{font-size:11px;font-weight:700;color:#0f172a;margin-bottom:8px}
       .epsilon-attribution-columns,.epsilon-attribution-row{display:grid;grid-template-columns:14px 56px minmax(70px,1fr) 48px 48px;gap:6px;align-items:center}
@@ -1445,8 +1557,18 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-change-label{font-size:9px;color:#64748b}
       .epsilon-driver-legend{margin-top:12px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
       .epsilon-driver-legend--compact{padding:8px;margin-top:10px}
+      .epsilon-driver-orientation{display:flex;align-items:center;gap:7px;margin:0 0 8px;color:#64748b;font-size:10px}
+      .epsilon-regime-ring-key{width:24px;height:24px;border:1.5px solid #64748b;border-radius:50%;display:grid;grid-template-rows:1fr 1fr;overflow:hidden;box-sizing:border-box;background:#fff;flex:0 0 auto}
+      .epsilon-regime-ring-key span{display:flex;align-items:center;justify-content:center;color:#475569;font-size:7px;font-weight:800;line-height:1}
+      .epsilon-regime-ring-key span+span{border-top:1px solid #cbd5e1}
       .epsilon-driver-legend-items{display:flex;flex-wrap:wrap;gap:7px 12px}
       .epsilon-driver-legend-item{display:inline-flex;align-items:center;gap:5px;color:#475569;font-size:10.5px;white-space:nowrap}
+      .epsilon-driver-guide{margin-top:10px;padding:10px 0 0;border-top:1px solid #e2e8f0}
+      .epsilon-driver-guide-formula{display:flex;flex-wrap:wrap;gap:5px 16px;margin-bottom:9px}
+      .epsilon-driver-guide-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px}
+      .epsilon-driver-guide-grid>div{display:grid;gap:1px}
+      .epsilon-driver-guide-grid strong{color:#0f172a;font-size:10.5px}
+      .epsilon-driver-guide-grid span{color:#64748b;font-size:10px;line-height:1.45}
       .epsilon-regime-state{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
       .epsilon-regime-state--matrix{gap:2px;line-height:1}
       .epsilon-regime-epsilon{font-family:Arial,sans-serif;font-size:1em;font-style:italic;font-weight:700;white-space:nowrap}
@@ -1489,6 +1611,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-svg-title,
       body.theme-dark .epsilon-svg-equation,
       body.theme-dark .epsilon-metric-value{color:#e5edf7}
+      body.theme-dark .epsilon-overview-nav{border-right-color:#263449}
+      body.theme-dark .epsilon-overview-nav a{color:#94a3b8}
+      body.theme-dark .epsilon-overview-nav a:hover{background:#111827;color:#e5edf7}
+      body.theme-dark .epsilon-overview-nav a.active{background:#10213a;color:#93c5fd;border-left-color:#3b82f6}
       body.theme-dark .epsilon-overview-body,
       body.theme-dark .epsilon-overview-lead,
       body.theme-dark .epsilon-overview-definitions,
@@ -1507,6 +1633,22 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-overview-body section + section{border-top-color:#263449}
       body.theme-dark .epsilon-overview-definition-title{color:#e5edf7}
       body.theme-dark .epsilon-overview-attribution{border-top-color:#263449}
+      body.theme-dark .epsilon-method-facts>div,
+      body.theme-dark .epsilon-driver-guide{border-color:#263449}
+      body.theme-dark .epsilon-method-facts strong,
+      body.theme-dark .epsilon-equation-card>span,
+      body.theme-dark .epsilon-equation-card code,
+      body.theme-dark .epsilon-driver-guide code,
+      body.theme-dark .epsilon-driver-guide-grid strong,
+      body.theme-dark .epsilon-method-caution strong{color:#e5edf7}
+      body.theme-dark .epsilon-method-facts span,
+      body.theme-dark .epsilon-driver-guide-grid span,
+      body.theme-dark .epsilon-method-caution,
+      body.theme-dark .epsilon-driver-orientation{color:#94a3b8}
+      body.theme-dark .epsilon-equation-card{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-regime-ring-key{background:#0f172a;border-color:#64748b}
+      body.theme-dark .epsilon-regime-ring-key span{color:#cbd5e1}
+      body.theme-dark .epsilon-regime-ring-key span+span{border-color:#475569}
       body.theme-dark .epsilon-attribution-panel,
       body.theme-dark .epsilon-trend-panel{background:transparent;border-color:#263449}
       body.theme-dark .epsilon-driver-legend{background:#111827;border-color:#263449}
@@ -1552,7 +1694,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-svg-grid{stroke:#334155}
       body.theme-dark .epsilon-svg-arrow{stroke:#64748b}
       body.theme-dark .epsilon-svg-arrow-head{fill:#64748b}
-      @media (max-width:760px){.epsilon-filter-grid{grid-template-columns:1fr}.epsilon-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.epsilon-story-panel{grid-template-columns:1fr}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}}
+      @media (max-width:760px){.epsilon-overview-layout{display:block}.epsilon-overview-nav{z-index:2;display:flex;gap:3px;margin:-2px 0 14px;padding:4px 0 8px;border-right:0;border-bottom:1px solid #e2e8f0;background:#fff;overflow-x:auto}.epsilon-overview-nav-title{display:none}.epsilon-overview-nav a{flex:0 0 auto;border-left:0;border-bottom:2px solid transparent;padding:6px 8px}.epsilon-overview-nav a.active{border-left:0;border-bottom-color:#2563eb}.epsilon-overview-content{padding-left:0}.epsilon-filter-grid{grid-template-columns:1fr}.epsilon-overview-metrics,.epsilon-method-facts,.epsilon-equation-grid,.epsilon-driver-guide-grid{grid-template-columns:1fr}.epsilon-equation-card:last-child{grid-column:auto}.epsilon-story-panel{grid-template-columns:1fr}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}body.theme-dark .epsilon-overview-nav{background:#0f172a;border-bottom-color:#263449}}
     `;
     document.head.appendChild(style);
   }
