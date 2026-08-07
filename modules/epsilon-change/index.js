@@ -969,7 +969,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <div class="epsilon-attribution-panel">
         <div class="epsilon-attribution-title">GQ / Q component attribution</div>
         <div class="epsilon-attribution-columns" aria-hidden="true">
-          <span></span><span></span><span>Driver</span><span>&Delta;GQ</span><span>&Delta;Q</span>
+          <span></span><span></span><span>Driver</span><span>&Delta;ln GQ</span><span>&minus;&Delta;ln Q</span>
         </div>
         ${regimes.map((regime) => {
           const driver = basin[`${regime}_driver`] || "insufficient";
@@ -978,12 +978,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
               <span class="epsilon-attribution-ring" style="--driver-color:${this.driverColor(driver) || "#cbd5e1"}"></span>
               <span class="epsilon-attribution-regime">${regime === "low" ? "Low flow" : "High flow"}</span>
               <span class="epsilon-attribution-driver">${this.driverLabel(driver)}</span>
-              <span class="epsilon-attribution-value">${this.formatPct(basin[`${regime}_gq_change_pct`])}</span>
-              <span class="epsilon-attribution-value">${this.formatPct(basin[`${regime}_qsim_change_pct`])}</span>
+              <span class="epsilon-attribution-value">${this.formatSigned(basin[`${regime}_gq_component_log`], 3)}</span>
+              <span class="epsilon-attribution-value">${this.formatSigned(basin[`${regime}_q_component_log`], 3)}</span>
             </div>
           `;
         }).join("")}
-        <div class="epsilon-attribution-note">Descriptive pre/post decomposition; not a significance or causal test.</div>
+        <div class="epsilon-attribution-note">Signed terms in &Delta;ln epsilon = &Delta;ln GQ + (&minus;&Delta;ln Q). Opposite signs mean Offsetting. Descriptive only; not a significance or causal test.</div>
       </div>
     `;
   }
@@ -2078,6 +2078,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   formatPct(value) {
     const number = Number(value);
     return Number.isFinite(number) ? `${number.toFixed(1)}%` : "NA";
+  }
+
+  formatSigned(value, digits = 3) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "NA";
+    const rounded = Math.abs(number) < 0.5 * 10 ** (-digits) ? 0 : number;
+    return `${rounded > 0 ? "+" : ""}${rounded.toFixed(digits)}`;
   }
 
   formatNumber(value, digits = 2) {
