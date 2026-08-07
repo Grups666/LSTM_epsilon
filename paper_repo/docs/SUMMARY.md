@@ -170,7 +170,9 @@ The public map preserves epsilon change as the point fill and adds an outer
 component ring. In the bivariate view, the upper semicircle represents high
 flow and the lower semicircle represents low flow. Ring classes distinguish
 GQ-dominant, Q-dominant, combined, and offsetting changes. These classes explain
-how the epsilon ratio changed; they do not establish climate causality or
+how the epsilon ratio changed. The inspector reports the signed `delta log GQ`
+and `-delta log Qsim` terms used by this classification, rather than the two raw
+percentage changes. The classes do not establish climate causality or
 statistical significance.
 
 ### Continuous Trend and Significance
