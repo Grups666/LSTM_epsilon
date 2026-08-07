@@ -190,6 +190,15 @@ the center class is No significant trend. That center label means the available
 series does not provide FDR-controlled evidence of a monotonic trend, not that
 epsilon is known to be exactly constant.
 
+The public explorer excludes a catchment from a trend map when the relevant
+flow regime has fewer than 20 qualifying annual medians; the bivariate map
+requires this coverage in both regimes. The Overview reports the excluded count
+and provides a display toggle for No significant trend catchments. The separate
+pre/post contrast compares mean daily epsilon between 1950-1990 and 1991-2019;
+it is a descriptive effect size, not the significance test used for the map
+class. A nonzero pre/post contrast can therefore coexist with No significant
+trend.
+
 The detail panel also reports a significance-based GQ/Q driver result. It is
 assigned only when epsilon itself passes FDR: GQ-driven, Q-driven, Combined, or
 Unresolved. Catchments without a significant epsilon trend are explicitly
