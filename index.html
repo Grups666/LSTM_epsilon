@@ -1625,9 +1625,9 @@
           },
           {
             id: 'overview-filter',
-            title: 'Filter by reliability',
-            copy: '<p>Choose NSE or KGE and set a minimum score. A catchment remains on the map only when both its pre- and post-period scores exceed the threshold.</p>',
-            hint: 'This changes display eligibility only; it does not retrain the model.',
+            title: 'Control the map',
+            copy: '<p>Choose NSE or KGE and set a minimum score. Use the second control to show or hide catchments whose annual epsilon trend does not pass FDR significance.</p><p>Catchments with fewer than 20 qualifying years are always excluded and counted below the controls.</p>',
+            hint: 'These controls change display eligibility only; they do not retrain the model.',
             target: '.epsilon-overview-filter'
           },
           {

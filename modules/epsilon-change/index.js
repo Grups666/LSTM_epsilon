@@ -30,6 +30,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       metric: manifest.skillFilterMetric || "nse",
       threshold: Number.isFinite(Number(manifest.skillFilterThreshold)) ? Number(manifest.skillFilterThreshold) : 0.5
     };
+    this.showNoSignificantTrends = true;
+    this.reliabilityEligibleCount = 0;
+    this.insufficientExcludedCount = 0;
+    this.noSignificantHiddenCount = 0;
     this.displayRegimes = ["all", "low", "high"];
     this.handleModalPointer = (event) => this.onDistributionPointer(event);
     this.handleFeatureClick = (payload) => {
@@ -166,18 +170,51 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const threshold = Number(this.skillFilter.threshold);
     this.skillFilter.metric = metric;
     this.skillFilter.threshold = Number.isFinite(threshold) ? threshold : 0.5;
-    this.basins = this.rawBasins.filter((basin) => {
+    const reliabilityEligible = this.rawBasins.filter((basin) => {
       const pre = Number(basin[`pre_${metric}`]);
       const post = Number(basin[`post_${metric}`]);
       return Number.isFinite(pre) && Number.isFinite(post) && pre > this.skillFilter.threshold && post > this.skillFilter.threshold;
     });
+    this.reliabilityEligibleCount = reliabilityEligible.length;
+    this.insufficientExcludedCount = reliabilityEligible.filter((basin) => !this.hasSufficientTrendData(basin)).length;
+    const trendEligible = reliabilityEligible.filter((basin) => this.hasSufficientTrendData(basin));
+    this.noSignificantHiddenCount = this.showNoSignificantTrends
+      ? 0
+      : trendEligible.filter((basin) => this.isNoSignificantForView(basin)).length;
+    this.basins = trendEligible.filter((basin) => this.showNoSignificantTrends || !this.isNoSignificantForView(basin));
     this.byId = new Map(this.basins.map((basin) => [basin.id, basin]));
-    if (this.selected && !this.byId.has(String(this.selected.id))) this.selected = null;
+    if (this.selected && !this.byId.has(String(this.selected.id))) {
+      this.selected = null;
+      this.app.selectedFeature = null;
+      this.app.selectedLayer = null;
+      document.getElementById("inspectorPanel")?.classList.remove("visible");
+    }
+  }
+
+  hasSufficientTrendData(basin) {
+    if (this.viewMode === "low") return Boolean(basin.low_change_state);
+    if (this.viewMode === "high") return Boolean(basin.high_change_state);
+    return Boolean(basin.low_change_state && basin.high_change_state);
+  }
+
+  isNoSignificantForView(basin) {
+    if (this.viewMode === "low") return basin.low_change_state === "stable";
+    if (this.viewMode === "high") return basin.high_change_state === "stable";
+    return basin.low_change_state === "stable" && basin.high_change_state === "stable";
   }
 
   updateSkillFilter(metric, threshold, refreshOverview = true) {
     this.skillFilter.metric = metric;
     this.skillFilter.threshold = threshold;
+    this.applySkillFilter();
+    this.colorScaleExtent = this.computeContinuousExtent();
+    this.ensureLegend();
+    if (refreshOverview && this.overviewModal?.classList.contains("visible")) this.showOverview();
+    this.app.draw?.();
+  }
+
+  updateNoSignificantVisibility(show, refreshOverview = true) {
+    this.showNoSignificantTrends = Boolean(show);
     this.applySkillFilter();
     this.colorScaleExtent = this.computeContinuousExtent();
     this.ensureLegend();
@@ -422,7 +459,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   renderOverviewFilter() {
     return `
       <div class="epsilon-overview-filter">
-        <div class="epsilon-filter-title">Reliability filter</div>
+        <div class="epsilon-filter-title">Map controls</div>
         <div class="epsilon-filter-grid">
           <label class="epsilon-filter-field">
             <span>Metric</span>
@@ -439,10 +476,25 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
             <span>Threshold</span>
             <input class="epsilon-filter-range" type="range" min="-1" max="1" step="0.05" value="${this.formatNumber(this.skillFilter.threshold, 2)}" aria-label="Minimum reliability threshold slider">
           </label>
+          <label class="epsilon-filter-toggle">
+            <input class="epsilon-filter-no-significant" type="checkbox"${this.showNoSignificantTrends ? " checked" : ""}>
+            <span class="epsilon-filter-switch" aria-hidden="true"></span>
+            <span><strong>Show no-significant-trend catchments</strong><small>Turn off to retain only catchments with a significant increase or decrease in the current view.</small></span>
+          </label>
         </div>
-        <div class="epsilon-filter-count">${this.basins.length.toLocaleString()} / ${this.rawBasins.length.toLocaleString()} catchments shown</div>
+        <div class="epsilon-filter-count">${this.filterCountText()}</div>
       </div>
     `;
+  }
+
+  filterCountText() {
+    const parts = [
+      `${this.basins.length.toLocaleString()} shown`,
+      `${this.reliabilityEligibleCount.toLocaleString()} pass reliability`,
+      `${this.insufficientExcludedCount.toLocaleString()} insufficient-year excluded`
+    ];
+    if (this.noSignificantHiddenCount) parts.push(`${this.noSignificantHiddenCount.toLocaleString()} no-significant hidden`);
+    return parts.join(" · ");
   }
 
   bindOverviewFilter() {
@@ -451,6 +503,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const metric = root.querySelector(".epsilon-filter-metric");
     const number = root.querySelector(".epsilon-filter-number");
     const range = root.querySelector(".epsilon-filter-range");
+    const noSignificant = root.querySelector(".epsilon-filter-no-significant");
     const apply = (value, refreshOverview = true) => {
       const threshold = Number(value);
       const next = Number.isFinite(threshold) ? threshold : 0.5;
@@ -459,13 +512,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       this.updateSkillFilter(metric.value, next, refreshOverview);
       if (!refreshOverview) {
         const count = root.querySelector(".epsilon-filter-count");
-        if (count) count.textContent = `${this.basins.length.toLocaleString()} / ${this.rawBasins.length.toLocaleString()} catchments shown`;
+        if (count) count.textContent = this.filterCountText();
       }
     };
     metric.onchange = () => this.updateSkillFilter(metric.value, Number(number.value));
     number.onchange = () => apply(number.value);
     range.oninput = () => apply(range.value, false);
     range.onchange = () => apply(range.value, true);
+    noSignificant.onchange = () => this.updateNoSignificantVisibility(noSignificant.checked);
   }
 
   closeOverview() {
@@ -753,16 +807,17 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       </div>
       <div class="epsilon-signal-panel">
         <div class="epsilon-inspector-classification">${this.categoryBanner(basin)}</div>
-        ${this.attributionPanel(basin)}
         ${this.trendPanel(basin)}
         <div class="epsilon-change-section">
-          <div class="epsilon-change-title">Pre/post epsilon change</div>
+          <div class="epsilon-change-title">Descriptive pre/post contrast</div>
           <div class="epsilon-change-summary">
             ${this.changeMetric("All", basin.all_relative_delta_pct)}
             ${this.changeMetric("Low flow", basin.low_relative_delta_pct)}
             ${this.changeMetric("High flow", basin.high_relative_delta_pct)}
           </div>
+          <div class="epsilon-change-note">Mean daily epsilon in 1950-1990 versus 1991-2019. This effect-size summary is not significance-tested and does not determine the trend class above.</div>
         </div>
+        ${this.attributionPanel(basin)}
       </div>
     `;
 
@@ -870,10 +925,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   changeMetric(label, value) {
     const numeric = Number(value);
-    const color = Number.isFinite(numeric) ? (numeric < 0 ? "#2563eb" : "#b84235") : "#64748b";
     return `
       <div class="epsilon-change-metric">
-        <span class="epsilon-change-value" style="color:${color}">${this.formatPct(numeric)}</span>
+        <span class="epsilon-change-value">${this.formatPct(numeric)}</span>
         <span class="epsilon-change-label">${this.escape(label)}</span>
       </div>
     `;
@@ -1129,7 +1183,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <div style="margin:0 0 14px">
         <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">${this.epsilonRegimeHtml("LF")} &times; ${this.epsilonRegimeHtml("HF")} trend classes</div>
         ${this.renderBivariateMatrix(counts, false)}
-        <div style="font-size:11px;color:#64748b;margin-top:7px">${counts.insufficient || 0} catchments have insufficient low-flow or high-flow information for this bivariate class.</div>
+        <div class="epsilon-insufficient-summary"><strong>${this.insufficientExcludedCount.toLocaleString()} catchments excluded.</strong> At least one flow regime had fewer than 20 qualifying annual medians, so no bivariate trend class was assigned and these catchments are not drawn on the map.</div>
       </div>
     `;
   }
@@ -1207,12 +1261,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   overviewText() {
     if (this.viewMode === "low") {
-      return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; points are colored by the fold-centered low-flow Theil-Sen trend per decade.`;
+      return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter and the 20-year low-flow coverage rule; points are colored by the fold-centered Theil-Sen trend per decade.`;
     }
     if (this.viewMode === "high") {
-      return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; points are colored by the fold-centered high-flow Theil-Sen trend per decade.`;
+      return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter and the 20-year high-flow coverage rule; points are colored by the fold-centered Theil-Sen trend per decade.`;
     }
-    return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter; color classifies low-flow and high-flow epsilon trends after false-discovery-rate correction.`;
+    return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows catchments passing the current ${this.skillFilterLabel()} pre/post reliability filter and the 20-year rule in both flow regimes; color classifies low-flow and high-flow epsilon trends after false-discovery-rate correction.`;
   }
 
   renderLegendDefinitions() {
@@ -1254,6 +1308,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           <span class="epsilon-overview-definition-title">Trend classes</span>
           <span>Annual medians require at least five recession days and each series requires at least 20 years. Increase or Decrease requires a positive or negative fold-centered Theil-Sen slope with Benjamini-Hochberg FDR q &lt; 0.05. Otherwise the class is No significant trend; this does not prove exact stability.</span>
         </div>
+        <div class="epsilon-overview-definition">
+          <span class="epsilon-overview-definition-title">Contrast versus trend</span>
+          <span>Pre/post contrast compares mean daily epsilon in 1950-1990 and 1991-2019. The map class instead uses the annual-median Theil-Sen trend and its FDR q-value. A nonzero period contrast can therefore coexist with No significant trend.</span>
+        </div>
       </div>
     `;
   }
@@ -1268,7 +1326,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   categoryLabelHtml(basin) {
     const low = basin.low_change_state;
     const high = basin.high_change_state;
-    if (!low || !high) return "Insufficient flow-regime data";
+    if (!low || !high) return "Trend class unavailable";
     return `${this.regimeStateHtml("LF", low)} <span class="epsilon-class-separator">·</span> ${this.regimeStateHtml("HF", high)}`;
   }
 
@@ -1553,8 +1611,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-change-metric:first-child{padding-left:0}
       .epsilon-change-metric:last-child{padding-right:0}
       .epsilon-change-metric+.epsilon-change-metric{border-left:1px solid #dbe3ef}
-      .epsilon-change-value{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+      .epsilon-change-value{color:#475569;font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums}
       .epsilon-change-label{font-size:9px;color:#64748b}
+      .epsilon-change-note{margin-top:9px;color:#64748b;font-size:9.5px;line-height:1.45}
       .epsilon-driver-legend{margin-top:12px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
       .epsilon-driver-legend--compact{padding:8px;margin-top:10px}
       .epsilon-driver-orientation{display:flex;align-items:center;gap:7px;margin:0 0 8px;color:#64748b;font-size:10px}
@@ -1582,7 +1641,19 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-filter-field{display:grid;gap:4px;margin:0;color:#64748b;font-size:11px;line-height:1.3}
       .epsilon-filter-field select,.epsilon-filter-field input{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;font-size:12px;padding:5px 6px}
       .epsilon-filter-range{padding:0!important;accent-color:#2563eb}
+      .epsilon-filter-toggle{grid-column:1/-1;display:flex;align-items:center;gap:9px;margin:1px 0 0;padding-top:9px;border-top:1px solid #e2e8f0;color:#475569;cursor:pointer}
+      .epsilon-filter-toggle>input{position:absolute;opacity:0;pointer-events:none}
+      .epsilon-filter-switch{position:relative;width:30px;height:17px;border-radius:999px;background:#cbd5e1;box-shadow:inset 0 0 0 1px rgba(15,23,42,.08);flex:0 0 auto;transition:background .16s ease}
+      .epsilon-filter-switch::after{content:"";position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.25);transition:transform .16s ease}
+      .epsilon-filter-toggle>input:checked+.epsilon-filter-switch{background:#2563eb}
+      .epsilon-filter-toggle>input:checked+.epsilon-filter-switch::after{transform:translateX(13px)}
+      .epsilon-filter-toggle>input:focus-visible+.epsilon-filter-switch{outline:2px solid #60a5fa;outline-offset:2px}
+      .epsilon-filter-toggle>span:last-child{display:grid;gap:1px;line-height:1.35}
+      .epsilon-filter-toggle strong{color:#334155;font-size:10.5px}
+      .epsilon-filter-toggle small{color:#64748b;font-size:9.5px}
       .epsilon-filter-count{font-size:11px;color:#475569;margin-top:8px;line-height:1.35}
+      .epsilon-insufficient-summary{margin-top:9px;padding:8px 10px;border-left:2px solid #94a3b8;background:#f8fafc;color:#64748b;font-size:10.5px;line-height:1.5}
+      .epsilon-insufficient-summary strong{color:#334155}
       .epsilon-story{position:relative}
       .epsilon-story::before{content:"";position:absolute;left:14px;top:54px;bottom:18px;width:2px;background:linear-gradient(#93b4ff,#b84235);border-radius:999px;opacity:.45}
       .epsilon-story-lead{max-width:760px;color:#475569;font-size:12.5px;line-height:1.7;margin:0 0 14px}
@@ -1625,7 +1696,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-inspector-context,
       body.theme-dark .epsilon-classification-kicker,
       body.theme-dark .epsilon-classification-subtitle,
-      body.theme-dark .epsilon-change-label{color:#94a3b8}
+      body.theme-dark .epsilon-change-label,
+      body.theme-dark .epsilon-change-note,
+      body.theme-dark .epsilon-change-value{color:#94a3b8}
       body.theme-dark .epsilon-classification-main,
       body.theme-dark .epsilon-change-title{color:#e5edf7}
       body.theme-dark .epsilon-streamflow-completeness{border-color:#263449}
@@ -1679,6 +1752,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-filter-field select,
       body.theme-dark .epsilon-filter-field input{background:#0f172a;border-color:#334155;color:#e5edf7}
       body.theme-dark .epsilon-filter-count{color:#94a3b8}
+      body.theme-dark .epsilon-filter-toggle{border-color:#263449;color:#94a3b8}
+      body.theme-dark .epsilon-filter-toggle strong{color:#e5edf7}
+      body.theme-dark .epsilon-filter-toggle small{color:#94a3b8}
+      body.theme-dark .epsilon-filter-switch{background:#475569}
+      body.theme-dark .epsilon-insufficient-summary{background:#111827;color:#94a3b8}
+      body.theme-dark .epsilon-insufficient-summary strong{color:#e5edf7}
       body.theme-dark .epsilon-streamflow-completeness,
       body.theme-dark .epsilon-completeness-title,
       body.theme-dark .epsilon-completeness-row span:last-child,
@@ -1994,10 +2073,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         title: `${this.focusTitle()} epsilon change`,
         html: `
           ${this.renderContinuousLegendBar()}
-          <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:#64748b;margin-top:8px">
-            <span style="width:12px;height:12px;border-radius:50%;background:#d8dee8;border:1px solid rgba(15,23,42,.16)"></span>
-            <span>Insufficient ${this.focusTitle().toLowerCase()} data</span>
-          </div>
           <div style="font-size:10px;color:#64748b;margin-top:8px">Fold-centered Theil-Sen epsilon change per decade; values are clipped to the displayed scale.</div>
           ${this.renderDriverLegend(true)}
         `
@@ -2009,10 +2084,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       title: "Epsilon trend classes",
       html: `
         ${this.renderBivariateMatrix(counts, true)}
-        <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:#64748b;margin-top:8px">
-          <span style="width:12px;height:12px;border-radius:50%;background:#d8dee8;border:1px solid rgba(15,23,42,.16)"></span>
-          <span>Insufficient low-flow / high-flow data</span>
-        </div>
         <div style="font-size:10px;color:#64748b;margin-top:8px">Decr. = significant decrease · N.S. = no significant trend · Incr. = significant increase. Significance uses FDR q &lt; 0.05.</div>
         ${this.renderDriverLegend(true)}
       `
