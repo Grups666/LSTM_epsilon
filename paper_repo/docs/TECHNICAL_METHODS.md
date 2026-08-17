@@ -171,38 +171,55 @@ and one-third absolute-contribution boundaries. Opposing contributions are
 labelled offsetting. This is an algebraic component decomposition, not a causal
 attribution to climate forcing and not yet a statistical significance test.
 
-## Continuous Trend Inference
+## Primary Era-Shift Inference
 
-Continuous trends are estimated separately for all-recession, low-flow, and
-high-flow epsilon, GQ, and simulated Q. Daily values are reduced to an annual
-median only when at least five eligible recession days exist. A series requires
-at least 20 annual values.
+The primary inferential unit is the catchment-year-flow-regime. Out-of-fold
+daily epsilon is reduced to an annual median when at least three eligible
+recession days exist. For each catchment and regime, the fitted model is:
 
-Because each contiguous OOF time block was inferred by a different fold model,
-annual log values are centered within fold before trend estimation. This removes
-fold-specific intercepts while retaining the paired pre/post information carried
-by each model. The reported slope is the Theil-Sen slope of the fold-centered
-log series, converted to percent change per decade. The raw uncentered slope is
-also retained for audit.
+```text
+log(annual epsilon) = fold fixed effect + beta_post * I(year >= 1991) + error
+era shift (%) = 100 * (exp(beta_post) - 1)
+```
 
-Before Kendall's rank trend test, the fold-centered series is detrended with
-its Theil-Sen slope, its lag-1 residual correlation is estimated, and the
-trend-free prewhitened series is used for the two-sided p-value. The raw Kendall
-result and residual autocorrelation are retained for audit. Benjamini-Hochberg
-correction is applied across catchments separately for every variable and flow
-regime. Epsilon is labelled Increase or Decrease only when the corrected
-`q < 0.05` and the slope has the corresponding sign. An adequately sampled
-series that does not pass FDR is labelled No significant trend, not proven
-stability.
+The fold intercepts absorb scale differences among the five independently
+trained OOF models. Consequently, `beta_post` is identified by pre/post years
+in folds that contain both eras, rather than by comparing unrelated model
+scales. Eligibility is fixed before testing:
 
-The significance-based component result is reported only when epsilon itself
-has a significant trend. Significant GQ alone is GQ-driven, significant Q alone
-is Q-driven, and significance in both is Combined. If epsilon does not pass FDR,
-the result is No significant driver; a significant epsilon trend unsupported by
-either component after FDR is retained as Unresolved rather than forced into a
-driver class. The map ring continues to show the separate descriptive pre/post
-decomposition so that statistical and effect-composition information are not
-collapsed into one symbol.
+```text
+at least 3 recession days per annual median
+at least 10 valid annual medians in each era
+at least 5 pre and 5 post annual medians inside paired folds
+```
+
+Coefficient uncertainty uses a one-year Newey-West HAC covariance. Two-sided
+p-values are converted to Benjamini-Hochberg q-values across all statistically
+eligible catchments separately for each flow regime. A positive or negative
+coefficient is labelled Increase or Decrease only when `q < 0.05`; all other
+estimable coefficients are labelled Unresolved. Unresolved is not evidence of
+stability. A Stable class would require a separately justified equivalence
+margin and is therefore not used.
+
+Low-flow and high-flow inference uses independent eligible samples. Their
+intersection is needed only for the bivariate map and does not restrict either
+single-regime result. The public NSE/KGE control is a reliability display
+filter; it does not recalculate q-values or alter the fixed FDR family.
+
+## Sensitivity Analyses
+
+Annual-support sensitivity checks repeat the era model with one and five days
+per annual median around the three-day primary rule. Breakpoint sensitivity
+uses 1985 and 1995 in addition to the fixed 1990 primary breakpoint. These
+results are summarized without choosing the scenario that produces the most
+significant result.
+
+Continuous trends are retained as a secondary check. All-recession, low-flow,
+and high-flow epsilon, GQ, and simulated Q are reduced to annual medians with at
+least five recession days and at least 20 annual values. Fold-centered log
+series receive a Theil-Sen slope; trend-free prewhitening precedes Kendall's
+test and BH-FDR correction. This asks whether change is monotonic through time
+and never determines the primary pre/post map class.
 
 ## Audited Results
 
@@ -217,6 +234,9 @@ pre median NSE / KGE:     0.555 / 0.622
 post median NSE / KGE:    0.626 / 0.666
 both-period NSE > 0.5:    1,304
 both-period KGE > 0.5:    1,447
+NSE > 0.5 low eligible:   791 (139 increase, 19 decrease, 633 unresolved)
+NSE > 0.5 high eligible:  1,007 (13 increase, 2 decrease, 992 unresolved)
+NSE > 0.5 low/high overlap: 745
 ```
 
 Among the 1,304 catchments passing NSE 0.5 in both periods, mean delta epsilon is -0.0192 (catchment-bootstrap 95% CI -0.0348 to -0.00521), while median delta epsilon is +0.00230 (95% CI +0.00151 to +0.00324). The opposite signs show a strongly skewed change distribution: negative outliers move the mean, whereas the typical catchment has a small positive shift. Both summaries must be reported.
@@ -238,6 +258,11 @@ _private/results/epsilon_pure_gcin_1950_2019/temporal_crossfit_1990/
     epsilon_change_inference.csv
     gq_q_attribution_by_catchment.csv
     gq_q_attribution_by_catchment.parquet
+    prepost_shifts_long.csv
+    prepost_shifts_long.parquet
+    prepost_shifts_by_catchment.csv
+    prepost_shifts_by_catchment.parquet
+    prepost_shift_sensitivity_summary.csv
     annual_epsilon_gq_q_by_regime.parquet
     continuous_trends_long.csv
     continuous_trends_long.parquet

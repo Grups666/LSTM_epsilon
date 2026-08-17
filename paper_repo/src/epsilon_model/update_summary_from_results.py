@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import numpy as np
@@ -38,7 +39,7 @@ def fmt_pct(value: float) -> str:
 def markdown_relative_path(source_md: Path, target: Path) -> str:
     source_parent = source_md.resolve().parent
     target_resolved = target.resolve()
-    return Path(target_resolved).relative_to(source_parent).as_posix()
+    return Path(os.path.relpath(target_resolved, source_parent)).as_posix()
 
 
 def regime_line(regime: pd.DataFrame, name: str) -> str:
@@ -68,13 +69,21 @@ def main() -> None:
     n_folds = int(cfg["splits"]["n_folds"])
     cold_filter = cfg["recession"].get("cold_temperature_filter_C")
     fig = args.figures_dir
+    run_root = Path(cfg["paths"]["output_dir"]) / args.run_label
+    shift_path = run_root / "analysis" / "prepost_shifts_long.parquet"
+    sensitivity_path = run_root / "analysis" / "prepost_shift_sensitivity_summary.csv"
+    inference_path = fig / "epsilon_change_inference.csv"
+    if not inference_path.exists():
+        inference_path = run_root / "analysis" / "epsilon_change_inference.csv"
     required = [
         fig / "result_summary.csv",
         fig / "model_skill_summary.csv",
         fig / "model_skill_by_catchment.csv",
         fig / "epsilon_change_by_catchment.csv",
         fig / "epsilon_change_by_flow_regime.csv",
-        fig / "epsilon_change_inference.csv",
+        inference_path,
+        shift_path,
+        sensitivity_path,
     ]
     missing = [str(p) for p in required if not p.exists()]
     if missing:
@@ -85,7 +94,9 @@ def main() -> None:
     skill_by_catchment = pd.read_csv(fig / "model_skill_by_catchment.csv")
     epsilon_by_catchment = pd.read_csv(fig / "epsilon_change_by_catchment.csv").set_index("GCIN")
     regime = pd.read_csv(fig / "epsilon_change_by_flow_regime.csv")
-    inference = pd.read_csv(fig / "epsilon_change_inference.csv").set_index("subset")
+    inference = pd.read_csv(inference_path).set_index("subset")
+    shifts = pd.read_parquet(shift_path)
+    sensitivity = pd.read_csv(sensitivity_path)
     qobs_inventory_path = Path(cfg["paths"]["output_dir"]) / "inputs" / "qobs_inventory.parquet"
     qobs_inventory = pd.read_parquet(qobs_inventory_path)
     median_valid_q_days = int(qobs_inventory["valid_q_days"].median())
@@ -119,6 +130,30 @@ def main() -> None:
     reliable_nse_gcins = skill_wide.index[
         (skill_wide[("nse", "pre")] > 0.5) & (skill_wide[("nse", "post")] > 0.5)
     ]
+    reliable_shifts = shifts[shifts["GCIN"].isin(reliable_nse_gcins)].copy()
+    reliable_shift_counts = (
+        reliable_shifts.groupby(["regime", "shift_class"], observed=True)
+        .size()
+        .unstack(fill_value=0)
+    )
+    shift_wide = reliable_shifts.pivot(index="GCIN", columns="regime", values="shift_class")
+    bivariate_eligible = int(
+        (
+            shift_wide.get("low", pd.Series(index=shift_wide.index, dtype=object)).isin(
+                ["increase", "decrease", "unresolved"]
+            )
+            & shift_wide.get("high", pd.Series(index=shift_wide.index, dtype=object)).isin(
+                ["increase", "decrease", "unresolved"]
+            )
+        ).sum()
+    )
+
+    def shift_count(regime_name: str, class_name: str) -> int:
+        if regime_name not in reliable_shift_counts.index or class_name not in reliable_shift_counts.columns:
+            return 0
+        return int(reliable_shift_counts.loc[regime_name, class_name])
+
+    breakpoint_sensitivity = sensitivity[sensitivity["scenario"].isin(["break_1985", "break_1995"])]
     reliable_nse_delta = epsilon_by_catchment.loc[
         epsilon_by_catchment.index.intersection(reliable_nse_gcins), "delta_epsilon_mean"
     ].dropna()
@@ -249,7 +284,40 @@ For each catchment and period, the primary NSE is calculated once after concaten
 
 The public explorer retains all evaluated catchments in its JSON. Its Overview panel applies the reliability filter in the browser: users can switch between NSE and KGE and change the threshold. At the default threshold of 0.5, `{both_nse_05:,}` catchments pass NSE in both periods and `{both_kge_05:,}` pass KGE in both periods.
 
-The full-cohort epsilon shift below is descriptive when the out-of-fold NSE distribution has a substantial low-skill tail. For the primary reliability subset, both pre-period and post-period catchment NSE must exceed 0.5. All `{len(reliable_nse_delta):,}` catchments passing that rule have a valid pre/post epsilon contrast:
+### Primary Fold-Adjusted Era Shift
+
+The primary scientific estimand is one post-1990 coefficient for each catchment and flow regime. Daily out-of-fold epsilon is reduced to an annual median when at least three recession days are available. For each catchment and regime, the model is:
+
+```text
+log(annual epsilon) = fold fixed effect + beta_post * I(year >= 1991) + error
+era shift (%) = 100 * (exp(beta_post) - 1)
+```
+
+Fold fixed effects prevent differences among the five trained OOF models from being mistaken for a climate-era shift. A test requires at least 10 valid years in each era and at least five pre and five post years inside folds that cover both eras. A one-year Newey-West HAC covariance allows residual heteroskedasticity and serial dependence. Benjamini-Hochberg FDR correction is applied across all statistically eligible catchments separately by regime. Increase and Decrease require `q < 0.05`; otherwise the result is Unresolved, which is not evidence of stability.
+
+At the default both-period `NSE > 0.5` display threshold:
+
+```text
+low-flow eligible:          {shift_count('low', 'increase') + shift_count('low', 'decrease') + shift_count('low', 'unresolved'):,}
+  increase / decrease:      {shift_count('low', 'increase'):,} / {shift_count('low', 'decrease'):,}
+  unresolved:               {shift_count('low', 'unresolved'):,}
+high-flow eligible:         {shift_count('high', 'increase') + shift_count('high', 'decrease') + shift_count('high', 'unresolved'):,}
+  increase / decrease:      {shift_count('high', 'increase'):,} / {shift_count('high', 'decrease'):,}
+  unresolved:               {shift_count('high', 'unresolved'):,}
+low/high eligible overlap:  {bivariate_eligible:,}
+```
+
+Low-flow and high-flow analyses retain their independent samples; the smaller overlap is used only for the bivariate 3 x 3 map. The FDR family is fixed before applying the interactive reliability display filter, so changing the website threshold cannot redefine statistical significance.
+
+The annual-support sensitivity checks use one, three, and five recession days per annual median. Alternative 1985 and 1995 breakpoints are also evaluated without selecting the most significant result. Across overlapping catchments, effect correlations with the 1990 primary analysis range from `{breakpoint_sensitivity['effect_correlation_with_primary'].min():.3f}` to `{breakpoint_sensitivity['effect_correlation_with_primary'].max():.3f}` for the breakpoint checks.
+
+### Component Attribution and Trend Sensitivity
+
+For interpretation, `GQ = epsilon * Qsim` gives the exact descriptive identity `delta log epsilon = delta log GQ - delta log Qsim`. GQ-dominant, Q-dominant, Combined, and Offsetting labels describe how the pre/post ratio is composed; they are not causal climate attribution.
+
+Continuous fold-centered Theil-Sen slopes and prewhitened Kendall tests are retained as a secondary robustness check. They ask whether change is monotonic through time, whereas the primary model asks whether the two predefined climate eras differ. Continuous trends never determine the map class.
+
+The raw daily-mean contrast below is retained only as a descriptive distribution summary. For the default reliability subset, both pre-period and post-period catchment NSE exceed 0.5:
 
 ```text
 reliability-subset mean delta epsilon: {fmt_sci(reliable_nse_mean_delta)}
@@ -261,7 +329,7 @@ bootstrap 95% CI for median delta: {fmt_sci(reliable_inference['median_bootstrap
 
 The intervals resample catchments and quantify cross-catchment sampling uncertainty; they do not account for spatial dependence or model structural uncertainty. This filter does not validate epsilon against a direct observation: epsilon remains latent, and NSE measures the skill of the physics-constrained streamflow reconstruction. The subset result should therefore be interpreted as a change in model-inferred epsilon among catchments with adequate indirect reconstruction skill.
 
-### Epsilon Shift
+### Descriptive Daily-Mean Contrast
 
 ![Epsilon delta distribution by all days and flow regime]({fig_rel}/figure_02_delta_distribution.png)
 
@@ -283,7 +351,7 @@ catchment share with negative delta epsilon: {fmt_pct(result['negative_delta_sha
 
 {direction_note}
 
-The mean, median, and negative-share statistics describe the central tendency and sign balance of the catchment-level epsilon shift. They should be interpreted together: the mean is sensitive to large-magnitude catchments, while the median is the more robust summary of the typical catchment.
+These values describe the unadjusted daily distribution and support the interactive CDF panels. They do not determine the primary era-shift class because unequal numbers of recession days and OOF model scale can affect raw daily means.
 
 Flow-regime summaries use basin-specific observed-flow thresholds:
 
@@ -332,7 +400,7 @@ dQ/dt = -epsilon * Q^2 - epsilon * alpha * AET * Q
 
 The model is therefore an epsilon-core physics-informed LSTM that infers daily epsilon directly inside the recession equation.
 """
-    args.summary_md.write_text(text, encoding="utf-8")
+    args.summary_md.write_text(text, encoding="utf-8", newline="\n")
     print(f"wrote {args.summary_md}")
 
 

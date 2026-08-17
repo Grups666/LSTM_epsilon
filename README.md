@@ -39,7 +39,7 @@ The generated data file is:
 
 `public/modules/epsilon-change/data/epsilon-catchment-distributions.json`
 
-The training dataset contains 2,511 pure GCIN catchments. Five-fold out-of-fold predictions are concatenated before calculating each catchment's pre-period and post-period NSE/KGE and epsilon contrast.
+The training dataset contains 2,511 pure GCIN catchments. Five-fold out-of-fold predictions are concatenated before calculating each catchment's pre-period and post-period NSE/KGE. The primary epsilon result uses annual medians in a log-linear post-1990 model with OOF-fold fixed effects, a one-year HAC covariance, and BH-FDR correction.
 
 The explorer JSON retains all 2,297 catchments with a valid epsilon contrast. The Overview panel applies NSE or KGE filtering in the browser; `NSE > 0.5` in both periods is only the default display filter, not a hard-coded export filter.
 
@@ -50,3 +50,5 @@ Audited out-of-fold performance:
 - median catchment KGE: `0.642`
 - pre/post median NSE: `0.555 / 0.626`
 - pre/post NSE above `0.5` in both periods: `1,304` catchments
+
+At that default reliability threshold, the fixed data-support rule retains 791 low-flow catchments, 1,007 high-flow catchments, and 745 in their bivariate overlap. Increase and Decrease require era-shift `q < 0.05`; Unresolved means the direction is not established and does not mean Stable. Continuous trends are retained only as a sensitivity check.

@@ -106,7 +106,40 @@ For each catchment and period, the primary NSE is calculated once after concaten
 
 The public explorer retains all evaluated catchments in its JSON. Its Overview panel applies the reliability filter in the browser: users can switch between NSE and KGE and change the threshold. At the default threshold of 0.5, `1,304` catchments pass NSE in both periods and `1,447` pass KGE in both periods.
 
-The full-cohort epsilon shift below is descriptive when the out-of-fold NSE distribution has a substantial low-skill tail. For the primary reliability subset, both pre-period and post-period catchment NSE must exceed 0.5. All `1,304` catchments passing that rule have a valid pre/post epsilon contrast:
+### Primary Fold-Adjusted Era Shift
+
+The primary scientific estimand is one post-1990 coefficient for each catchment and flow regime. Daily out-of-fold epsilon is reduced to an annual median when at least three recession days are available. For each catchment and regime, the model is:
+
+```text
+log(annual epsilon) = fold fixed effect + beta_post * I(year >= 1991) + error
+era shift (%) = 100 * (exp(beta_post) - 1)
+```
+
+Fold fixed effects prevent differences among the five trained OOF models from being mistaken for a climate-era shift. A test requires at least 10 valid years in each era and at least five pre and five post years inside folds that cover both eras. A one-year Newey-West HAC covariance allows residual heteroskedasticity and serial dependence. Benjamini-Hochberg FDR correction is applied across all statistically eligible catchments separately by regime. Increase and Decrease require `q < 0.05`; otherwise the result is Unresolved, which is not evidence of stability.
+
+At the default both-period `NSE > 0.5` display threshold:
+
+```text
+low-flow eligible:          791
+  increase / decrease:      139 / 19
+  unresolved:               633
+high-flow eligible:         1,007
+  increase / decrease:      13 / 2
+  unresolved:               992
+low/high eligible overlap:  745
+```
+
+Low-flow and high-flow analyses retain their independent samples; the smaller overlap is used only for the bivariate 3 x 3 map. The FDR family is fixed before applying the interactive reliability display filter, so changing the website threshold cannot redefine statistical significance.
+
+The annual-support sensitivity checks use one, three, and five recession days per annual median. Alternative 1985 and 1995 breakpoints are also evaluated without selecting the most significant result. Across overlapping catchments, effect correlations with the 1990 primary analysis range from `0.888` to `0.964` for the breakpoint checks.
+
+### Component Attribution and Trend Sensitivity
+
+For interpretation, `GQ = epsilon * Qsim` gives the exact descriptive identity `delta log epsilon = delta log GQ - delta log Qsim`. GQ-dominant, Q-dominant, Combined, and Offsetting labels describe how the pre/post ratio is composed; they are not causal climate attribution.
+
+Continuous fold-centered Theil-Sen slopes and prewhitened Kendall tests are retained as a secondary robustness check. They ask whether change is monotonic through time, whereas the primary model asks whether the two predefined climate eras differ. Continuous trends never determine the map class.
+
+The raw daily-mean contrast below is retained only as a descriptive distribution summary. For the default reliability subset, both pre-period and post-period catchment NSE exceed 0.5:
 
 ```text
 reliability-subset mean delta epsilon: -1.917e-02
@@ -118,7 +151,7 @@ bootstrap 95% CI for median delta: 1.514e-03 to 3.239e-03
 
 The intervals resample catchments and quantify cross-catchment sampling uncertainty; they do not account for spatial dependence or model structural uncertainty. This filter does not validate epsilon against a direct observation: epsilon remains latent, and NSE measures the skill of the physics-constrained streamflow reconstruction. The subset result should therefore be interpreted as a change in model-inferred epsilon among catchments with adequate indirect reconstruction skill.
 
-### Epsilon Shift
+### Descriptive Daily-Mean Contrast
 
 ![Epsilon delta distribution by all days and flow regime](assets/epsilon_pure_gcin_1950_2019/figure_02_delta_distribution.png)
 
@@ -140,7 +173,7 @@ catchment share with negative delta epsilon: 44.8%
 
 The mean and median have opposite signs, showing that the catchment-level change distribution is strongly skewed. Large-magnitude negative catchments move the mean, while the typical catchment represented by the median has a small positive shift; neither direction should be reported alone.
 
-The mean, median, and negative-share statistics describe the central tendency and sign balance of the catchment-level epsilon shift. They should be interpreted together: the mean is sensitive to large-magnitude catchments, while the median is the more robust summary of the typical catchment.
+These values describe the unadjusted daily distribution and support the interactive CDF panels. They do not determine the primary era-shift class because unequal numbers of recession days and OOF model scale can affect raw daily means.
 
 Flow-regime summaries use basin-specific observed-flow thresholds:
 
@@ -155,56 +188,6 @@ mid-flow epsilon:  Q10 < observed Q < Q90
 - `high` flow: mean delta epsilon = 5.267e-03; median delta epsilon = 2.772e-03; mean relative delta = 8.6%.
 
 Low-flow and high-flow epsilon are evaluated separately because recession behavior under the tails of the flow distribution can reflect different storage-release controls. Their mean relative changes are `3.1%` for low flow and `8.6%` for high flow. These flow-regime summaries should be read together with the median and quartile structure in the table, because outlier catchments can move the mean.
-
-### GQ / Q Component Attribution
-
-The retained out-of-fold table contains daily effective epsilon and simulated Q
-for every evaluated recession day. Effective GQ is reconstructed as
-`epsilon_effective * Qsim`, then pre/post changes are compared in log space:
-
-```text
-delta log epsilon = delta log GQ - delta log Qsim
-```
-
-The public map preserves epsilon change as the point fill and adds an outer
-component ring. In the bivariate view, the upper semicircle represents high
-flow and the lower semicircle represents low flow. Ring classes distinguish
-GQ-dominant, Q-dominant, combined, and offsetting changes. These classes explain
-how the epsilon ratio changed. The inspector reports the signed `delta log GQ`
-and `-delta log Qsim` terms used by this classification, rather than the two raw
-percentage changes. The classes do not establish climate causality or
-statistical significance.
-
-### Continuous Trend and Significance
-
-The map's nine fill classes now use continuous annual trends rather than the
-former arbitrary +/-5% pre/post threshold. Annual medians require at least five
-recession days, and each series requires at least 20 years. Log annual values
-are centered within OOF fold to reduce model-specific level shifts, then fitted
-with a Theil-Sen slope. Trend-free prewhitening reduces lag-1 autocorrelation
-before Kendall's rank trend test.
-
-Benjamini-Hochberg correction controls false discoveries across catchments for
-each variable and flow regime. Increase and Decrease require FDR `q < 0.05`;
-the center class is No significant trend. That center label means the available
-series does not provide FDR-controlled evidence of a monotonic trend, not that
-epsilon is known to be exactly constant.
-
-The public explorer excludes a catchment from a trend map when the relevant
-flow regime has fewer than 20 qualifying annual medians; the bivariate map
-requires this coverage in both regimes. The Overview reports the excluded count
-and provides a display toggle for No significant trend catchments. The separate
-pre/post contrast compares mean daily epsilon between 1950-1990 and 1991-2019;
-it is a descriptive effect size, not the significance test used for the map
-class. A nonzero pre/post contrast can therefore coexist with No significant
-trend.
-
-The detail panel also reports a significance-based GQ/Q driver result. It is
-assigned only when epsilon itself passes FDR: GQ-driven, Q-driven, Combined, or
-Unresolved. Catchments without a significant epsilon trend are explicitly
-reported as No significant driver. The outer ring remains the descriptive
-pre/post component decomposition, keeping effect composition separate from
-trend significance.
 
 ### Hydroclimate Structure
 

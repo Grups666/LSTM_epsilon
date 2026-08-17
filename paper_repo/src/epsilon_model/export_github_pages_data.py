@@ -20,6 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--static", type=Path)
     parser.add_argument("--attribution", type=Path)
     parser.add_argument("--trends", type=Path)
+    parser.add_argument("--shifts", type=Path)
     parser.add_argument(
         "--qobs-coverage",
         type=Path,
@@ -226,9 +227,31 @@ def read_trends(path: Path) -> dict[tuple[int, str], dict[str, object]]:
     if not path.exists():
         return {}
     frame = pd.read_parquet(path) if path.suffix.lower() == ".parquet" else pd.read_csv(path)
-    required = {"GCIN", "regime", "epsilon_trend_class", "trend_driver"}
+    fields = (
+        "epsilon_n_years",
+        "epsilon_slope_pct_decade",
+        "epsilon_q_value",
+        "epsilon_trend_class",
+    )
+    required = {"GCIN", "regime", *fields}
     if not required.issubset(frame.columns):
         raise ValueError(f"Trend file is missing columns: {sorted(required - set(frame.columns))}")
+    records: dict[tuple[int, str], dict[str, object]] = {}
+    for row in frame.itertuples(index=False):
+        record = row._asdict()
+        records[(int(record["GCIN"]), str(record["regime"]))] = {
+            field: record.get(field) for field in fields
+        }
+    return records
+
+
+def read_shifts(path: Path) -> dict[tuple[int, str], dict[str, object]]:
+    if not path.exists():
+        return {}
+    frame = pd.read_parquet(path) if path.suffix.lower() == ".parquet" else pd.read_csv(path)
+    required = {"GCIN", "regime", "epsilon_shift_class"}
+    if not required.issubset(frame.columns):
+        raise ValueError(f"Shift file is missing columns: {sorted(required - set(frame.columns))}")
     records: dict[tuple[int, str], dict[str, object]] = {}
     for row in frame.itertuples(index=False):
         record = row._asdict()
@@ -246,6 +269,7 @@ def build_payload(
     qobs_coverage_path: Path,
     attribution: dict[tuple[int, str], dict[str, object]],
     trends: dict[tuple[int, str], dict[str, object]],
+    shifts: dict[tuple[int, str], dict[str, object]],
     bins: int,
     cfg: dict,
     run_label: str,
@@ -359,11 +383,20 @@ def build_payload(
             trend_row = trends.get((int(gcin), regime), {})
             for field, value in trend_row.items():
                 key = f"{prefix}_{field}"
-                if field in {"epsilon_trend_class", "gq_trend_class", "qsim_trend_class", "trend_driver"}:
+                if field == "epsilon_trend_class":
+                    basin[key] = str(value)
+                elif field.endswith("_n_years") or field.endswith("_start_year") or field.endswith("_end_year"):
+                    basin[key] = int(value) if pd.notna(value) else None
+                else:
+                    basin[key] = finite_or_none(value)
+            shift_row = shifts.get((int(gcin), regime), {})
+            for field, value in shift_row.items():
+                key = f"{prefix}_{field}"
+                if field in {"epsilon_shift_class", "gq_shift_class", "qsim_shift_class", "shift_driver"}:
                     basin[key] = str(value)
                 elif field in {"epsilon_significant", "gq_significant", "qsim_significant"}:
                     basin[key] = bool(value)
-                elif field.endswith("_n_years") or field.endswith("_start_year") or field.endswith("_end_year"):
+                elif field.endswith("_pre_years") or field.endswith("_post_years") or field.endswith("_paired_folds") or field.endswith("_n_years"):
                     basin[key] = int(value) if pd.notna(value) else None
                 else:
                     basin[key] = finite_or_none(value)
@@ -409,6 +442,15 @@ def build_payload(
                 "slope": "fold-centered log-space Theil-Sen slope",
                 "significance": "trend-free prewhitened Kendall test with Benjamini-Hochberg FDR q < 0.05",
             },
+            "prePostShift": {
+                "primaryBreakpoint": 1990,
+                "annualStatistic": "median of at least 3 recession days",
+                "coverage": "at least 10 pre years and 10 post years, including at least 5 pre and 5 post years within paired OOF folds",
+                "estimate": "log annual epsilon regressed on post-period indicator and fold fixed effects",
+                "uncertainty": "one-year Newey-West HAC covariance",
+                "significance": "Benjamini-Hochberg FDR q < 0.05",
+                "classes": "Increase, Decrease, Unresolved, or Insufficient; Unresolved does not mean stable",
+            },
             "module": "epsilon-change",
         },
         "basins": basins,
@@ -423,11 +465,13 @@ def main() -> None:
     static = args.static or Path(cfg["paths"]["static_attributes"])
     attribution_path = args.attribution or (run_root / "analysis" / "gq_q_attribution_by_catchment.parquet")
     trends_path = args.trends or (run_root / "analysis" / "continuous_trends_by_catchment.parquet")
+    shifts_path = args.shifts or (run_root / "analysis" / "prepost_shifts_by_catchment.parquet")
     sim = read_simulations(run_root)
     sim = label_regimes(label_periods(sim, cfg))
     attribution = read_attribution(attribution_path)
     trends = read_trends(trends_path)
-    payload = build_payload(sim, static, args.qobs_coverage, attribution, trends, args.bins, cfg, args.run_label)
+    shifts = read_shifts(shifts_path)
+    payload = build_payload(sim, static, args.qobs_coverage, attribution, trends, shifts, args.bins, cfg, args.run_label)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, separators=(",", ":"), allow_nan=False), encoding="utf-8")
     print(f"wrote {args.out} with {payload['meta']['nCatchments']:,} catchments")

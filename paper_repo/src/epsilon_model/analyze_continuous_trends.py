@@ -175,7 +175,7 @@ def summarize_trends(annual: pd.DataFrame, min_years: int, fdr_alpha: float) -> 
     return long
 
 
-def build_wide(long: pd.DataFrame, fdr_alpha: float) -> pd.DataFrame:
+def build_wide(long: pd.DataFrame) -> pd.DataFrame:
     fields = [
         "n_years",
         "start_year",
@@ -197,24 +197,7 @@ def build_wide(long: pd.DataFrame, fdr_alpha: float) -> pd.DataFrame:
     ]
     wide = long.pivot(index=["GCIN", "regime"], columns="variable", values=fields)
     wide.columns = [f"{variable}_{field}" for field, variable in wide.columns]
-    wide = wide.reset_index()
-
-    def driver(row: pd.Series) -> str:
-        epsilon_q = float(row.get("epsilon_q_value", np.nan))
-        if not np.isfinite(epsilon_q) or epsilon_q >= fdr_alpha:
-            return "nonsignificant"
-        gq_sig = bool(row.get("gq_significant", False))
-        q_sig = bool(row.get("qsim_significant", False))
-        if gq_sig and q_sig:
-            return "combined"
-        if gq_sig:
-            return "gq"
-        if q_sig:
-            return "q"
-        return "unresolved"
-
-    wide["trend_driver"] = wide.apply(driver, axis=1)
-    return wide
+    return wide.reset_index()
 
 
 def main() -> None:
@@ -230,7 +213,7 @@ def main() -> None:
     sim["year"] = sim["date"].dt.year.astype(int)
     annual = annual_series(sim, args.min_days_per_year)
     long = summarize_trends(annual, args.min_years, args.fdr_alpha)
-    wide = build_wide(long, args.fdr_alpha)
+    wide = build_wide(long)
 
     analysis_dir = run_root / "analysis"
     annual.to_parquet(analysis_dir / "annual_epsilon_gq_q_by_regime.parquet", index=False)
@@ -243,8 +226,6 @@ def main() -> None:
     print(f"annual catchment-regime-variable rows: {len(annual):,}")
     print(f"trend series: {len(long):,}")
     print(epsilon.groupby(["regime", "trend_class"], observed=True).size().unstack(fill_value=0).to_string())
-    print("significance-based attribution")
-    print(wide.groupby(["regime", "trend_driver"], observed=True).size().unstack(fill_value=0).to_string())
 
 
 if __name__ == "__main__":

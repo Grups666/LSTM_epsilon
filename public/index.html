@@ -1588,7 +1588,7 @@
           {
             id: 'classification',
             title: 'Interpret the nine classes',
-            copy: '<p>Each class combines low-flow epsilon, &epsilon;<sub>LF</sub>, with high-flow epsilon, &epsilon;<sub>HF</sub>. Each is labeled significant Decrease, significant Increase, or No significant trend after FDR correction.</p><p>Low flow uses observed Q at or below Q10; high flow uses Q at or above Q90. On the outer component ring, high flow is the upper half and low flow is the lower half.</p>',
+            copy: '<p>Each class combines low-flow epsilon, &epsilon;<sub>LF</sub>, with high-flow epsilon, &epsilon;<sub>HF</sub>. Each post-1990 era shift is labeled significant Decrease, significant Increase, or Unresolved after FDR correction.</p><p>Low flow uses observed Q at or below Q10; high flow uses Q at or above Q90. Unresolved means the direction is not established, not that epsilon is stable.</p>',
             target: 'classification-summary'
           },
           {
@@ -1626,20 +1626,20 @@
           {
             id: 'overview-filter',
             title: 'Control the map',
-            copy: '<p>Choose NSE or KGE and set a minimum score. Use the second control to show or hide catchments whose annual epsilon trend does not pass FDR significance.</p><p>Catchments with fewer than 20 qualifying years are always excluded and counted below the controls.</p>',
+            copy: '<p>Choose NSE or KGE and set a minimum score. Use the second control to show or hide unresolved era shifts.</p><p>The fixed support rule requires 10 years per era and five identifying years per era inside paired folds; excluded catchments are counted below the controls.</p>',
             hint: 'These controls change display eligibility only; they do not retrain the model.',
             target: '.epsilon-overview-filter'
           },
           {
             id: 'overview-classification',
             title: 'Review the nine-class summary',
-            copy: '<p>This 3 x 3 matrix counts the displayed catchments by continuous epsilon-trend class. Rows are &epsilon;<sub>LF</sub>; columns are &epsilon;<sub>HF</sub>. The compact map legend uses Decr., N.S., and Incr.; N.S. means no significant trend after FDR correction.</p>',
+            copy: '<p>This 3 x 3 matrix counts the displayed catchments by fold-adjusted era-shift class. Rows are &epsilon;<sub>LF</sub>; columns are &epsilon;<sub>HF</sub>. The compact legend uses Decr., Unr., and Incr.; Unr. means the direction remains unresolved after FDR correction.</p>',
             target: '.epsilon-overview-classification'
           },
           {
             id: 'overview-method',
             title: 'Read the method',
-            copy: '<p>Use the compact section navigation in Overview to jump between data provenance, equations, cross-fitting, GQ / Q component attribution, and the annual Theil-Sen, Kendall, and FDR trend workflow.</p>',
+            copy: '<p>Use the compact section navigation in Overview to jump between data provenance, equations, cross-fitting, the primary era-shift model, GQ / Q component attribution, and continuous-trend sensitivity checks.</p>',
             target: '.epsilon-story'
           },
           {
@@ -1798,7 +1798,7 @@
           return this.combinedTutorialRect(document.querySelectorAll('.epsilon-metric-card--skill'));
         }
         if (step.target === 'classification-summary') {
-          return this.combinedTutorialRect(document.querySelectorAll('.epsilon-inspector-classification, .epsilon-change-cards'));
+          return this.combinedTutorialRect(document.querySelectorAll('.epsilon-inspector-classification, .epsilon-shift-panel'));
         }
         const element = document.querySelector(step.target);
         if (!element) return null;

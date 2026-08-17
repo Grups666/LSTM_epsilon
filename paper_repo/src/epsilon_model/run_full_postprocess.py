@@ -12,7 +12,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--run-label", type=str, required=True)
-    parser.add_argument("--figures-dir", type=Path, default=Path("_private/results/paper_figures_pure_gcin"))
+    parser.add_argument(
+        "--figures-dir",
+        type=Path,
+        default=Path("paper_repo/docs/assets/epsilon_pure_gcin_1950_2019"),
+    )
     parser.add_argument("--summary-md", type=Path, default=Path("paper_repo/docs/SUMMARY.md"))
     parser.add_argument(
         "--github-pages-out",
@@ -87,6 +91,16 @@ def main() -> None:
         [
             python,
             str(scripts / "analyze_continuous_trends.py"),
+            "--config",
+            str(args.config),
+            "--run-label",
+            args.run_label,
+        ]
+    )
+    run(
+        [
+            python,
+            str(scripts / "analyze_prepost_shifts.py"),
             "--config",
             str(args.config),
             "--run-label",
