@@ -1202,7 +1202,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           const driver = basin[`${regime}_driver`] || "insufficient";
           return `
             <div class="epsilon-attribution-row">
-              <span class="epsilon-attribution-ring" style="--driver-color:${this.driverColor(driver) || "#cbd5e1"}"></span>
+              <span class="epsilon-attribution-swatch" style="--driver-color:${this.driverColor(driver) || "#cbd5e1"}"></span>
                <span class="epsilon-attribution-regime">${this.regimeShortLabel(regime)}</span>
               <span class="epsilon-attribution-driver">${this.driverLabel(driver)}</span>
               <span class="epsilon-attribution-value">${this.formatSigned(basin[`${regime}_gq_component_log`], 3)}</span>
@@ -1267,19 +1267,18 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   renderDriverLegend(compact = true) {
     const items = ["gq", "q", "combined", "offsetting"];
-    const regimeNote = `Map colors show ${this.focusTitle().toLowerCase()} decomposition.`;
     return `
       <div class="epsilon-driver-legend${compact ? " epsilon-driver-legend--compact" : ""}">
-        <div class="epsilon-driver-legend-title">GQ / Q component class</div>
+        <div class="epsilon-driver-legend-title">${compact ? "Component driver" : "GQ / Q component class"}</div>
         <div class="epsilon-driver-legend-items">
           ${items.map((driver) => `
             <span class="epsilon-driver-legend-item">
-              <span class="epsilon-driver-ring-swatch${driver === "offsetting" ? " is-dashed" : ""}" style="--driver-color:${this.driverColor(driver)}"></span>
+              <span class="epsilon-driver-swatch" style="--driver-color:${this.driverColor(driver)}"></span>
               ${this.driverLabel(driver)}
             </span>
           `).join("")}
         </div>
-        <div class="epsilon-driver-legend-note">${regimeNote} GQ = epsilon x simulated Q; categories describe pre/post component dominance.</div>
+        <div class="epsilon-driver-legend-note">${this.focusTitle()} · GQ = epsilon x simulated Q. Colors describe the pre/post component balance; they are not causal evidence.</div>
       </div>
     `;
   }
@@ -1662,8 +1661,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-attribution-columns{padding:0 0 3px;font-size:9px;color:#94a3b8;text-align:right}
       .epsilon-attribution-columns span:nth-child(3){text-align:left}
       .epsilon-attribution-row{padding:4px 0;font-size:10.5px;color:#475569}
-      .epsilon-attribution-ring,.epsilon-driver-ring-swatch{width:12px;height:12px;border-radius:50%;border:2px solid var(--driver-color);box-sizing:border-box;display:inline-block;flex:0 0 auto}
-      .epsilon-driver-ring-swatch.is-dashed{border-style:dashed}
+      .epsilon-attribution-swatch,.epsilon-driver-swatch{width:11px;height:11px;border-radius:50%;border:1px solid rgba(15,23,42,.22);background:var(--driver-color);box-sizing:border-box;display:inline-block;flex:0 0 auto}
       .epsilon-attribution-regime{color:#64748b}
       .epsilon-attribution-driver{font-weight:700;color:#334155}
       .epsilon-attribution-value{text-align:right;color:#64748b;white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -1680,11 +1678,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-trend-regime{font-size:9px;font-weight:600;color:#64748b;text-transform:uppercase}
       .epsilon-trend-class{min-width:0;font-weight:700;color:#334155;line-height:1.3}
       .epsilon-trend-slope{white-space:nowrap}
-      .epsilon-driver-legend{margin-top:12px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
+      .epsilon-driver-legend{margin-top:10px}
       .epsilon-continuous-key{padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
       .epsilon-continuous-labels{display:flex;justify-content:space-between;margin-top:6px;color:#64748b;font-size:10px}
-      .epsilon-driver-legend--compact{padding:8px;margin-top:10px}
-      .epsilon-driver-legend-items{display:flex;flex-wrap:wrap;gap:7px 12px}
+      .epsilon-driver-legend--compact{margin-top:0}
+      .epsilon-driver-legend-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px}
       .epsilon-driver-legend-item{display:inline-flex;align-items:center;gap:5px;color:#475569;font-size:10.5px;white-space:nowrap}
       .epsilon-driver-guide{margin-top:10px;padding:10px 0 0;border-top:1px solid #e2e8f0}
       .epsilon-driver-guide-formula{display:flex;flex-wrap:wrap;gap:5px 16px;margin-bottom:9px}
@@ -1789,7 +1787,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-equation-card{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-attribution-panel,
       body.theme-dark .epsilon-trend-panel{background:transparent;border-color:#263449}
-      body.theme-dark .epsilon-driver-legend{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-attribution-swatch,
+      body.theme-dark .epsilon-driver-swatch{border-color:rgba(255,255,255,.28)}
       body.theme-dark .epsilon-continuous-key{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-continuous-labels{color:#94a3b8}
       body.theme-dark .epsilon-attribution-title,
@@ -2131,10 +2130,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     if (this.analysisView === "decomposition") {
       this.app.registerLegend?.(this.legendId, {
         title: `${this.focusTitle()} GQ / Q decomposition`,
-        html: `
-          ${this.renderDriverLegend(true)}
-          <div style="font-size:10px;color:#64748b;margin-top:8px">Colors identify the dominant algebraic contribution to delta log epsilon. Descriptive, not causal.</div>
-        `
+        html: this.renderDriverLegend(true)
       });
       return;
     }
