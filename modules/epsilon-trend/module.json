@@ -1,0 +1,22 @@
+{
+  "id": "epsilon-trend",
+  "name": "Temporal Robustness",
+  "version": "0.1.0",
+  "assetVersion": "2026-08-18-analysis-modules-v14",
+  "description": "Fold-centered continuous epsilon trends as a prespecified sensitivity check.",
+  "author": "Spatial Research Team",
+  "icon": "activity",
+  "entry": "../epsilon-change/index.js",
+  "className": "EpsilonChangeModule",
+  "importKind": "module-manifest",
+  "defaultLoad": false,
+  "analysisView": "trend",
+  "defaultRegime": "all",
+  "skillFilterMetric": "nse",
+  "skillFilterThreshold": 0.5,
+  "globalStoryFile": "../epsilon-change/data/global-story-summary.json",
+  "datasets": [{
+    "id": "epsilon-catchment-distributions",
+    "file": "../epsilon-change/data/epsilon-catchment-distributions.json"
+  }]
+}
