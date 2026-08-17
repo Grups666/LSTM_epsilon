@@ -2,7 +2,7 @@
   "id": "epsilon-change-high",
   "name": "Epsilon Change (High Flow)",
   "version": "0.1.0",
-  "assetVersion": "2026-08-18-global-story-v12",
+  "assetVersion": "2026-08-18-field-effect-v13",
   "description": "Catchment-scale fold-adjusted high-flow epsilon shift after 1990.",
   "author": "Spatial Research Team",
   "icon": "activity",

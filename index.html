@@ -1587,8 +1587,8 @@
           },
           {
             id: 'classification',
-            title: 'Interpret the nine classes',
-            copy: '<p>Each class combines low-flow epsilon, &epsilon;<sub>LF</sub>, with high-flow epsilon, &epsilon;<sub>HF</sub>. Each post-1990 era shift is labeled significant Decrease, significant Increase, or Unresolved after FDR correction.</p><p>Low flow uses observed Q at or below Q10; high flow uses Q at or above Q90. Unresolved means the direction is not established, not that epsilon is stable.</p>',
+            title: 'Read the field effect',
+            copy: '<p>The default map shows each catchment\'s continuous post-1990 shift in annual epsilon spread, defined as q75 divided by q25 across all recession days.</p><p>Color gives effect direction and magnitude. It does not claim that every catchment is individually significant; the detail panel keeps the separate low/high local FDR results below it.</p>',
             target: 'classification-summary'
           },
           {
@@ -1617,7 +1617,7 @@
           {
             id: 'overview-open',
             title: 'Open Overview',
-            copy: '<p>Overview is a clickable row under Layers. It contains the reliability filter, the nine-class summary, and the full data and inference method.</p>',
+            copy: '<p>Overview is a clickable row under Layers. It contains the Field effect / Local FDR map switch, reliability controls, global evidence, and the full data and inference method.</p>',
             hint: 'Click the highlighted Overview row to continue.',
             target: '[data-id="epsilon-change-overview"]',
             calloutPlacement: 'sidebar-right',
@@ -1626,14 +1626,14 @@
           {
             id: 'overview-filter',
             title: 'Control the map',
-            copy: '<p>Choose NSE or KGE and set a minimum score. Use the second control to show or hide unresolved era shifts.</p><p>The fixed support rule requires 10 years per era and five identifying years per era inside paired folds; excluded catchments are counted below the controls.</p>',
+            copy: '<p>Field effect displays the continuous annual-spread estimates behind the global analysis. Local FDR switches to strict low/high catchment classes and then offers the option to hide Unresolved points.</p><p>NSE or KGE controls only the displayed subset. The published global test remains fixed at both-era NSE above 0.5.</p>',
             hint: 'These controls change display eligibility only; they do not retrain the model.',
             target: '.epsilon-overview-filter'
           },
           {
             id: 'overview-classification',
-            title: 'Review the nine-class summary',
-            copy: '<p>This 3 x 3 matrix counts the displayed catchments by fold-adjusted era-shift class. Rows are &epsilon;<sub>LF</sub>; columns are &epsilon;<sub>HF</sub>. The compact legend uses Decr., Unr., and Incr.; Unr. means the direction remains unresolved after FDR correction.</p>',
+            title: 'Read the active map key',
+            copy: '<p>In Field effect mode, the continuous scale runs from a narrower to a wider annual epsilon distribution; gray is near zero, not Unresolved.</p><p>In Local FDR mode, this section becomes the 3 x 3 low/high significance matrix, where gray Unresolved has its strict multiple-testing meaning.</p>',
             target: '.epsilon-overview-classification'
           },
           {
@@ -1645,7 +1645,7 @@
           {
             id: 'modes',
             title: 'Switch epsilon views',
-            copy: '<p>Epsilon Change is the bivariate main view. The Low Flow and High Flow modules switch to continuous maps for each regime; loading one replaces the current epsilon view.</p>',
+            copy: '<p>Epsilon Change defaults to the global annual-spread field. Local FDR is available inside Overview, while the Low Flow and High Flow modules provide continuous effect maps for each regime.</p>',
             hint: 'You are ready to explore. The ? control restarts this tour whenever needed.',
             target: '#moduleList'
           }
@@ -1672,6 +1672,7 @@
           return;
         }
         module.updateSkillFilter?.('nse', 0.5, false);
+        module.updateMapEvidenceMode?.('field');
         if (module.overviewLayerId) this.layerManager.setVisibility(module.overviewLayerId, false);
         this.tutorial = { active: true, index: 0 };
         document.body.classList.add('tutorial-active');
@@ -1798,7 +1799,7 @@
           return this.combinedTutorialRect(document.querySelectorAll('.epsilon-metric-card--skill'));
         }
         if (step.target === 'classification-summary') {
-          return this.combinedTutorialRect(document.querySelectorAll('.epsilon-inspector-classification, .epsilon-shift-panel'));
+          return this.combinedTutorialRect(document.querySelectorAll('.epsilon-inspector-classification, .epsilon-field-spread-panel'));
         }
         const element = document.querySelector(step.target);
         if (!element) return null;

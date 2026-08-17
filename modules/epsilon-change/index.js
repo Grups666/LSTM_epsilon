@@ -32,6 +32,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       threshold: Number.isFinite(Number(manifest.skillFilterThreshold)) ? Number(manifest.skillFilterThreshold) : 0.5
     };
     this.showUnresolved = true;
+    this.mapEvidenceMode = this.viewMode === "bivariate"
+      ? (manifest.mapEvidenceMode === "local" ? "local" : "field")
+      : "regime";
     this.reliabilityEligibleCount = 0;
     this.insufficientExcludedCount = 0;
     this.noSignificantHiddenCount = 0;
@@ -180,12 +183,17 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       return Number.isFinite(pre) && Number.isFinite(post) && pre > this.skillFilter.threshold && post > this.skillFilter.threshold;
     });
     this.reliabilityEligibleCount = reliabilityEligible.length;
-    this.insufficientExcludedCount = reliabilityEligible.filter((basin) => !this.hasSufficientShiftData(basin)).length;
-    const shiftEligible = reliabilityEligible.filter((basin) => this.hasSufficientShiftData(basin));
-    this.noSignificantHiddenCount = this.showUnresolved
+    const fieldMode = this.isFieldEvidenceMode();
+    const supported = reliabilityEligible.filter((basin) => (
+      fieldMode ? this.hasFieldSpreadEffect(basin) : this.hasSufficientShiftData(basin)
+    ));
+    this.insufficientExcludedCount = reliabilityEligible.length - supported.length;
+    this.noSignificantHiddenCount = fieldMode || this.showUnresolved
       ? 0
-      : shiftEligible.filter((basin) => this.isUnresolvedForView(basin)).length;
-    this.basins = shiftEligible.filter((basin) => this.showUnresolved || !this.isUnresolvedForView(basin));
+      : supported.filter((basin) => this.isUnresolvedForView(basin)).length;
+    this.basins = fieldMode
+      ? supported
+      : supported.filter((basin) => this.showUnresolved || !this.isUnresolvedForView(basin));
     this.byId = new Map(this.basins.map((basin) => [basin.id, basin]));
     if (this.selected && !this.byId.has(String(this.selected.id))) {
       this.selected = null;
@@ -199,6 +207,19 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     if (this.viewMode === "low") return Boolean(basin.low_change_state);
     if (this.viewMode === "high") return Boolean(basin.high_change_state);
     return Boolean(basin.low_change_state && basin.high_change_state);
+  }
+
+  isFieldEvidenceMode() {
+    return this.viewMode === "bivariate" && this.mapEvidenceMode === "field";
+  }
+
+  hasFieldSpreadEffect(basin) {
+    return Boolean(basin.field_spread_eligible)
+      && Number.isFinite(Number(basin.field_spread_shift_pct));
+  }
+
+  fieldSpreadValue(basin) {
+    return Number(basin?.field_spread_shift_pct);
   }
 
   isUnresolvedForView(basin) {
@@ -223,6 +244,16 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.colorScaleExtent = this.computeContinuousExtent();
     this.ensureLegend();
     if (refreshOverview && this.overviewModal?.classList.contains("visible")) this.showOverview();
+    this.app.draw?.();
+  }
+
+  updateMapEvidenceMode(mode) {
+    if (this.viewMode !== "bivariate") return;
+    this.mapEvidenceMode = mode === "local" ? "local" : "field";
+    this.applySkillFilter();
+    this.colorScaleExtent = this.computeContinuousExtent();
+    this.ensureLegend();
+    if (this.overviewModal?.classList.contains("visible")) this.showOverview();
     this.app.draw?.();
   }
 
@@ -292,6 +323,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   drawAttributionRing(ctx, x, y, radius, basin, emphasized = false) {
+    if (this.isFieldEvidenceMode()) return;
     const ringRadius = radius + (emphasized ? 3.3 : 2.5);
     const lineWidth = emphasized ? 2.2 : 1.5;
     if (this.viewMode === "low" || this.viewMode === "high") {
@@ -353,7 +385,21 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const all = this.basins.map((basin) => Number(basin.all_epsilon_shift_pct)).filter(Number.isFinite);
     const low = this.basins.map((basin) => Number(basin.low_epsilon_shift_pct)).filter(Number.isFinite);
     const high = this.basins.map((basin) => Number(basin.high_epsilon_shift_pct)).filter(Number.isFinite);
+    const field = this.basins.map((basin) => this.fieldSpreadValue(basin)).filter(Number.isFinite);
     const counts = this.categoryCounts();
+    const snapshotMetrics = this.isFieldEvidenceMode()
+      ? `
+        ${this.metricCard("Field catchments", this.basins.length.toLocaleString())}
+        ${this.metricCard("Median spread effect", this.formatPct(this.median(field)), this.median(field))}
+        ${this.metricCard("Positive estimates", this.basins.filter((basin) => this.fieldSpreadValue(basin) > 0).length.toLocaleString())}
+        ${this.metricCard("Negative estimates", this.basins.filter((basin) => this.fieldSpreadValue(basin) < 0).length.toLocaleString())}
+      `
+      : `
+        ${this.metricCard("Catchments", this.basins.length.toLocaleString())}
+        ${this.metricCard("All-recession median", this.formatPct(this.median(all)), this.median(all))}
+        ${this.metricCard("Low-flow median", this.formatPct(this.median(low)), this.median(low))}
+        ${this.metricCard("High-flow median", this.formatPct(this.median(high)), this.median(high))}
+      `;
     const layer = this.app.layerManager.getLayer?.(this.overviewLayerId);
     if (layer && !layer.visible) return;
     this.ensureOverviewModal();
@@ -366,10 +412,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
             <p class="epsilon-overview-lead">${this.escape(this.overviewText())}</p>
             ${this.renderOverviewFilter()}
             <div class="epsilon-overview-metrics">
-              ${this.metricCard("Catchments", this.basins.length.toLocaleString())}
-              ${this.metricCard("All-recession median", this.formatPct(this.median(all)), this.median(all))}
-              ${this.metricCard("Low-flow median", this.formatPct(this.median(low)), this.median(low))}
-              ${this.metricCard("High-flow median", this.formatPct(this.median(high)), this.median(high))}
+              ${snapshotMetrics}
             </div>
           </section>
           <section id="epsilon-overview-map-key">
@@ -378,10 +421,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
               ${this.renderOverviewLegend(counts)}
             </div>
             ${this.renderLegendDefinitions()}
-            <div class="epsilon-overview-attribution">
-              ${this.renderDriverLegend(false)}
-              ${this.renderAttributionDefinitions()}
-            </div>
+            ${this.isFieldEvidenceMode() ? "" : `
+              <div class="epsilon-overview-attribution">
+                ${this.renderDriverLegend(false)}
+                ${this.renderAttributionDefinitions()}
+              </div>
+            `}
           </section>
           ${this.renderGlobalEvidence()}
           <section id="epsilon-overview-data-model">
@@ -514,9 +559,31 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   renderOverviewFilter() {
+    const modeControl = this.viewMode === "bivariate" ? `
+      <div class="epsilon-map-mode">
+        <span>Map evidence</span>
+        <div class="epsilon-map-mode-segments" role="group" aria-label="Map evidence mode">
+          <button type="button" data-map-mode="field" class="${this.mapEvidenceMode === "field" ? "active" : ""}">Field effect</button>
+          <button type="button" data-map-mode="local" class="${this.mapEvidenceMode === "local" ? "active" : ""}">Local FDR</button>
+        </div>
+        <small>${this.isFieldEvidenceMode()
+          ? "Continuous annual spread effects for the global field sample; color is an estimate, not a local significance claim."
+          : "Catchment-level low/high classes after FDR correction; Unresolved is retained unless hidden below."}</small>
+      </div>
+    ` : "";
+    const evidenceControl = this.isFieldEvidenceMode() ? `
+      <div class="epsilon-field-mode-note"><strong>Global inference remains fixed.</strong> The published field test uses both-era NSE &gt; 0.5; changing controls here only changes the displayed subset.</div>
+    ` : `
+      <label class="epsilon-filter-toggle">
+        <input class="epsilon-filter-no-significant" type="checkbox"${this.showUnresolved ? " checked" : ""}>
+        <span class="epsilon-filter-switch" aria-hidden="true"></span>
+        <span><strong>Show unresolved era shifts</strong><small>Turn off to retain only catchments with an FDR-significant post-1990 increase or decrease in the current view.</small></span>
+      </label>
+    `;
     return `
       <div class="epsilon-overview-filter">
         <div class="epsilon-filter-title">Map controls</div>
+        ${modeControl}
         <div class="epsilon-filter-grid">
           <label class="epsilon-filter-field">
             <span>Metric</span>
@@ -533,11 +600,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
             <span>Threshold</span>
             <input class="epsilon-filter-range" type="range" min="-1" max="1" step="0.05" value="${this.formatNumber(this.skillFilter.threshold, 2)}" aria-label="Minimum reliability threshold slider">
           </label>
-          <label class="epsilon-filter-toggle">
-            <input class="epsilon-filter-no-significant" type="checkbox"${this.showUnresolved ? " checked" : ""}>
-            <span class="epsilon-filter-switch" aria-hidden="true"></span>
-            <span><strong>Show unresolved era shifts</strong><small>Turn off to retain only catchments with an FDR-significant post-1990 increase or decrease in the current view.</small></span>
-          </label>
+          ${evidenceControl}
         </div>
         <div class="epsilon-filter-count">${this.filterCountText()}</div>
       </div>
@@ -546,12 +609,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   filterCountText() {
     const parts = [
-      `${this.basins.length.toLocaleString()} shown`,
+      `${this.basins.length.toLocaleString()} ${this.isFieldEvidenceMode() ? "field effects" : "catchments"} shown`,
       `${this.reliabilityEligibleCount.toLocaleString()} pass reliability`,
       `${this.insufficientExcludedCount.toLocaleString()} insufficient-support excluded`
     ];
     if (this.noSignificantHiddenCount) parts.push(`${this.noSignificantHiddenCount.toLocaleString()} unresolved hidden`);
-    return parts.join(" · ");
+    return parts.join(" | ");
   }
 
   bindOverviewFilter() {
@@ -561,6 +624,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const number = root.querySelector(".epsilon-filter-number");
     const range = root.querySelector(".epsilon-filter-range");
     const noSignificant = root.querySelector(".epsilon-filter-no-significant");
+    const modeButtons = root.querySelectorAll("[data-map-mode]");
     const apply = (value, refreshOverview = true) => {
       const threshold = Number(value);
       const next = Number.isFinite(threshold) ? threshold : 0.5;
@@ -576,7 +640,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     number.onchange = () => apply(number.value);
     range.oninput = () => apply(range.value, false);
     range.onchange = () => apply(range.value, true);
-    noSignificant.onchange = () => this.updateNoSignificantVisibility(noSignificant.checked);
+    if (noSignificant) noSignificant.onchange = () => this.updateNoSignificantVisibility(noSignificant.checked);
+    modeButtons.forEach((button) => {
+      button.onclick = () => this.updateMapEvidenceMode(button.dataset.mapMode);
+    });
   }
 
   closeOverview() {
@@ -910,6 +977,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       </div>
       <div class="epsilon-signal-panel">
         <div class="epsilon-inspector-classification">${this.categoryBanner(basin)}</div>
+        ${this.isFieldEvidenceMode() ? this.fieldSpreadPanel(basin) : ""}
         ${this.shiftPanel(basin)}
         ${this.attributionPanel(basin)}
         ${this.trendPanel(basin)}
@@ -1085,12 +1153,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   categoryBanner(basin) {
     const color = this.basinColor(basin);
-    const label = (this.viewMode === "low" || this.viewMode === "high")
+    const label = this.isFieldEvidenceMode()
+      ? this.escape(this.basinLabel(basin))
+      : (this.viewMode === "low" || this.viewMode === "high")
       ? this.escape(this.basinLabel(basin))
       : this.categoryLabelHtml(basin);
     return `
       <div class="epsilon-classification-banner">
-        <div class="epsilon-classification-kicker">Epsilon signal</div>
+        <div class="epsilon-classification-kicker">${this.isFieldEvidenceMode() ? "Global field effect" : "Epsilon signal"}</div>
         <div class="epsilon-classification-main">
           <span class="epsilon-classification-dot" style="background:${color}"></span>
           <span aria-label="${this.escape(this.basinLabel(basin))}">${label}</span>
@@ -1100,10 +1170,43 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     `;
   }
 
+  fieldSpreadPanel(basin) {
+    const effect = this.fieldSpreadValue(basin);
+    const ciLow = Number(basin.field_spread_ci_low_pct);
+    const ciHigh = Number(basin.field_spread_ci_high_pct);
+    const preYears = Number(basin.field_spread_pre_years);
+    const postYears = Number(basin.field_spread_post_years);
+    const pairedFolds = Number(basin.field_spread_paired_folds);
+    const split = basin.field_spread_analysis_split === "confirmation" ? "Confirmation" : "Discovery";
+    return `
+      <div class="epsilon-shift-panel epsilon-field-spread-panel">
+        <div class="epsilon-attribution-title">Annual epsilon spread effect</div>
+        <div class="epsilon-shift-row">
+          <div class="epsilon-trend-regime">All recession days: annual q75 / q25</div>
+          <div class="epsilon-shift-main">
+            <span class="epsilon-trend-class">${effect >= 0 ? "Wider" : "Narrower"} after 1990</span>
+            <span class="epsilon-shift-effect">${this.formatPct(effect)}</span>
+          </div>
+          <div class="epsilon-shift-ci">Catchment interval ${this.formatPct(ciLow)} to ${this.formatPct(ciHigh)}</div>
+          <div class="epsilon-trend-meta">
+            <span>${split} spatial sample</span>
+            <span>${Number.isFinite(preYears) && Number.isFinite(postYears) ? `${preYears} / ${postYears} yr` : "NA"}</span>
+            <span>${Number.isFinite(pairedFolds) ? `${pairedFolds} paired folds` : "NA"}</span>
+          </div>
+        </div>
+        <div class="epsilon-attribution-note">This continuous estimate contributes to the global field test. Its sign does not overwrite the separate low/high catchment-level FDR classes below.</div>
+      </div>
+    `;
+  }
+
   shiftPanel(basin) {
-    const regimes = this.viewMode === "low" || this.viewMode === "high"
+    let regimes = this.viewMode === "low" || this.viewMode === "high"
       ? [this.focusRegime || this.viewMode]
       : ["low", "high"];
+    if (this.isFieldEvidenceMode()) {
+      regimes = regimes.filter((regime) => this.shiftState(basin[`${regime}_epsilon_shift_class`]));
+      if (!regimes.length) return "";
+    }
     return `
       <div class="epsilon-shift-panel">
         <div class="epsilon-attribution-title">Post-1990 era shift</div>
@@ -1245,10 +1348,30 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   renderOverviewLegend(counts) {
+    if (this.isFieldEvidenceMode()) {
+      return this.renderFieldOverviewLegend();
+    }
     if (this.viewMode === "low" || this.viewMode === "high") {
       return this.renderContinuousOverviewLegend();
     }
     return this.renderCategoryMatrix(counts);
+  }
+
+  renderFieldOverviewLegend() {
+    const values = this.basins.map((basin) => this.fieldSpreadValue(basin)).filter(Number.isFinite);
+    const positive = values.filter((value) => value > 0).length;
+    const negative = values.filter((value) => value < 0).length;
+    return `
+      <div style="margin:0 0 14px">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">Annual all-recession epsilon spread shift</div>
+        ${this.renderContinuousLegendBar()}
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px">
+          ${this.metricCard("Median effect", this.formatPct(this.median(values)), this.median(values))}
+          ${this.metricCard("Positive estimates", positive.toLocaleString())}
+          ${this.metricCard("Negative estimates", negative.toLocaleString())}
+        </div>
+      </div>
+    `;
   }
 
   renderContinuousOverviewLegend() {
@@ -1371,10 +1494,31 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     if (this.viewMode === "high") {
       return `Temporally cross-fitted daily epsilon inference summarized by catchment. The map shows high-flow post-1990 era shifts among catchments passing the current ${this.skillFilterLabel()} reliability filter and the fixed annual-support rule.`;
     }
+    if (this.isFieldEvidenceMode()) {
+      return `The default map shows the continuous post-1990 shift in each catchment's annual all-recession epsilon spread (q75/q25). It displays the field sample behind the spatial discovery-confirmation result; color shows effect direction and magnitude, not catchment-level significance.`;
+    }
     return `Temporally cross-fitted daily epsilon inference summarized by catchment. Color combines low-flow and high-flow post-1990 era shifts after fold adjustment and false-discovery-rate correction; the two single-regime modules retain their larger independent samples.`;
   }
 
   renderLegendDefinitions() {
+    if (this.isFieldEvidenceMode()) {
+      return `
+        <div class="epsilon-overview-definitions">
+          <div class="epsilon-overview-definition">
+            <span class="epsilon-overview-definition-title">Field statistic</span>
+            <span>Within each catchment-year, spread is epsilon q75 divided by q25 across all recession days. The mapped value is its fold-adjusted post-1990 percent shift.</span>
+          </div>
+          <div class="epsilon-overview-definition">
+            <span class="epsilon-overview-definition-title">Color scale</span>
+            <span>Cyan-blue indicates a narrower annual epsilon distribution after 1990; magenta indicates a wider distribution. Gray is near zero, not Unresolved.</span>
+          </div>
+          <div class="epsilon-overview-definition">
+            <span class="epsilon-overview-definition-title">Evidence level</span>
+            <span>Individual colors are effect estimates. Statistical support belongs to the independently confirmed spatial field result, not to a relabeled significance claim for every catchment.</span>
+          </div>
+        </div>
+      `;
+    }
     if (this.viewMode === "low") {
       return `
         <div class="epsilon-overview-definitions">
@@ -1436,6 +1580,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   basinLabel(basin) {
+    if (this.isFieldEvidenceMode()) {
+      return `Annual epsilon spread shift: ${this.formatPct(this.fieldSpreadValue(basin))}`;
+    }
     if (this.viewMode === "low" || this.viewMode === "high") {
       const regime = this.focusRegime || this.viewMode;
       const value = this.shiftValue(basin, regime);
@@ -1445,6 +1592,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   basinLabelSubtitle() {
+    if (this.isFieldEvidenceMode()) {
+      return "Continuous field effect estimate; this is not a catchment-level FDR label.";
+    }
     if (this.viewMode === "low" || this.viewMode === "high") {
       return "Fold-adjusted post-1990 effect; significance is classified after FDR correction.";
     }
@@ -1479,6 +1629,9 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   basinColor(basin) {
+    if (this.isFieldEvidenceMode()) {
+      return this.continuousColor(this.fieldSpreadValue(basin));
+    }
     if (this.viewMode === "low" || this.viewMode === "high") {
       const regime = this.focusRegime || this.viewMode;
       return this.continuousColor(this.shiftValue(basin, regime));
@@ -1487,6 +1640,16 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   computeContinuousExtent() {
+    if (this.isFieldEvidenceMode()) {
+      const values = this.basins
+        .map((basin) => this.fieldSpreadValue(basin))
+        .filter(Number.isFinite)
+        .map(Math.abs)
+        .sort((a, b) => a - b);
+      if (!values.length) return 50;
+      const p95 = values[Math.min(values.length - 1, Math.floor(values.length * 0.95))];
+      return Math.max(10, Math.min(100, p95 || 50));
+    }
     const regime = this.focusRegime || this.viewMode;
     if (!(regime === "low" || regime === "high")) return 50;
     const values = this.basins
@@ -1754,6 +1917,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
       .epsilon-overview-filter{margin:14px 0 16px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
       .epsilon-filter-title{font-size:12px;font-weight:800;margin-bottom:8px;color:#0f172a}
+      .epsilon-map-mode{display:grid;grid-template-columns:auto minmax(220px,1fr);gap:5px 12px;align-items:center;margin:0 0 10px;padding:0 0 10px;border-bottom:1px solid #e2e8f0}
+      .epsilon-map-mode>span{font-size:11px;font-weight:700;color:#475569}
+      .epsilon-map-mode>small{grid-column:2;color:#64748b;font-size:9.5px;line-height:1.4}
+      .epsilon-map-mode-segments{display:grid;grid-template-columns:1fr 1fr;width:min(320px,100%);padding:2px;border:1px solid #cbd5e1;border-radius:6px;background:#e2e8f0}
+      .epsilon-map-mode-segments button{min-height:28px;border:0;border-radius:4px;background:transparent;color:#64748b;font-size:11px;font-weight:700;cursor:pointer}
+      .epsilon-map-mode-segments button:hover{color:#0f172a}
+      .epsilon-map-mode-segments button.active{background:#fff;color:#1d4ed8;box-shadow:0 1px 3px rgba(15,23,42,.14)}
       .epsilon-filter-grid{display:grid;grid-template-columns:minmax(112px,.7fr) minmax(112px,.7fr) minmax(180px,1.4fr);gap:10px;align-items:end}
       .epsilon-filter-field{display:grid;gap:4px;margin:0;color:#64748b;font-size:11px;line-height:1.3}
       .epsilon-filter-field select,.epsilon-filter-field input{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;font-size:12px;padding:5px 6px}
@@ -1768,6 +1938,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-filter-toggle>span:last-child{display:grid;gap:1px;line-height:1.35}
       .epsilon-filter-toggle strong{color:#334155;font-size:10.5px}
       .epsilon-filter-toggle small{color:#64748b;font-size:9.5px}
+      .epsilon-field-mode-note{grid-column:1/-1;margin:1px 0 0;padding:9px 10px;border-left:2px solid #22c55e;background:#fff;color:#64748b;font-size:9.5px;line-height:1.45}
+      .epsilon-field-mode-note strong{color:#334155}
       .epsilon-filter-count{font-size:11px;color:#475569;margin-top:8px;line-height:1.35}
       .epsilon-insufficient-summary{margin-top:9px;padding:8px 10px;border-left:2px solid #94a3b8;background:#f8fafc;color:#64748b;font-size:10.5px;line-height:1.5}
       .epsilon-insufficient-summary strong{color:#334155}
@@ -1878,6 +2050,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-metric-value--skill{color:var(--epsilon-skill-dark)}
       body.theme-dark .epsilon-overview-filter{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-filter-title{color:#e5edf7}
+      body.theme-dark .epsilon-map-mode{border-bottom-color:#263449}
+      body.theme-dark .epsilon-map-mode>span{color:#cbd5e1}
+      body.theme-dark .epsilon-map-mode>small{color:#94a3b8}
+      body.theme-dark .epsilon-map-mode-segments{background:#0b1220;border-color:#334155}
+      body.theme-dark .epsilon-map-mode-segments button{color:#94a3b8}
+      body.theme-dark .epsilon-map-mode-segments button:hover{color:#e5edf7}
+      body.theme-dark .epsilon-map-mode-segments button.active{background:#1e293b;color:#93c5fd;box-shadow:none}
       body.theme-dark .epsilon-filter-field{color:#94a3b8}
       body.theme-dark .epsilon-filter-field select,
       body.theme-dark .epsilon-filter-field input{background:#0f172a;border-color:#334155;color:#e5edf7}
@@ -1886,6 +2065,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-filter-toggle strong{color:#e5edf7}
       body.theme-dark .epsilon-filter-toggle small{color:#94a3b8}
       body.theme-dark .epsilon-filter-switch{background:#475569}
+      body.theme-dark .epsilon-field-mode-note{background:#0f172a;color:#94a3b8}
+      body.theme-dark .epsilon-field-mode-note strong{color:#e5edf7}
       body.theme-dark .epsilon-insufficient-summary{background:#111827;color:#94a3b8}
       body.theme-dark .epsilon-insufficient-summary strong{color:#e5edf7}
       body.theme-dark .epsilon-streamflow-completeness,
@@ -1903,7 +2084,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-svg-grid{stroke:#334155}
       body.theme-dark .epsilon-svg-arrow{stroke:#64748b}
       body.theme-dark .epsilon-svg-arrow-head{fill:#64748b}
-      @media (max-width:760px){.epsilon-overview-body{padding-top:0}.epsilon-overview-layout{display:block}.epsilon-overview-nav{z-index:2;display:flex;gap:3px;margin:-2px 0 14px;padding:4px 0 8px;border-right:0;border-bottom:1px solid #e2e8f0;background:#fff;overflow-x:auto}.epsilon-overview-nav-title{display:none}.epsilon-overview-nav a{flex:0 0 auto;border-left:0;border-bottom:2px solid transparent;padding:6px 8px}.epsilon-overview-nav a.active{border-left:0;border-bottom-color:#2563eb}.epsilon-overview-content{padding-left:0}.epsilon-filter-grid{grid-template-columns:1fr}.epsilon-overview-metrics,.epsilon-method-facts,.epsilon-equation-grid,.epsilon-driver-guide-grid,.epsilon-evidence-grid{grid-template-columns:1fr}.epsilon-bivariate-matrix:not(.epsilon-bivariate-matrix--compact){width:100%;grid-template-columns:64px repeat(3,minmax(0,1fr));gap:4px;font-size:9px}.epsilon-evidence-association{grid-template-columns:1fr}.epsilon-evidence-association-value{margin-top:4px}.epsilon-evidence-association p{grid-column:auto}.epsilon-equation-card:last-child{grid-column:auto}.epsilon-story-panel{grid-template-columns:1fr}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}body.theme-dark .epsilon-overview-nav{background:#0f172a;border-bottom-color:#263449}}
+      @media (max-width:760px){.epsilon-overview-body{padding-top:0}.epsilon-overview-layout{display:block}.epsilon-overview-nav{z-index:2;display:flex;gap:3px;margin:-2px 0 14px;padding:4px 0 8px;border-right:0;border-bottom:1px solid #e2e8f0;background:#fff;overflow-x:auto}.epsilon-overview-nav-title{display:none}.epsilon-overview-nav a{flex:0 0 auto;border-left:0;border-bottom:2px solid transparent;padding:6px 8px}.epsilon-overview-nav a.active{border-left:0;border-bottom-color:#2563eb}.epsilon-overview-content{padding-left:0}.epsilon-map-mode{grid-template-columns:1fr}.epsilon-map-mode>small{grid-column:1}.epsilon-map-mode-segments{width:100%}.epsilon-filter-grid{grid-template-columns:1fr}.epsilon-overview-metrics,.epsilon-method-facts,.epsilon-equation-grid,.epsilon-driver-guide-grid,.epsilon-evidence-grid{grid-template-columns:1fr}.epsilon-bivariate-matrix:not(.epsilon-bivariate-matrix--compact){width:100%;grid-template-columns:64px repeat(3,minmax(0,1fr));gap:4px;font-size:9px}.epsilon-evidence-association{grid-template-columns:1fr}.epsilon-evidence-association-value{margin-top:4px}.epsilon-evidence-association p{grid-column:auto}.epsilon-equation-card:last-child{grid-column:auto}.epsilon-story-panel{grid-template-columns:1fr}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}body.theme-dark .epsilon-overview-nav{background:#0f172a;border-bottom-color:#263449}}
     `;
     document.head.appendChild(style);
   }
@@ -2198,6 +2379,16 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   ensureLegend() {
+    if (this.isFieldEvidenceMode()) {
+      this.app.registerLegend?.(this.legendId, {
+        title: "Annual epsilon spread shift",
+        html: `
+          ${this.renderContinuousLegendBar()}
+          <div style="font-size:10px;color:#64748b;margin-top:8px">Continuous fold-adjusted q75/q25 spread effect. Gray is near zero; it does not mean Unresolved. Field significance is reported in Overview.</div>
+        `
+      });
+      return;
+    }
     if (this.viewMode === "low" || this.viewMode === "high") {
       this.app.registerLegend?.(this.legendId, {
         title: `${this.focusTitle()} epsilon era shift`,

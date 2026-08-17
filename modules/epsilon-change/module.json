@@ -2,8 +2,8 @@
   "id": "epsilon-change",
   "name": "Epsilon Change",
   "version": "0.1.0",
-  "assetVersion": "2026-08-18-global-story-v12",
-  "description": "Catchment-scale low-flow and high-flow epsilon change classes before and after 1990.",
+  "assetVersion": "2026-08-18-field-effect-v13",
+  "description": "Global annual epsilon spread effects with optional catchment-level low/high FDR classes.",
   "author": "Spatial Research Team",
   "icon": "activity",
   "entry": "./index.js",
@@ -12,6 +12,7 @@
   "defaultLoad": true,
   "skillFilterMetric": "nse",
   "skillFilterThreshold": 0.5,
+  "mapEvidenceMode": "field",
   "globalStoryFile": "./data/global-story-summary.json",
   "datasets": [
     {
