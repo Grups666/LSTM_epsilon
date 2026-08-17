@@ -22,6 +22,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trends", type=Path)
     parser.add_argument("--shifts", type=Path)
     parser.add_argument(
+        "--global-field",
+        type=Path,
+        default=Path("_private/audits/global_story_v2/global_story_dataset.parquet"),
+    )
+    parser.add_argument(
         "--qobs-coverage",
         type=Path,
         default=Path("_private/results/epsilon_pure_gcin_1950_2019/inputs/qobs_inventory.parquet"),
@@ -263,6 +268,49 @@ def read_shifts(path: Path) -> dict[tuple[int, str], dict[str, object]]:
     return records
 
 
+def read_global_field(path: Path) -> dict[int, dict[str, object]]:
+    if not path.exists():
+        return {}
+    frame = pd.read_parquet(path) if path.suffix.lower() == ".parquet" else pd.read_csv(path)
+    required = {
+        "GCIN",
+        "regime",
+        "statistic",
+        "cohort_primary",
+        "analysis_split",
+        "shift_pct",
+        "shift_ci_low_pct",
+        "shift_ci_high_pct",
+        "pre_years",
+        "post_years",
+        "paired_folds",
+        "p_value",
+    }
+    if not required.issubset(frame.columns):
+        raise ValueError(f"Global field file is missing columns: {sorted(required - set(frame.columns))}")
+    field = frame[
+        (frame["regime"] == "all")
+        & (frame["statistic"] == "spread")
+        & frame["cohort_primary"].fillna(False).astype(bool)
+        & frame["p_value"].notna()
+    ].copy()
+    if field["GCIN"].duplicated().any():
+        raise ValueError("Global field file contains duplicate all-recession spread rows")
+    records: dict[int, dict[str, object]] = {}
+    for row in field.itertuples(index=False):
+        records[int(row.GCIN)] = {
+            "field_spread_eligible": True,
+            "field_spread_shift_pct": row.shift_pct,
+            "field_spread_ci_low_pct": row.shift_ci_low_pct,
+            "field_spread_ci_high_pct": row.shift_ci_high_pct,
+            "field_spread_analysis_split": str(row.analysis_split),
+            "field_spread_pre_years": row.pre_years,
+            "field_spread_post_years": row.post_years,
+            "field_spread_paired_folds": row.paired_folds,
+        }
+    return records
+
+
 def build_payload(
     sim: pd.DataFrame,
     static_path: Path,
@@ -270,6 +318,7 @@ def build_payload(
     attribution: dict[tuple[int, str], dict[str, object]],
     trends: dict[tuple[int, str], dict[str, object]],
     shifts: dict[tuple[int, str], dict[str, object]],
+    global_field: dict[int, dict[str, object]],
     bins: int,
     cfg: dict,
     run_label: str,
@@ -328,6 +377,16 @@ def build_payload(
             basin["qobs_long_gaps"] = parse_gap_ranges(cov.get("qobs_long_gaps_json"))
         if basin["lon"] is None or basin["lat"] is None:
             continue
+
+        for field, value in global_field.get(int(gcin), {}).items():
+            if field == "field_spread_eligible":
+                basin[field] = bool(value)
+            elif field == "field_spread_analysis_split":
+                basin[field] = str(value)
+            elif field.endswith("_years") or field.endswith("_folds"):
+                basin[field] = int(value) if pd.notna(value) else None
+            else:
+                basin[field] = finite_or_none(value)
 
         q10 = finite_or_none(g["q10"].iloc[0])
         q90 = finite_or_none(g["q90"].iloc[0])
@@ -451,6 +510,13 @@ def build_payload(
                 "significance": "Benjamini-Hochberg FDR q < 0.05",
                 "classes": "Increase, Decrease, Unresolved, or Insufficient; Unresolved does not mean stable",
             },
+            "globalField": {
+                "statistic": "annual all-recession epsilon q75/q25 spread",
+                "effect": "fold-adjusted post-1990 percent shift",
+                "eligibility": "NSE > 0.5 in both eras and at least 5 recession days in at least 10 years per era",
+                "classification": "continuous field effect; not a catchment-level significance label",
+                "nCatchments": len(global_field),
+            },
             "module": "epsilon-change",
         },
         "basins": basins,
@@ -471,7 +537,19 @@ def main() -> None:
     attribution = read_attribution(attribution_path)
     trends = read_trends(trends_path)
     shifts = read_shifts(shifts_path)
-    payload = build_payload(sim, static, args.qobs_coverage, attribution, trends, shifts, args.bins, cfg, args.run_label)
+    global_field = read_global_field(args.global_field)
+    payload = build_payload(
+        sim,
+        static,
+        args.qobs_coverage,
+        attribution,
+        trends,
+        shifts,
+        global_field,
+        args.bins,
+        cfg,
+        args.run_label,
+    )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(payload, separators=(",", ":"), allow_nan=False), encoding="utf-8")
     print(f"wrote {args.out} with {payload['meta']['nCatchments']:,} catchments")

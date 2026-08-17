@@ -156,6 +156,8 @@ Precipitation did not retain independent interval evidence after joint soil-mois
 
 The hydroclimate result is associative. Soil moisture is a model input, recession response can also reflect storage connectivity, land use, geology, and human influence, and this design does not identify a causal climate effect. The supported story is therefore: post-1990 epsilon became more dispersed across annual recession conditions, with larger positive shifts preferentially occurring where the soil-moisture era change was more negative.
 
+The public map separates two evidence levels. **Field effect** is the default and maps the continuous annual `q75 / q25` spread effect for all 1,180 field-eligible catchments; gray means an estimate near zero. **Local FDR** retains the low/high catchment-level significance classes; gray there means Unresolved after multiple-testing correction. The field view does not relabel individual catchments as significant, and the local view is not used to estimate global coverage.
+
 ### Component Attribution and Trend Sensitivity
 
 For interpretation, `GQ = epsilon * Qsim` gives the exact descriptive identity `delta log epsilon = delta log GQ - delta log Qsim`. GQ-dominant, Q-dominant, Combined, and Offsetting labels describe how the pre/post ratio is composed; they are not causal climate attribution.

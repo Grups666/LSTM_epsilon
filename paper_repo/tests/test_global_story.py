@@ -19,6 +19,7 @@ from analyze_global_story import (  # noqa: E402
     reml_meta,
 )
 from analyze_global_story_sensitivity import block_regression_test  # noqa: E402
+from export_github_pages_data import read_global_field  # noqa: E402
 
 
 class GlobalStoryTests(unittest.TestCase):
@@ -114,6 +115,34 @@ class GlobalStoryTests(unittest.TestCase):
 
         self.assertEqual(result["n_catchments"], 4)
         self.assertEqual(result["spatial_blocks"], 2)
+
+    def test_public_field_export_keeps_only_eligible_all_recession_spread(self) -> None:
+        from tempfile import TemporaryDirectory
+
+        frame = pd.DataFrame(
+            {
+                "GCIN": [1, 2, 3],
+                "regime": ["all", "low", "all"],
+                "statistic": ["spread", "spread", "spread"],
+                "cohort_primary": [True, True, False],
+                "analysis_split": ["confirmation", "confirmation", "discovery"],
+                "shift_pct": [12.0, 99.0, -4.0],
+                "shift_ci_low_pct": [1.0, 2.0, -8.0],
+                "shift_ci_high_pct": [20.0, 120.0, 1.0],
+                "pre_years": [20, 20, 20],
+                "post_years": [18, 18, 18],
+                "paired_folds": [5, 5, 5],
+                "p_value": [0.03, 0.01, 0.20],
+            }
+        )
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "field.parquet"
+            frame.to_parquet(path, index=False)
+            records = read_global_field(path)
+
+        self.assertEqual(set(records), {1})
+        self.assertEqual(records[1]["field_spread_analysis_split"], "confirmation")
+        self.assertEqual(records[1]["field_spread_shift_pct"], 12.0)
 
 
 if __name__ == "__main__":

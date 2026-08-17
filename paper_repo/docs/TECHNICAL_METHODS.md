@@ -256,6 +256,8 @@ high flow, joint + block FE:             -3.13%
 
 The precipitation and soil-moisture changes correlate at `r = 0.57`. Precipitation loses interval evidence in the joint model and is not reported as an independent driver. Soil-moisture coefficients retain their negative sign under every leave-one-20-degree-block analysis. These regressions are associative, not causal attribution tests.
 
+The public explorer exposes the distinction directly. Its default **Field effect** map joins the 1,180 eligible all-recession spread coefficients from `global_story_dataset.parquet` to the public catchment records and colors their continuous effect estimates. The optional **Local FDR** map uses the separate low/high BH-FDR classes. Consequently, hiding Unresolved catchments in Local FDR mode is a local-evidence operation and does not define the global field sample.
+
 The original `global_story_v1` audit recorded the 10-year climate-support rule but failed to apply it while constructing climate predictors. This was detected after confirmation. `global_story_v2` enforces the configured rule and preserves a protocol-deviation record. The corrected confirmation table is byte-identical to v1 because the affected short-record catchments did not enter the locked confirmation tests.
 
 ## Sensitivity Analyses

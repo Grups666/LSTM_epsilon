@@ -62,3 +62,5 @@ At that default reliability threshold, the fixed data-support rule retains 791 l
 Local FDR labels and global evidence are kept separate. Ten-degree spatial blocks were split into 40% discovery and 60% untouched confirmation sets. Locked candidates were tested with random-effects aggregation, spatial block bootstrap intervals, and Holm family-wise correction.
 
 The replicated headline is a post-1990 broadening of the annual epsilon distribution: `+5.2%` in discovery and `+17.6%` in confirmation (`95% spatial CI +3.7% to +21.3%`, Holm `p = 0.012`). The full-sample descriptive estimate is `+11.7%`. A negative soil-moisture-change association remains after joint precipitation and spatial-block adjustment, but is explicitly reported as associative rather than causal.
+
+The explorer defaults to a continuous **Field effect** map of all 1,180 eligible annual-spread estimates. **Local FDR** is a separate view for strict catchment-level low/high significance classes; hiding Unresolved points there does not change or define the global field result.
