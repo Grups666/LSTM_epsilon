@@ -133,6 +133,29 @@ Low-flow and high-flow analyses retain their independent samples; the smaller ov
 
 The annual-support sensitivity checks use one, three, and five recession days per annual median. Alternative 1985 and 1995 breakpoints are also evaluated without selecting the most significant result. Across overlapping catchments, effect correlations with the 1990 primary analysis range from `0.888` to `0.964` for the breakpoint checks.
 
+### Global Field Evidence Beyond Local FDR Labels
+
+The large Unresolved class does not imply that the global field contains no signal. Catchment-level FDR asks whether each location has enough evidence for its own direction; the field analysis asks whether many noisy catchment effects share a reproducible distributional pattern. The latter uses only catchments with NSE above 0.5 in both eras and at least five recession days in at least 10 years per era.
+
+Catchments were assigned by deterministic 10-degree spatial blocks to a 40% discovery sample and an untouched 60% confirmation sample. Candidate statistics were locked after discovery. Confirmation used random-effects aggregation, 2,000 spatial-block bootstrap replicates, and Holm correction across the 10 locked candidates.
+
+The strongest replicated story is a broadening of the within-catchment annual epsilon distribution after 1990. Spread is defined as annual `q75 / q25` before fitting the same fold-adjusted era model:
+
+| Field result | Discovery | Independent confirmation | Full sample, descriptive |
+|:---|---:|---:|---:|
+| Annual epsilon spread | +5.2% (95% spatial CI +1.3% to +10.3%) | +17.6% (+3.7% to +21.3%; Holm p = 0.012) | +11.7% (+2.7% to +19.0%) |
+| Annual epsilon median | +1.4% (-1.4% to +9.2%) | +16.2% (+4.5% to +18.9%; Holm p = 0.010) | +9.9% (+0.5% to +17.4%) |
+
+Spread increased in 78.3% of discovery catchments and 88.6% of confirmation catchments. Its sign remained positive after omitting each of 30 occupied 20-degree spatial blocks in turn; the full-sample leave-one-block estimate ranged from +5.5% to +14.9%. The median shift is retained as secondary evidence because its discovery estimate was weak and its magnitude differed substantially between spatial samples. The distribution broadening is therefore the more defensible headline.
+
+### Hydroclimate Association
+
+Discovery-screened precipitation and root-zone soil-moisture changes were correlated (`r = 0.57`). In the confirmation sample, increased soil moisture was associated with a smaller epsilon shift. The univariate all-recession association was -8.1% per discovery-sample SD (95% spatial CI -12.6% to -6.1%; Holm p = 0.010). After precipitation and 10-degree spatial-block fixed effects were entered jointly, the soil-moisture coefficient remained negative at -4.1% (-9.3% to -1.7%). The corresponding high-flow coefficient was -3.1% (-6.5% to -0.6%). Both remained negative when any occupied 20-degree block was removed.
+
+Precipitation did not retain independent interval evidence after joint soil-moisture adjustment. Low-versus-high flow direction contrasts also failed to reproduce across the spatial split. These are reported as negative results rather than folded into the main story.
+
+The hydroclimate result is associative. Soil moisture is a model input, recession response can also reflect storage connectivity, land use, geology, and human influence, and this design does not identify a causal climate effect. The supported story is therefore: post-1990 epsilon became more dispersed across annual recession conditions, with larger positive shifts preferentially occurring where the soil-moisture era change was more negative.
+
 ### Component Attribution and Trend Sensitivity
 
 For interpretation, `GQ = epsilon * Qsim` gives the exact descriptive identity `delta log epsilon = delta log GQ - delta log Qsim`. GQ-dominant, Q-dominant, Combined, and Offsetting labels describe how the pre/post ratio is composed; they are not causal climate attribution.
@@ -221,3 +244,11 @@ dQ/dt = -epsilon * Q^2 - epsilon * alpha * AET * Q
 ```
 
 The model is therefore an epsilon-core physics-informed LSTM that infers daily epsilon directly inside the recession equation.
+
+## Methodological Context
+
+Large-sample recession work has shown that recession characteristics vary systematically with climate and physiography, while regional studies show that recession behavior can be non-stationary and can also reflect landscape co-evolution rather than climate alone. The present split-sample field test is designed around that ambiguity: it tests reproducibility and spatial robustness, but does not promote association to causation.
+
+- Beck et al. (2013), [Global patterns in base flow index and recession based on streamflow observations from 3394 catchments](https://doi.org/10.1002/2013WR013918).
+- Bogaart et al. (2016), [Streamflow recession patterns can help unravel the role of climate and humans in landscape co-evolution](https://doi.org/10.5194/hess-20-1413-2016).
+- Trotter et al. (2024), [Recession constants are non-stationary: impacts of multi-annual drought on catchment recession behaviour and storage dynamics](https://doi.org/10.1016/j.jhydrol.2024.130707).

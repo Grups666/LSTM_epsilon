@@ -206,6 +206,58 @@ intersection is needed only for the bivariate map and does not restrict either
 single-regime result. The public NSE/KGE control is a reliability display
 filter; it does not recalculate q-values or alter the fixed FDR family.
 
+## Global Field-Level Inference
+
+The per-catchment FDR map and the global field analysis answer different questions. Local FDR controls false discoveries among catchment labels. The field analysis evaluates whether the distribution of catchment effects contains a spatially reproducible post-1990 pattern even when many individual coefficients are imprecise.
+
+The maintained field protocol is `global_story_v2`:
+
+```text
+config:                    paper_repo/configs/global_story_analysis_v2.yaml
+primary reliability:      NSE > 0.5 in both eras
+annual support:            >= 5 recession days and >= 10 years per era
+spatial assignment:        deterministic 10-degree blocks
+discovery / confirmation:  40% / 60% of spatial blocks
+confirmation bootstrap:    2,000 spatial-block resamples
+candidate correction:      Holm family-wise error control
+```
+
+For each catchment-year, all-recession epsilon is summarized by `q25`, `q50`, `q75`, and `spread = q75 / q25`. Each statistic receives the same fold-adjusted log-era model used for the primary catchment analysis. Catchment coefficients and standard errors are combined with a REML random-effects estimator. Spatial-block bootstrap intervals replace an independence-based standard error.
+
+The discovery sample selected candidates without reading confirmation outcomes. The preregistered median statistic entered confirmation regardless of discovery p-value; additional statistics and hydroclimate predictors required discovery p below 0.10, at least 150 catchments, and at least 10 occupied spatial blocks. Ten locked candidates were tested once in the confirmation sample. A candidate required the same sign, a spatial interval excluding zero, and Holm-adjusted p below 0.05.
+
+The field result that reproduced most consistently was annual epsilon distribution spread:
+
+```text
+discovery:    +5.17% (95% spatial CI +1.33% to +10.27%; n = 461)
+confirmation: +17.62% (+3.66% to +21.33%; Holm p = 0.012; n = 719)
+full sample:  +11.67% (+2.75% to +18.95%; descriptive; n = 1,180)
+```
+
+The preregistered annual median also confirmed at +16.17% (+4.48% to +18.88%; Holm p = 0.010), but discovery was only +1.41% with an interval crossing zero. It is therefore secondary to the replicated spread result. Full-sample leave-one-20-degree-block estimates were positive for all 30 omitted blocks for both median and spread.
+
+## Hydroclimate Association Model
+
+Climate-era predictors are computed from catchment-year forcing means only when both eras contain at least 10 years. Difference is used for temperature and root-zone soil moisture; positive-valued precipitation and PET use log post/pre ratios. Predictor scale is fixed from discovery data before confirmation.
+
+The primary association model regresses the catchment log-era epsilon coefficient on one standardized climate-era predictor using random-effects precision weights. Confirmation uncertainty uses the same spatial bootstrap and Holm family. Post-confirmation validation adds 10-degree spatial-block fixed effects and enters precipitation and soil-moisture changes jointly.
+
+Only soil moisture retained independent interval evidence:
+
+```text
+all recession, univariate confirmation:  -8.10% per discovery SD
+  95% spatial CI:                        -12.55% to -6.12%
+  Holm p:                                0.010
+all recession, joint + block FE:         -4.09%
+  95% block-bootstrap CI:                -9.26% to -1.66%
+high flow, joint + block FE:             -3.13%
+  95% block-bootstrap CI:                -6.46% to -0.64%
+```
+
+The precipitation and soil-moisture changes correlate at `r = 0.57`. Precipitation loses interval evidence in the joint model and is not reported as an independent driver. Soil-moisture coefficients retain their negative sign under every leave-one-20-degree-block analysis. These regressions are associative, not causal attribution tests.
+
+The original `global_story_v1` audit recorded the 10-year climate-support rule but failed to apply it while constructing climate predictors. This was detected after confirmation. `global_story_v2` enforces the configured rule and preserves a protocol-deviation record. The corrected confirmation table is byte-identical to v1 because the affected short-record catchments did not enter the locked confirmation tests.
+
 ## Sensitivity Analyses
 
 Annual-support sensitivity checks repeat the era model with one and five days
@@ -269,6 +321,17 @@ _private/results/epsilon_pure_gcin_1950_2019/temporal_crossfit_1990/
     continuous_trends_by_catchment.csv
     continuous_trends_by_catchment.parquet
   production_audit.csv
+
+_private/audits/global_story_v2/
+  global_story_dataset.parquet
+  locked_confirmation_candidates.json
+  confirmation_tests.csv
+  sensitivity_tests.csv
+  robust_story_candidates.csv
+  validation_distribution_tests.csv
+  validation_leave_one_block_distribution.csv
+  validation_leave_one_block_climate.csv
+  global_story_validation.json
 ```
 
 ## Reproduction
@@ -284,4 +347,15 @@ conda run -n hydro python paper_repo\src\epsilon_model\run_full_postprocess.py `
   --config paper_repo\configs\epsilon_experiment_pure_gcin_1950_2019.yaml `
   --run-label temporal_crossfit_1990 `
   --figures-dir paper_repo\docs\assets\epsilon_pure_gcin_1950_2019
+
+conda run -n hydro python paper_repo\src\epsilon_model\analyze_global_story.py `
+  --analysis-config paper_repo\configs\global_story_analysis_v2.yaml --phase all
+
+conda run -n hydro python paper_repo\src\epsilon_model\analyze_global_story_sensitivity.py `
+  --analysis-config paper_repo\configs\global_story_analysis_v2.yaml
+
+conda run -n hydro python paper_repo\src\epsilon_model\validate_global_story.py `
+  --analysis-config paper_repo\configs\global_story_analysis_v2.yaml
 ```
+
+Field-level inference follows the logic of spatial block resampling and guarded multiple testing; see Lahiri and Zhu (2006), [doi:10.1214/009053606000000551](https://doi.org/10.1214/009053606000000551), and Wilks (2016), [doi:10.1175/BAMS-D-15-00267.1](https://doi.org/10.1175/BAMS-D-15-00267.1).

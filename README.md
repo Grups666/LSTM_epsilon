@@ -39,6 +39,10 @@ The generated data file is:
 
 `public/modules/epsilon-change/data/epsilon-catchment-distributions.json`
 
+The aggregate discovery/confirmation result shown in Overview is:
+
+`public/modules/epsilon-change/data/global-story-summary.json`
+
 The training dataset contains 2,511 pure GCIN catchments. Five-fold out-of-fold predictions are concatenated before calculating each catchment's pre-period and post-period NSE/KGE. The primary epsilon result uses annual medians in a log-linear post-1990 model with OOF-fold fixed effects, a one-year HAC covariance, and BH-FDR correction.
 
 The explorer JSON retains all 2,297 catchments with a valid epsilon contrast. The Overview panel applies NSE or KGE filtering in the browser; `NSE > 0.5` in both periods is only the default display filter, not a hard-coded export filter.
@@ -52,3 +56,9 @@ Audited out-of-fold performance:
 - pre/post NSE above `0.5` in both periods: `1,304` catchments
 
 At that default reliability threshold, the fixed data-support rule retains 791 low-flow catchments, 1,007 high-flow catchments, and 745 in their bivariate overlap. Increase and Decrease require era-shift `q < 0.05`; Unresolved means the direction is not established and does not mean Stable. Continuous trends are retained only as a sensitivity check.
+
+## Global Field Result
+
+Local FDR labels and global evidence are kept separate. Ten-degree spatial blocks were split into 40% discovery and 60% untouched confirmation sets. Locked candidates were tested with random-effects aggregation, spatial block bootstrap intervals, and Holm family-wise correction.
+
+The replicated headline is a post-1990 broadening of the annual epsilon distribution: `+5.2%` in discovery and `+17.6%` in confirmation (`95% spatial CI +3.7% to +21.3%`, Holm `p = 0.012`). The full-sample descriptive estimate is `+11.7%`. A negative soil-moisture-change association remains after joint precipitation and spatial-block adjustment, but is explicitly reported as associative rather than causal.

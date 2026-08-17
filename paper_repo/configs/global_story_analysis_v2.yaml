@@ -1,0 +1,61 @@
+analysis_version: global_story_v2
+seed: 20260818
+
+paths:
+  experiment_config: paper_repo/configs/epsilon_experiment_pure_gcin_1950_2019.yaml
+  run_root: _private/results/epsilon_pure_gcin_1950_2019/temporal_crossfit_1990
+  physics_daily_dir: _private/processed/epsilon_physics_daily_pure_gcin_1950_2019_parquet
+  static_attributes: _private/processed/epsilon_model_inputs_pure_gcin_1950_2019/static_attributes.parquet
+  audit_dir: _private/audits/global_story_v2
+
+design:
+  break_year: 1990
+  discovery_fraction: 0.40
+  assignment_cell_degrees: 10
+  bootstrap_cell_degrees: [5, 10, 20]
+  discovery_bootstrap_replicates: 500
+  confirmation_bootstrap_replicates: 2000
+  annual_min_days: 5
+  annual_min_years_per_period: 10
+  annual_min_identifying_years_per_period: 5
+  hac_lag_years: 1
+
+reliability:
+  primary_metric: nse
+  primary_threshold: 0.5
+  sensitivity_cohorts:
+    - {name: nse_0.3, metric: nse, threshold: 0.3}
+    - {name: nse_0.7, metric: nse, threshold: 0.7}
+    - {name: kge_0.5, metric: kge, threshold: 0.5}
+    - {name: all_skill, metric: none, threshold: null}
+
+distribution:
+  regimes: [all, low, high]
+  annual_statistics: [q25, q50, q75, spread]
+  discovery_statistics: [q25, q75, spread]
+  primary_statistic: q50
+
+climate:
+  variables:
+    temperature_C: difference
+    precipitation_mmd: log_ratio
+    pet_mmd: log_ratio
+    SM_%: difference
+  minimum_years_per_period: 10
+  include_static_aridity: true
+
+candidate_selection:
+  discovery_p_threshold: 0.10
+  minimum_catchments: 150
+  minimum_spatial_blocks: 10
+
+confirmation:
+  familywise_alpha: 0.05
+  correction: holm
+  require_same_direction_as_discovery: true
+  require_primary_block_ci_excludes_zero: true
+  require_sensitivity_direction_fraction: 0.75
+
+sensitivity:
+  break_years: [1985, 1990, 1995]
+  annual_min_days: [3, 5, 10]

@@ -1,0 +1,170 @@
+{
+  "analysisVersion": "global_story_v2",
+  "design": {
+    "breakYear": 1990,
+    "discoveryFraction": 0.4,
+    "assignmentCellDegrees": 10,
+    "bootstrapCellDegrees": [
+      5,
+      10,
+      20
+    ],
+    "annualMinimumDays": 5,
+    "annualMinimumYearsPerEra": 10,
+    "reliability": "NSE > 0.5 in both eras",
+    "confirmationCorrection": "Holm family-wise error control"
+  },
+  "coverage": {
+    "reliabilityQualifiedCatchments": 1304,
+    "fieldEligibleCatchments": 1180,
+    "fieldCoverageFraction": 0.9049079754601227
+  },
+  "fieldEvidence": {
+    "distributionSpread": {
+      "discovery": {
+        "catchments": 461,
+        "estimatePct": 5.167532839813378,
+        "ciLowPct": 1.3280581696204177,
+        "ciHighPct": 10.271436889433362,
+        "pValue": 0.0239520958083832,
+        "holmPValue": null,
+        "positiveCatchmentFraction": 0.7830802603036876,
+        "positiveBlockFraction": 0.7333333333333333,
+        "i2": 0.5236860734527624
+      },
+      "confirmation": {
+        "catchments": 719,
+        "estimatePct": 17.62200120753271,
+        "ciLowPct": 3.656038361611072,
+        "ciHighPct": 21.326682999903653,
+        "pValue": 0.0019990004997501,
+        "holmPValue": 0.0119940029985007,
+        "positiveCatchmentFraction": 0.885952712100139,
+        "positiveBlockFraction": 0.7058823529411765,
+        "i2": 0.6897688844558161
+      },
+      "fullDescriptive": {
+        "catchments": 1180,
+        "estimatePct": 11.672457498737907,
+        "ciLowPct": 2.748280219424013,
+        "ciHighPct": 18.951969544205564,
+        "pValue": 0.000999500249875,
+        "holmPValue": null,
+        "positiveCatchmentFraction": 0.8457627118644068,
+        "positiveBlockFraction": 0.7142857142857143,
+        "i2": 0.6864414429243333
+      },
+      "leaveOne20DegreeBlock": {
+        "blocks": 30,
+        "maximum_pct": 14.883976693751224,
+        "minimum_pct": 5.531644590715342,
+        "positive_fraction": 1.0
+      },
+      "robust": true
+    },
+    "distributionMedian": {
+      "discovery": {
+        "catchments": 461,
+        "estimatePct": 1.4114969122787562,
+        "ciLowPct": -1.365825134533314,
+        "ciHighPct": 9.211415709915183,
+        "pValue": 0.5429141716566867,
+        "holmPValue": null,
+        "positiveCatchmentFraction": 0.6030368763557483,
+        "positiveBlockFraction": 0.5333333333333333,
+        "i2": 0.494347547555882
+      },
+      "confirmation": {
+        "catchments": 719,
+        "estimatePct": 16.16824277151957,
+        "ciLowPct": 4.483595247900289,
+        "ciHighPct": 18.88270376936717,
+        "pValue": 0.000999500249875,
+        "holmPValue": 0.0099950024987506,
+        "positiveCatchmentFraction": 0.8803894297635605,
+        "positiveBlockFraction": 0.7647058823529411,
+        "i2": 0.6155487441556156
+      },
+      "fullDescriptive": {
+        "catchments": 1180,
+        "estimatePct": 9.880496427312403,
+        "ciLowPct": 0.4693349923474424,
+        "ciHighPct": 17.356687174376802,
+        "pValue": 0.0279860069965017,
+        "holmPValue": null,
+        "positiveCatchmentFraction": 0.7720338983050847,
+        "positiveBlockFraction": 0.6938775510204082,
+        "i2": 0.6847782320137532
+      },
+      "leaveOne20DegreeBlock": {
+        "blocks": 30,
+        "maximum_pct": 13.336157569336994,
+        "minimum_pct": 3.170287846750005,
+        "positive_fraction": 1.0
+      },
+      "robust": true
+    }
+  },
+  "hydroclimateAssociation": {
+    "soilMoistureAllRecession": {
+      "confirmation": {
+        "catchments": 719,
+        "estimatePct": -8.104255218670701,
+        "ciLowPct": -12.550451918298885,
+        "ciHighPct": -6.121159648080566,
+        "pValue": 0.000999500249875,
+        "holmPValue": 0.0099950024987506,
+        "positiveCatchmentFraction": null,
+        "positiveBlockFraction": null,
+        "i2": null
+      },
+      "jointPrecipitationSoilMoistureBlockFixed": {
+        "catchments": 719,
+        "estimatePctPerDiscoverySd": -4.088129655194527,
+        "ciLowPctPerDiscoverySd": -9.258608834996558,
+        "ciHighPctPerDiscoverySd": -1.6602415503670889,
+        "pValue": 0.028985507246376812
+      },
+      "leaveOne20DegreeBlock": {
+        "blocks": 24,
+        "maximum_pct": -3.105256687735243,
+        "minimum_pct": -6.89791273759658,
+        "negative_fraction": 1.0
+      },
+      "robust": true
+    },
+    "soilMoistureHighFlow": {
+      "confirmation": {
+        "catchments": 500,
+        "estimatePct": -5.41341918727921,
+        "ciLowPct": -7.160569842063477,
+        "ciHighPct": -3.6547872605992975,
+        "pValue": 0.000999500249875,
+        "holmPValue": 0.0099950024987506,
+        "positiveCatchmentFraction": null,
+        "positiveBlockFraction": null,
+        "i2": null
+      },
+      "jointPrecipitationSoilMoistureBlockFixed": {
+        "catchments": 500,
+        "estimatePctPerDiscoverySd": -3.1347162621113838,
+        "ciLowPctPerDiscoverySd": -6.456852653868634,
+        "ciHighPctPerDiscoverySd": -0.6372594321401671,
+        "pValue": 0.026986506746626688
+      },
+      "leaveOne20DegreeBlock": {
+        "blocks": 19,
+        "maximum_pct": -2.0790188642644645,
+        "minimum_pct": -4.01962616829405,
+        "negative_fraction": 1.0
+      },
+      "robust": true
+    },
+    "predictorCorrelation": 0.5743021733987678,
+    "interpretation": "Associative only; precipitation loses independent support after joint adjustment."
+  },
+  "nonReplicated": [
+    "Low-flow and high-flow direction contrasts did not reproduce across the spatial split.",
+    "Precipitation-change associations did not retain independent interval evidence after joint adjustment for soil moisture and spatial blocks."
+  ]
+}
