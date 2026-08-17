@@ -10,6 +10,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.manifest = manifest;
     this.basePath = manifest.basePath || `/modules/${manifest.id || "epsilon-change"}/`;
     this.data = null;
+    this.globalStory = null;
     this.rawBasins = [];
     this.basins = [];
     this.byId = new Map();
@@ -18,6 +19,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.viewMode = manifest.viewMode || "bivariate";
     this.focusRegime = manifest.focusRegime || null;
     this.dataFile = manifest.dataFile || manifest.datasets?.[0]?.file || "./data/epsilon-catchment-distributions.json";
+    this.globalStoryFile = manifest.globalStoryFile || "./data/global-story-summary.json";
     this.layerId = `${manifest.id || "epsilon-change"}-catchments`;
     this.overviewLayerId = `${manifest.id || "epsilon-change"}-overview`;
     this.legendId = `${manifest.id || "epsilon-change"}-legend`;
@@ -54,7 +56,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   }
 
   async onLoad() {
-    this.data = await this.fetchJson(this.resolve(this.dataFile));
+    [this.data, this.globalStory] = await Promise.all([
+      this.fetchJson(this.resolve(this.dataFile)),
+      this.fetchJson(this.resolve(this.globalStoryFile)).catch(() => null)
+    ]);
     this.rawBasins = (this.data.basins || [])
       .filter((basin) => Number.isFinite(Number(basin.lon)) && Number.isFinite(Number(basin.lat)))
       .map((basin) => ({
@@ -378,6 +383,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
               ${this.renderAttributionDefinitions()}
             </div>
           </section>
+          ${this.renderGlobalEvidence()}
           <section id="epsilon-overview-data-model">
             <h3>Data, model and equations</h3>
             ${this.renderMethodEssentials()}
@@ -395,6 +401,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const items = [
       ["epsilon-overview-snapshot", "Snapshot"],
       ["epsilon-overview-map-key", "Map key"],
+      ["epsilon-overview-global-evidence", "Global evidence"],
       ["epsilon-overview-data-model", "Data & model"],
       ["epsilon-overview-workflow", "Workflow"],
       ["epsilon-overview-crossfit", "Cross-fit"],
@@ -425,11 +432,13 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         if (!target) return;
         activate(target.id);
         const targetTop = target.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop;
-        body.scrollTo({ top: Math.max(0, targetTop - 12), behavior: "smooth" });
+        const compact = window.innerWidth <= 760;
+        const offset = compact ? 68 : 12;
+        body.scrollTo({ top: Math.max(0, targetTop - offset), behavior: compact ? "auto" : "smooth" });
       };
     });
     this.overviewNavScrollHandler = () => {
-      const top = body.getBoundingClientRect().top + 34;
+      const top = body.getBoundingClientRect().top + (window.innerWidth <= 760 ? 96 : 34);
       let current = targets[0];
       for (const target of targets) {
         if (target.getBoundingClientRect().top <= top) current = target;
@@ -453,6 +462,54 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         <div class="epsilon-equation-card"><span>Reliability & inference rules</span><code>skill_pre &gt; threshold AND skill_post &gt; threshold</code><code>Increase / Decrease only when era-shift FDR q &lt; 0.05</code></div>
       </div>
       <p class="epsilon-method-caution"><strong>Interpretation boundary.</strong> The primary result is an association between model-inferred epsilon and the two climate eras. The GQ / Q ring is a descriptive identity, and neither result alone identifies an external climate cause.</p>
+    `;
+  }
+
+  renderGlobalEvidence() {
+    const story = this.globalStory;
+    if (!story?.fieldEvidence) return "";
+    const spread = story.fieldEvidence.distributionSpread;
+    const median = story.fieldEvidence.distributionMedian;
+    const soil = story.hydroclimateAssociation?.soilMoistureAllRecession;
+    const spreadConfirmation = spread.confirmation;
+    const medianConfirmation = median.confirmation;
+    const soilJoint = soil?.jointPrecipitationSoilMoistureBlockFixed;
+    const spreadPositive = 100 * Number(spreadConfirmation.positiveCatchmentFraction);
+    const coverage = story.coverage;
+    const coveragePct = 100 * Number(coverage?.fieldCoverageFraction);
+    return `
+      <section id="epsilon-overview-global-evidence">
+        <h3>Global field evidence</h3>
+        <p class="epsilon-overview-lead">A catchment can remain Unresolved after local FDR control while a spatially replicated field-level pattern is still supported. These tests pool catchment effects without relabeling any individual map point.${coverage ? ` At the fixed NSE &gt; 0.5 protocol, ${Number(coverage.fieldEligibleCatchments).toLocaleString()} of ${Number(coverage.reliabilityQualifiedCatchments).toLocaleString()} reliability-qualified catchments contribute to the all-recession field test (${this.formatNumber(coveragePct, 1)}%).` : ""}</p>
+        <div class="epsilon-evidence-grid">
+          <article class="epsilon-evidence-item epsilon-evidence-item--primary">
+            <span class="epsilon-evidence-kicker">Replicated primary story</span>
+            <div class="epsilon-evidence-value">${this.formatSignedPct(spreadConfirmation.estimatePct)}</div>
+            <strong>Wider annual epsilon distribution after 1990</strong>
+            <p>Confirmation 95% spatial-block CI ${this.formatSignedPct(spreadConfirmation.ciLowPct)} to ${this.formatSignedPct(spreadConfirmation.ciHighPct)}; Holm p ${this.formatPValue(spreadConfirmation.holmPValue)}. The direction was positive in ${this.formatNumber(spreadPositive, 1)}% of confirmation catchments.</p>
+            <small>Independent discovery: ${this.formatSignedPct(spread.discovery.estimatePct)}. Full sample, descriptive: ${this.formatSignedPct(spread.fullDescriptive.estimatePct)}.</small>
+          </article>
+          <article class="epsilon-evidence-item">
+            <span class="epsilon-evidence-kicker">Secondary location shift</span>
+            <div class="epsilon-evidence-value">${this.formatSignedPct(medianConfirmation.estimatePct)}</div>
+            <strong>Higher annual epsilon median in confirmation blocks</strong>
+            <p>Confirmation 95% spatial-block CI ${this.formatSignedPct(medianConfirmation.ciLowPct)} to ${this.formatSignedPct(medianConfirmation.ciHighPct)}; Holm p ${this.formatPValue(medianConfirmation.holmPValue)}.</p>
+            <small>Discovery was weaker (${this.formatSignedPct(median.discovery.estimatePct)}; interval crossed zero), so distribution broadening is the stronger headline.</small>
+          </article>
+        </div>
+        ${soilJoint ? `
+          <div class="epsilon-evidence-association">
+            <div>
+              <span class="epsilon-evidence-kicker">Hydroclimate association</span>
+              <strong>Wetter soil-moisture change aligns with a smaller epsilon shift</strong>
+            </div>
+            <div class="epsilon-evidence-association-value">${this.formatSignedPct(soilJoint.estimatePctPerDiscoverySd)}</div>
+            <p>Per discovery-sample SD after joint precipitation adjustment and 10-degree spatial-block fixed effects; 95% block-bootstrap CI ${this.formatSignedPct(soilJoint.ciLowPctPerDiscoverySd)} to ${this.formatSignedPct(soilJoint.ciHighPctPerDiscoverySd)}. This is an association, not a causal climate attribution.</p>
+          </div>
+        ` : ""}
+        <div class="epsilon-evidence-guardrail"><strong>What did not replicate.</strong> Low-versus-high flow direction contrasts were not stable across the spatial split, and precipitation did not retain independent interval evidence after soil-moisture adjustment.</div>
+        <p class="epsilon-evidence-method">Design: deterministic 10-degree spatial blocks, 40% discovery / 60% untouched confirmation, random-effects aggregation, spatial block bootstrap, and Holm family-wise correction. Sensitivity checks cover 1985/1990/1995 breaks, 3/5/10 annual days, NSE/KGE cohorts, and 5/10/20-degree blocks.</p>
+      </section>
     `;
   }
 
@@ -616,13 +673,20 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         })}
         ${this.renderStoryPanel({
           index: "08",
+          id: "epsilon-overview-global-field",
+          title: "Test a spatially replicated global field story",
+          body: "Catchments are assigned by 10-degree spatial blocks to a 40% discovery set and an untouched 60% confirmation set. Candidate field patterns are locked after discovery, then tested with random-effects aggregation, spatial block bootstrap intervals and Holm family-wise correction. This separates local unresolved labels from evidence about the global distribution.",
+          figure: this.renderGlobalEvidenceFigure()
+        })}
+        ${this.renderStoryPanel({
+          index: "09",
           id: "epsilon-overview-attribution-step",
           title: "Decompose epsilon change into GQ and Q components",
           body: "For every out-of-fold recession day, effective GQ is epsilon_effective multiplied by simulated Q. Period changes use geometric means so delta log epsilon = delta log GQ - delta log Q closes exactly. The ring places high flow above and low flow below. Combined means GQ and Q reinforce the same epsilon direction without one dominating; Offsetting means they push epsilon in opposite directions. The ring is descriptive, not causal or significance evidence.",
           figure: this.renderAttributionFigure()
         })}
         ${this.renderStoryPanel({
-          index: "09",
+          index: "10",
           id: "epsilon-overview-trends",
           title: "Check whether the era result is robust to continuous time",
           body: "Continuous Theil-Sen and Kendall trends remain a prespecified sensitivity analysis, not the map classifier. Annual series with at least 20 years are fold-centered and trend-free prewhitened before FDR correction. Alternative 1985 and 1995 breakpoints and one-, three-, and five-day annual-support rules are also summarized without selecting whichever result is most significant.",
@@ -794,6 +858,22 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         <text x="${x + w / 2}" y="${y + h / 2 - 4}" text-anchor="middle" class="epsilon-svg-title">${this.escape(title)}</text>
         <text x="${x + w / 2}" y="${y + h / 2 + 14}" text-anchor="middle" class="epsilon-svg-muted">${this.escape(subtitle)}</text>
       </g>
+    `;
+  }
+
+  renderGlobalEvidenceFigure() {
+    return `
+      <svg viewBox="0 0 520 210" role="img" aria-label="Spatial discovery and confirmation workflow">
+        ${this.svgBox(20, 44, 106, 54, "Discovery", "40% of blocks")}
+        ${this.svgArrow(136, 71, 192, 71)}
+        ${this.svgBox(200, 44, 116, 54, "Lock candidates", "before testing")}
+        ${this.svgArrow(326, 71, 382, 71)}
+        ${this.svgBox(390, 44, 110, 54, "Confirmation", "60% of blocks")}
+        ${this.svgBox(92, 130, 106, 46, "Random effects", "catchments")}
+        ${this.svgBox(208, 130, 106, 46, "Block bootstrap", "spatial CI")}
+        ${this.svgBox(324, 130, 106, 46, "Holm", "family-wise p")}
+        <text x="260" y="198" text-anchor="middle" class="epsilon-svg-muted">field evidence never overwrites a catchment's local FDR class</text>
+      </svg>
     `;
   }
 
@@ -1225,7 +1305,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const labelWidth = compact ? 48 : 88;
     const matrixWidth = labelWidth + cell * 3 + gap * 3;
     return `
-      <div style="width:${matrixWidth}px;margin:0 auto;display:grid;grid-template-columns:${labelWidth}px repeat(3,${cell}px);grid-template-rows:auto repeat(3,${rowHeight}px);gap:${gap}px;font-size:${compact ? 9 : 11}px;color:#64748b">
+      <div class="epsilon-bivariate-matrix${compact ? " epsilon-bivariate-matrix--compact" : ""}" style="--epsilon-matrix-width:${matrixWidth}px;--epsilon-label-width:${labelWidth}px;--epsilon-cell-width:${cell}px;--epsilon-matrix-gap:${gap}px;--epsilon-row-height:${rowHeight}px;--epsilon-matrix-font:${compact ? 9 : 11}px">
         <div aria-hidden="true"></div>
         ${states.map((state) => `<div title="High-flow epsilon ${this.stateLabel(state)}" style="display:flex;align-items:center;justify-content:center;min-width:0">${this.regimeStateHtml("HF", state, true, compact)}</div>`).join("")}
         ${states.map((low) => `
@@ -1599,6 +1679,22 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-definition::before{content:"";position:absolute;left:1px;top:7px;width:5px;height:5px;border-radius:50%;background:#64748b}
       .epsilon-overview-definition-title{display:block;margin-bottom:1px;color:#0f172a;font-weight:700}
       .epsilon-overview-attribution{margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0}
+      .epsilon-evidence-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+      .epsilon-evidence-item{min-width:0;padding:12px;border:1px solid #dbe3ef;border-radius:7px;background:#f8fafc}
+      .epsilon-evidence-item--primary{border-top:3px solid #15803d;padding-top:10px}
+      .epsilon-evidence-kicker{display:block;margin-bottom:5px;color:#64748b;font-size:9px;font-weight:700;text-transform:uppercase}
+      .epsilon-evidence-value{color:#166534;font-size:23px;font-weight:750;line-height:1.1;font-variant-numeric:tabular-nums}
+      .epsilon-evidence-item>strong,.epsilon-evidence-association strong{display:block;margin-top:5px;color:#0f172a;font-size:11px;line-height:1.4}
+      .epsilon-evidence-item p{margin:6px 0!important;color:#475569;font-size:10.5px;line-height:1.5}
+      .epsilon-evidence-item small{display:block;color:#64748b;font-size:9.5px;line-height:1.45}
+      .epsilon-evidence-association{display:grid;grid-template-columns:minmax(190px,1fr) auto;gap:4px 16px;align-items:end;margin-top:10px;padding:11px 0;border-top:1px solid #dbe3ef;border-bottom:1px solid #dbe3ef}
+      .epsilon-evidence-association .epsilon-evidence-kicker{margin:0}
+      .epsilon-evidence-association strong{margin:2px 0 0}
+      .epsilon-evidence-association-value{color:#166534;font-size:20px;font-weight:750;line-height:1;font-variant-numeric:tabular-nums}
+      .epsilon-evidence-association p{grid-column:1/-1;margin:3px 0 0!important;color:#64748b;font-size:10px;line-height:1.5}
+      .epsilon-evidence-guardrail{margin-top:10px;padding-left:10px;border-left:2px solid #94a3b8;color:#64748b;font-size:10px;line-height:1.5}
+      .epsilon-evidence-guardrail strong{color:#334155}
+      .epsilon-evidence-method{margin:8px 0 0!important;color:#64748b;font-size:9.5px;line-height:1.48}
       .epsilon-method-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin-top:10px}
       .epsilon-method-facts>div{display:grid;gap:2px;padding:8px 0;border-top:1px solid #edf1f6}
       .epsilon-method-facts strong{color:#0f172a;font-size:10.5px}
@@ -1650,6 +1746,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-driver-guide-grid span{color:#64748b;font-size:10px;line-height:1.45}
       .epsilon-regime-state{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
       .epsilon-regime-state--matrix{gap:2px;line-height:1}
+      .epsilon-bivariate-matrix{width:var(--epsilon-matrix-width);margin:0 auto;display:grid;grid-template-columns:var(--epsilon-label-width) repeat(3,var(--epsilon-cell-width));grid-template-rows:auto repeat(3,var(--epsilon-row-height));gap:var(--epsilon-matrix-gap);font-size:var(--epsilon-matrix-font);color:#64748b}
       .epsilon-regime-epsilon{font-family:Arial,sans-serif;font-size:1em;font-style:italic;font-weight:700;white-space:nowrap}
       .epsilon-regime-epsilon sub{margin-left:1px;font-family:Arial,sans-serif;font-size:.62em;font-style:normal;font-weight:700;vertical-align:-.28em;letter-spacing:0}
       .epsilon-regime-label{font-family:Arial,sans-serif;font-weight:700;font-style:normal}
@@ -1728,6 +1825,20 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-overview-body section + section{border-top-color:#263449}
       body.theme-dark .epsilon-overview-definition-title{color:#e5edf7}
       body.theme-dark .epsilon-overview-attribution{border-top-color:#263449}
+      body.theme-dark .epsilon-evidence-item{background:#111827;border-color:#263449}
+      body.theme-dark .epsilon-evidence-item--primary{border-top-color:#4ade80}
+      body.theme-dark .epsilon-evidence-value,
+      body.theme-dark .epsilon-evidence-association-value{color:#86efac}
+      body.theme-dark .epsilon-evidence-item>strong,
+      body.theme-dark .epsilon-evidence-association strong,
+      body.theme-dark .epsilon-evidence-guardrail strong{color:#e5edf7}
+      body.theme-dark .epsilon-evidence-kicker,
+      body.theme-dark .epsilon-evidence-item p,
+      body.theme-dark .epsilon-evidence-item small,
+      body.theme-dark .epsilon-evidence-association p,
+      body.theme-dark .epsilon-evidence-guardrail,
+      body.theme-dark .epsilon-evidence-method{color:#94a3b8}
+      body.theme-dark .epsilon-evidence-association{border-color:#263449}
       body.theme-dark .epsilon-method-facts>div,
       body.theme-dark .epsilon-driver-guide{border-color:#263449}
       body.theme-dark .epsilon-method-facts strong,
@@ -1792,7 +1903,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-svg-grid{stroke:#334155}
       body.theme-dark .epsilon-svg-arrow{stroke:#64748b}
       body.theme-dark .epsilon-svg-arrow-head{fill:#64748b}
-      @media (max-width:760px){.epsilon-overview-layout{display:block}.epsilon-overview-nav{z-index:2;display:flex;gap:3px;margin:-2px 0 14px;padding:4px 0 8px;border-right:0;border-bottom:1px solid #e2e8f0;background:#fff;overflow-x:auto}.epsilon-overview-nav-title{display:none}.epsilon-overview-nav a{flex:0 0 auto;border-left:0;border-bottom:2px solid transparent;padding:6px 8px}.epsilon-overview-nav a.active{border-left:0;border-bottom-color:#2563eb}.epsilon-overview-content{padding-left:0}.epsilon-filter-grid{grid-template-columns:1fr}.epsilon-overview-metrics,.epsilon-method-facts,.epsilon-equation-grid,.epsilon-driver-guide-grid{grid-template-columns:1fr}.epsilon-equation-card:last-child{grid-column:auto}.epsilon-story-panel{grid-template-columns:1fr}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}body.theme-dark .epsilon-overview-nav{background:#0f172a;border-bottom-color:#263449}}
+      @media (max-width:760px){.epsilon-overview-body{padding-top:0}.epsilon-overview-layout{display:block}.epsilon-overview-nav{z-index:2;display:flex;gap:3px;margin:-2px 0 14px;padding:4px 0 8px;border-right:0;border-bottom:1px solid #e2e8f0;background:#fff;overflow-x:auto}.epsilon-overview-nav-title{display:none}.epsilon-overview-nav a{flex:0 0 auto;border-left:0;border-bottom:2px solid transparent;padding:6px 8px}.epsilon-overview-nav a.active{border-left:0;border-bottom-color:#2563eb}.epsilon-overview-content{padding-left:0}.epsilon-filter-grid{grid-template-columns:1fr}.epsilon-overview-metrics,.epsilon-method-facts,.epsilon-equation-grid,.epsilon-driver-guide-grid,.epsilon-evidence-grid{grid-template-columns:1fr}.epsilon-bivariate-matrix:not(.epsilon-bivariate-matrix--compact){width:100%;grid-template-columns:64px repeat(3,minmax(0,1fr));gap:4px;font-size:9px}.epsilon-evidence-association{grid-template-columns:1fr}.epsilon-evidence-association-value{margin-top:4px}.epsilon-evidence-association p{grid-column:auto}.epsilon-equation-card:last-child{grid-column:auto}.epsilon-story-panel{grid-template-columns:1fr}.epsilon-overview-dialog{width:calc(100vw - 28px);max-height:calc(100vh - 28px)}body.theme-dark .epsilon-overview-nav{background:#0f172a;border-bottom-color:#263449}}
     `;
     document.head.appendChild(style);
   }
@@ -2168,6 +2279,19 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   formatPct(value) {
     const number = Number(value);
     return Number.isFinite(number) ? `${number.toFixed(1)}%` : "NA";
+  }
+
+  formatSignedPct(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "NA";
+    const rounded = Math.abs(number) < 0.05 ? 0 : number;
+    return `${rounded > 0 ? "+" : ""}${rounded.toFixed(1)}%`;
+  }
+
+  formatPValue(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "NA";
+    return number >= 0.001 ? number.toFixed(3) : number.toExponential(2);
   }
 
   formatSigned(value, digits = 3) {

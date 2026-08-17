@@ -2,7 +2,7 @@
   "id": "epsilon-change-low",
   "name": "Epsilon Change (Low Flow)",
   "version": "0.1.0",
-  "assetVersion": "2026-08-18-era-shift-v11",
+  "assetVersion": "2026-08-18-global-story-v12",
   "description": "Catchment-scale fold-adjusted low-flow epsilon shift after 1990.",
   "author": "Spatial Research Team",
   "icon": "activity",
@@ -12,6 +12,7 @@
   "defaultLoad": false,
   "viewMode": "low",
   "focusRegime": "low",
+  "globalStoryFile": "../epsilon-change/data/global-story-summary.json",
   "datasets": [
     {
       "id": "epsilon-catchment-distributions",
