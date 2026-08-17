@@ -307,7 +307,7 @@ high-flow eligible:         {shift_count('high', 'increase') + shift_count('high
 low/high eligible overlap:  {bivariate_eligible:,}
 ```
 
-Low-flow and high-flow analyses retain their independent samples; the smaller overlap is used only for the bivariate 3 x 3 map. The FDR family is fixed before applying the interactive reliability display filter, so changing the website threshold cannot redefine statistical significance.
+All-recession, low-flow, and high-flow analyses retain their independent eligible samples. The low/high overlap is reported as a coverage diagnostic and does not restrict either single-regime result. The FDR family is fixed before applying the interactive reliability display filter, so changing the website threshold cannot redefine statistical significance.
 
 The annual-support sensitivity checks use one, three, and five recession days per annual median. Alternative 1985 and 1995 breakpoints are also evaluated without selecting the most significant result. Across overlapping catchments, effect correlations with the 1990 primary analysis range from `{breakpoint_sensitivity['effect_correlation_with_primary'].min():.3f}` to `{breakpoint_sensitivity['effect_correlation_with_primary'].max():.3f}` for the breakpoint checks.
 

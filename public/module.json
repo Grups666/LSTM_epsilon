@@ -2,8 +2,8 @@
   "id": "epsilon-change",
   "name": "Epsilon Change",
   "version": "0.1.0",
-  "assetVersion": "2026-08-18-field-effect-v13",
-  "description": "Global annual epsilon spread effects with optional catchment-level low/high FDR classes.",
+  "assetVersion": "2026-08-18-analysis-modules-v14",
+  "description": "Fold-adjusted post-1990 annual-median epsilon effects with an All / Low / High flow selector.",
   "author": "Spatial Research Team",
   "icon": "activity",
   "basePath": "https://grups666.github.io/LSTM_epsilon/",
@@ -11,9 +11,10 @@
   "className": "EpsilonChangeModule",
   "importKind": "module-manifest",
   "defaultLoad": false,
+  "analysisView": "change",
+  "defaultRegime": "all",
   "skillFilterMetric": "nse",
   "skillFilterThreshold": 0.5,
-  "mapEvidenceMode": "field",
   "datasets": [
     {
       "id": "epsilon-catchment-distributions",

@@ -129,7 +129,7 @@ high-flow eligible:         1,007
 low/high eligible overlap:  745
 ```
 
-Low-flow and high-flow analyses retain their independent samples; the smaller overlap is used only for the bivariate 3 x 3 map. The FDR family is fixed before applying the interactive reliability display filter, so changing the website threshold cannot redefine statistical significance.
+All-recession, low-flow, and high-flow analyses retain their independent eligible samples. The low/high overlap is reported as a coverage diagnostic and does not restrict either single-regime result. The FDR family is fixed before applying the interactive reliability display filter, so changing the website threshold cannot redefine statistical significance.
 
 The annual-support sensitivity checks use one, three, and five recession days per annual median. Alternative 1985 and 1995 breakpoints are also evaluated without selecting the most significant result. Across overlapping catchments, effect correlations with the 1990 primary analysis range from `0.888` to `0.964` for the breakpoint checks.
 
@@ -154,9 +154,9 @@ Discovery-screened precipitation and root-zone soil-moisture changes were correl
 
 Precipitation did not retain independent interval evidence after joint soil-moisture adjustment. Low-versus-high flow direction contrasts also failed to reproduce across the spatial split. These are reported as negative results rather than folded into the main story.
 
-The hydroclimate result is associative. Soil moisture is a model input, recession response can also reflect storage connectivity, land use, geology, and human influence, and this design does not identify a causal climate effect. The supported story is therefore: post-1990 epsilon became more dispersed across annual recession conditions, with larger positive shifts preferentially occurring where the soil-moisture era change was more negative.
+The hydroclimate result is associative and uses the all-recession annual-median era coefficient, not annual spread, as its response. Soil moisture is a model input, recession response can also reflect storage connectivity, land use, geology, and human influence, and this design does not identify a causal climate effect. The two supported statements must therefore remain separate: annual epsilon distributions broadened in the spatial confirmation analysis, and annual-median epsilon shifts were more positive where the soil-moisture era change was more negative.
 
-The public map separates two evidence levels. **Field effect** is the default and maps the continuous annual `q75 / q25` spread effect for all 1,180 field-eligible catchments; gray means an estimate near zero. **Local FDR** retains the low/high catchment-level significance classes; gray there means Unresolved after multiple-testing correction. The field view does not relabel individual catchments as significant, and the local view is not used to estimate global coverage.
+The public explorer separates scientific questions rather than mixing evidence levels on one map. **Epsilon Change** maps the primary continuous annual-median era effect; its inspector reports the matching 95% interval and FDR q-value without hiding Unresolved catchments. **GQ / Q Decomposition** maps the descriptive component class. **Temporal Robustness** maps the continuous trend sensitivity. A shared All / Low / High selector changes flow condition within each module, while Overview reports the independently confirmed annual-spread result as secondary field evidence.
 
 ### Component Attribution and Trend Sensitivity
 

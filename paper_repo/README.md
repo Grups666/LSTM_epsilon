@@ -16,11 +16,11 @@ Five rotations give every eligible date one out-of-fold streamflow and epsilon e
 
 The audited run contains 9,192,715 out-of-fold recession-day predictions. Median catchment NSE is 0.581 overall, 0.555 before 1991, and 0.626 after 1990; pooled NSE is 0.577. Of 2,297 catchments with valid epsilon contrasts, 1,304 exceed NSE 0.5 in both periods.
 
-At the default both-period `NSE > 0.5` display threshold, 791 low-flow catchments and 1,007 high-flow catchments meet the fixed annual-support rule; 745 support the bivariate map. Increase and Decrease require era-shift `q < 0.05`; the remaining estimable class is Unresolved, not Stable.
+At the default both-period `NSE > 0.5` display threshold, 791 low-flow catchments and 1,007 high-flow catchments meet the fixed annual-support rule; 745 support both regimes. Each regime retains its own sample. Increase and Decrease require era-shift `q < 0.05`; the remaining estimable class is Unresolved, not Stable.
 
 The maintained global field analysis uses spatially disjoint discovery and confirmation blocks. Its strongest replicated result is a post-1990 broadening of the annual epsilon distribution: +5.2% in discovery and +17.6% in confirmation (95% spatial CI +3.7% to +21.3%; Holm p = 0.012). A soil-moisture-change association remains after joint precipitation and spatial-block adjustment, but is treated as associative rather than causal. See `docs/SUMMARY.md` for the reader-facing story and `docs/TECHNICAL_METHODS.md` for the locked protocol and sensitivity checks.
 
-The public explorer is available at https://grups666.github.io/LSTM_epsilon/. Its Overview panel applies NSE or KGE filtering in the browser; the underlying public data are not hard-filtered at 0.5, and changing the display filter does not redefine the FDR family.
+The public explorer is available at https://grups666.github.io/LSTM_epsilon/. Its three modules separate the primary epsilon era effect, descriptive GQ/Q decomposition, and continuous-trend sensitivity. A shared top selector switches All recession, Low flow, and High flow. The Overview panel applies NSE or KGE filtering in the browser; the underlying public data are not hard-filtered at 0.5, and changing the display filter does not redefine the FDR family.
 
 Private daily data, checkpoints, credentials, and raw downloads are excluded from publication. The maintained documentation is:
 

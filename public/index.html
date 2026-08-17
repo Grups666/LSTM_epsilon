@@ -1114,9 +1114,9 @@
       pendingConfirm: null,
       tutorial: { active: false, index: 0 },
       staticModules: [
-        { id: 'epsilon-change', name: 'Epsilon Change', defaultLoad: true, exclusiveGroup: 'epsilon-change' },
-        { id: 'epsilon-change-low', name: 'Epsilon Change (Low Flow)', defaultLoad: false, exclusiveGroup: 'epsilon-change' },
-        { id: 'epsilon-change-high', name: 'Epsilon Change (High Flow)', defaultLoad: false, exclusiveGroup: 'epsilon-change' }
+        { id: 'epsilon-change', name: 'Epsilon Change', defaultLoad: true, exclusiveGroup: 'epsilon-analysis' },
+        { id: 'epsilon-decomposition', name: 'GQ / Q Decomposition', defaultLoad: false, exclusiveGroup: 'epsilon-analysis' },
+        { id: 'epsilon-trend', name: 'Temporal Robustness', defaultLoad: false, exclusiveGroup: 'epsilon-analysis' }
       ],
       themeStyle: 'light',
       imageryEnabled: false,
@@ -1586,9 +1586,16 @@
             target: 'skill-metrics'
           },
           {
+            id: 'condition',
+            title: 'Choose a flow condition',
+            copy: '<p>The top control keeps one scientific question on screen while switching between all recession days, low flow (Q10), and high flow (Q90).</p>',
+            hint: 'Use this selector instead of loading separate low- and high-flow modules.',
+            target: '.epsilon-toolbar-segments'
+          },
+          {
             id: 'classification',
-            title: 'Read the field effect',
-            copy: '<p>The default map shows each catchment\'s continuous post-1990 shift in annual epsilon spread, defined as q75 divided by q25 across all recession days.</p><p>Color gives effect direction and magnitude. It does not claim that every catchment is individually significant; the detail panel keeps the separate low/high local FDR results below it.</p>',
+            title: 'Read the epsilon effect',
+            copy: '<p>The Epsilon Change map shows each catchment\'s fold-adjusted post-1990 change in annual-median epsilon for the selected flow condition.</p><p>Color gives effect direction and magnitude. The detail panel reports the matching 95% interval and FDR q-value; Unresolved means the direction is not established, not that the effect is zero.</p>',
             target: 'classification-summary'
           },
           {
@@ -1617,7 +1624,7 @@
           {
             id: 'overview-open',
             title: 'Open Overview',
-            copy: '<p>Overview is a clickable row under Layers. It contains the Field effect / Local FDR map switch, reliability controls, global evidence, and the full data and inference method.</p>',
+            copy: '<p>Overview is a clickable row under Layers. It contains reliability controls, the active map definition, global evidence, equations, and the full inference workflow.</p>',
             hint: 'Click the highlighted Overview row to continue.',
             target: '[data-id="epsilon-change-overview"]',
             calloutPlacement: 'sidebar-right',
@@ -1625,15 +1632,15 @@
           },
           {
             id: 'overview-filter',
-            title: 'Control the map',
-            copy: '<p>Field effect displays the continuous annual-spread estimates behind the global analysis. Local FDR switches to strict low/high catchment classes and then offers the option to hide Unresolved points.</p><p>NSE or KGE controls only the displayed subset. The published global test remains fixed at both-era NSE above 0.5.</p>',
+            title: 'Filter by model reliability',
+            copy: '<p>NSE or KGE filters catchments by reconstructed-streamflow skill in both eras. It changes only which points are displayed; it does not retrain the model, redefine epsilon, or change the selected scientific view.</p>',
             hint: 'These controls change display eligibility only; they do not retrain the model.',
             target: '.epsilon-overview-filter'
           },
           {
             id: 'overview-classification',
             title: 'Read the active map key',
-            copy: '<p>In Field effect mode, the continuous scale runs from a narrower to a wider annual epsilon distribution; gray is near zero, not Unresolved.</p><p>In Local FDR mode, this section becomes the 3 x 3 low/high significance matrix, where gray Unresolved has its strict multiple-testing meaning.</p>',
+            copy: '<p>The key defines the selected flow condition, mapped quantity, and evidence rule. For epsilon change and temporal trend, gray means an estimate near zero; it is not a significance label.</p>',
             target: '.epsilon-overview-classification'
           },
           {
@@ -1644,8 +1651,8 @@
           },
           {
             id: 'modes',
-            title: 'Switch epsilon views',
-            copy: '<p>Epsilon Change defaults to the global annual-spread field. Local FDR is available inside Overview, while the Low Flow and High Flow modules provide continuous effect maps for each regime.</p>',
+            title: 'Switch scientific questions',
+            copy: '<p>Modules answer different questions: Epsilon Change maps the primary pre/post effect, GQ / Q Decomposition describes its algebraic components, and Temporal Robustness checks monotonic trends. The top selector applies All, Low, or High flow within whichever module is active.</p>',
             hint: 'You are ready to explore. The ? control restarts this tour whenever needed.',
             target: '#moduleList'
           }
@@ -1653,7 +1660,7 @@
       },
 
       async ensureTutorialMainMode() {
-        for (const id of ['epsilon-change-low', 'epsilon-change-high']) {
+        for (const id of ['epsilon-decomposition', 'epsilon-trend']) {
           if (this.moduleLoader.isLoaded(id)) this.unloadModule(id, { quiet: true });
         }
         if (!this.moduleLoader.isLoaded('epsilon-change')) {
@@ -1672,7 +1679,7 @@
           return;
         }
         module.updateSkillFilter?.('nse', 0.5, false);
-        module.updateMapEvidenceMode?.('field');
+        module.setRegime?.('all');
         if (module.overviewLayerId) this.layerManager.setVisibility(module.overviewLayerId, false);
         this.tutorial = { active: true, index: 0 };
         document.body.classList.add('tutorial-active');
@@ -1721,6 +1728,11 @@
             document.querySelector('.epsilon-metric-card--skill')?.scrollIntoView({ block: 'center' });
             this.updateTutorialPosition();
           }, 0);
+        } else if (stepId === 'condition') {
+          module.closeDistributionModal?.();
+          module.closeOverview?.();
+          inspector.classList.remove('visible');
+          module.setRegime?.('all');
         } else if (stepId === 'classification') {
           module.showTutorialBasin?.();
           setTimeout(() => {
@@ -1799,7 +1811,7 @@
           return this.combinedTutorialRect(document.querySelectorAll('.epsilon-metric-card--skill'));
         }
         if (step.target === 'classification-summary') {
-          return this.combinedTutorialRect(document.querySelectorAll('.epsilon-inspector-classification, .epsilon-field-spread-panel'));
+          return this.combinedTutorialRect(document.querySelectorAll('.epsilon-inspector-classification, .epsilon-shift-panel'));
         }
         const element = document.querySelector(step.target);
         if (!element) return null;

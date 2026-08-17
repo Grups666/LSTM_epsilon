@@ -201,14 +201,14 @@ estimable coefficients are labelled Unresolved. Unresolved is not evidence of
 stability. A Stable class would require a separately justified equivalence
 margin and is therefore not used.
 
-Low-flow and high-flow inference uses independent eligible samples. Their
-intersection is needed only for the bivariate map and does not restrict either
+All-recession, low-flow, and high-flow inference uses independent eligible samples. The
+low/high intersection is a coverage diagnostic and does not restrict either
 single-regime result. The public NSE/KGE control is a reliability display
 filter; it does not recalculate q-values or alter the fixed FDR family.
 
 ## Global Field-Level Inference
 
-The per-catchment FDR map and the global field analysis answer different questions. Local FDR controls false discoveries among catchment labels. The field analysis evaluates whether the distribution of catchment effects contains a spatially reproducible post-1990 pattern even when many individual coefficients are imprecise.
+Per-catchment FDR inference and the global field analysis answer different questions. Local FDR controls false discoveries among catchment labels reported in the inspector. The field analysis evaluates whether the distribution of catchment effects contains a spatially reproducible post-1990 pattern even when many individual coefficients are imprecise.
 
 The maintained field protocol is `global_story_v2`:
 
@@ -256,7 +256,7 @@ high flow, joint + block FE:             -3.13%
 
 The precipitation and soil-moisture changes correlate at `r = 0.57`. Precipitation loses interval evidence in the joint model and is not reported as an independent driver. Soil-moisture coefficients retain their negative sign under every leave-one-20-degree-block analysis. These regressions are associative, not causal attribution tests.
 
-The public explorer exposes the distinction directly. Its default **Field effect** map joins the 1,180 eligible all-recession spread coefficients from `global_story_dataset.parquet` to the public catchment records and colors their continuous effect estimates. The optional **Local FDR** map uses the separate low/high BH-FDR classes. Consequently, hiding Unresolved catchments in Local FDR mode is a local-evidence operation and does not define the global field sample.
+The public explorer exposes the inferential hierarchy directly. **Epsilon Change** maps the primary fold-adjusted annual-median era coefficient for the selected All/Low/High condition and reports its local BH-FDR evidence in the inspector. **GQ / Q Decomposition** and **Temporal Robustness** are separate modules because they answer interpretation and sensitivity questions rather than redefining the primary effect. The 1,180 eligible all-recession spread coefficients remain a separate field-level analysis reported in Overview; they are not used as the default catchment map or as a replacement for local FDR inference.
 
 The original `global_story_v1` audit recorded the 10-year climate-support rule but failed to apply it while constructing climate predictors. This was detected after confirmation. `global_story_v2` enforces the configured rule and preserves a protocol-deviation record. The corrected confirmation table is byte-identical to v1 because the affected short-record catchments did not enter the locked confirmation tests.
 
