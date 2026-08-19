@@ -437,19 +437,15 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   renderOverviewNavigation() {
     const items = [
-      ["epsilon-overview-snapshot", "Snapshot"],
-      ["epsilon-overview-map-key", "Map key"],
+      ["epsilon-overview-snapshot", "Current view"],
+      ["epsilon-overview-map-key", "Read the map"],
       ...(this.analysisView === "change" ? [
-        ["epsilon-overview-global-evidence", "Global evidence"],
-        ["epsilon-overview-data-model", "Data & model"],
-        ["epsilon-overview-workflow", "Workflow"],
-        ["epsilon-overview-crossfit", "Cross-fit"],
-        ["epsilon-overview-era-shift", "Era shift"],
-        ["epsilon-overview-attribution-step", "Decomposition"],
-        ["epsilon-overview-trends", "Sensitivity"]
+        ["epsilon-overview-global-evidence", "Global field evidence"],
+        ["epsilon-overview-data-model", "Data, model and equations"],
+        ["epsilon-overview-workflow", "Method workflow"]
       ] : [
-        ["epsilon-overview-data-model", "Data & model"],
-        ["epsilon-overview-focused-method", "Interpretation"]
+        ["epsilon-overview-data-model", "Data, model and equations"],
+        ["epsilon-overview-focused-method", "Interpretation boundary"]
       ])
     ];
     return `
@@ -662,7 +658,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <div class="epsilon-overview-dialog" role="dialog" aria-label="Overview">
         <div class="epsilon-overview-header">
           <div>
-            <div class="epsilon-overview-title">Overview</div>
+            <div class="epsilon-overview-title">Research overview</div>
           </div>
           <button class="epsilon-overview-close" type="button" aria-label="Close"></button>
         </div>
@@ -1620,7 +1616,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-close::before{transform:translate(-50%,-50%) rotate(45deg)}
       .epsilon-overview-close::after{transform:translate(-50%,-50%) rotate(-45deg)}
       .epsilon-overview-body{padding:22px;overflow:auto;color:#334155;font-size:16px;line-height:1.62}
-      .epsilon-overview-layout{display:grid;grid-template-columns:150px minmax(0,1fr);align-items:start}
+      .epsilon-overview-layout{display:grid;grid-template-columns:190px minmax(0,1fr);align-items:start}
       .epsilon-overview-nav{position:sticky;top:0;display:grid;gap:2px;padding:2px 14px 6px 0;border-right:1px solid #e2e8f0}
       .epsilon-overview-nav-title{margin:0 0 8px;padding:0 8px;color:#94a3b8;font-size:12.5px;font-weight:700;text-transform:uppercase}
       .epsilon-overview-nav a{display:block;padding:8px;border-left:2px solid transparent;color:#64748b;font-size:14px;font-weight:600;line-height:1.35;text-decoration:none}
@@ -1710,7 +1706,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-field-mode-note strong{color:#334155}
       .epsilon-filter-count{font-size:13.5px;color:#475569;margin-top:9px;line-height:1.45}
       .epsilon-story{position:relative}
-      .epsilon-story::before{content:"";position:absolute;left:14px;top:54px;bottom:18px;width:2px;background:linear-gradient(#93b4ff,#b84235);border-radius:999px;opacity:.45}
       .epsilon-story-lead{max-width:900px;color:#475569;font-size:15px;line-height:1.68;margin:0 0 14px}
       .epsilon-story-panel{position:relative;display:grid;grid-template-columns:minmax(250px,.92fr) minmax(320px,1.18fr);gap:18px;align-items:center;padding:12px 0 14px 42px}
       .epsilon-story-copy{position:relative}
