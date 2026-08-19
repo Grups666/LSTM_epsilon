@@ -17,7 +17,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.selected = null;
     this.overviewNavScrollHandler = null;
     this.overviewNavScrollTimer = null;
-    this.overviewNavPendingId = null;
+    this.overviewNavProgrammaticScroll = false;
     this.analysisView = ["change", "decomposition", "trend"].includes(manifest.analysisView)
       ? manifest.analysisView
       : "change";
@@ -466,12 +466,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const links = [...nav.querySelectorAll("a")];
     const targets = links.map((link) => body.querySelector(link.getAttribute("href"))).filter(Boolean);
     const activate = (id) => links.forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${id}`));
-    const schedulePendingActivation = () => {
-      if (!this.overviewNavPendingId) return;
+    const scheduleScrollSpyResume = () => {
       if (this.overviewNavScrollTimer) clearTimeout(this.overviewNavScrollTimer);
       this.overviewNavScrollTimer = setTimeout(() => {
-        activate(this.overviewNavPendingId);
-        this.overviewNavPendingId = null;
+        this.overviewNavProgrammaticScroll = false;
         this.overviewNavScrollTimer = null;
       }, 140);
     };
@@ -480,18 +478,18 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         event.preventDefault();
         const target = body.querySelector(link.getAttribute("href"));
         if (!target) return;
-        this.overviewNavPendingId = target.id;
-        if (this.overviewNavScrollTimer) clearTimeout(this.overviewNavScrollTimer);
+        activate(target.id);
+        this.overviewNavProgrammaticScroll = true;
         const targetTop = target.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop;
         const compact = window.innerWidth <= 760;
         const offset = compact ? 68 : 12;
         body.scrollTo({ top: Math.max(0, targetTop - offset), behavior: compact ? "auto" : "smooth" });
-        schedulePendingActivation();
+        scheduleScrollSpyResume();
       };
     });
     this.overviewNavScrollHandler = () => {
-      if (this.overviewNavPendingId) {
-        schedulePendingActivation();
+      if (this.overviewNavProgrammaticScroll) {
+        scheduleScrollSpyResume();
         return;
       }
       const top = body.getBoundingClientRect().top + (window.innerWidth <= 760 ? 96 : 34);
@@ -663,7 +661,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     if (this.overviewNavScrollTimer) clearTimeout(this.overviewNavScrollTimer);
     this.overviewNavScrollHandler = null;
     this.overviewNavScrollTimer = null;
-    this.overviewNavPendingId = null;
+    this.overviewNavProgrammaticScroll = false;
     this.overviewModal?.remove();
     this.distributionModal?.remove();
     this.overviewModal = null;
@@ -974,7 +972,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.metricCard("Area", `${this.formatNumber(basin.area_km2, 1)} km2`)}
         ${this.metricCard("Aridity", this.formatNumber(basin.Aridity, 3))}
         ${this.metricCard("Precip.", `${this.formatNumber(basin.Prec_mm, 1)} mm`)}
-        ${this.metricCard("Temp.", `${this.formatNumber(basin.Temp_C, 1)} °C`)}
+        ${this.metricCard("Temp.", `${this.formatNumber(basin.Temp_C, 1)} ?C`)}
         ${this.skillMetricCard("NSE pre", this.formatNumber(basin.pre_nse, 3), basin.pre_nse)}
         ${this.skillMetricCard("NSE post", this.formatNumber(basin.post_nse, 3), basin.post_nse)}
         ${this.skillMetricCard("KGE pre", this.formatNumber(basin.pre_kge, 3), basin.pre_kge)}
@@ -1039,7 +1037,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       : "Unavailable";
     const longGapHtml = longGaps.length
       ? `
-        <div class="epsilon-completeness-subtitle">Long continuous gaps (≥30 days)</div>
+        <div class="epsilon-completeness-subtitle">Long continuous gaps (?30 days)</div>
         <ul class="epsilon-gap-list">
           ${longGaps.map((gap) => `
             <li>
@@ -1294,7 +1292,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
             </span>
           `).join("")}
         </div>
-        <div class="epsilon-driver-legend-note">${this.focusTitle()} · GQ = epsilon x simulated Q. Colors describe the pre/post component balance; they are not causal evidence.</div>
+        <div class="epsilon-driver-legend-note">${this.focusTitle()} ? GQ = epsilon x simulated Q. Colors describe the pre/post component balance; they are not causal evidence.</div>
       </div>
     `;
   }
