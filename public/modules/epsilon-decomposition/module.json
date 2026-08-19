@@ -2,7 +2,7 @@
   "id": "epsilon-decomposition",
   "name": "GQ / Q Decomposition",
   "version": "0.1.0",
-  "assetVersion": "2026-08-18-analysis-modules-v15",
+  "assetVersion": "2026-08-19-readable-type-v16",
   "description": "Descriptive decomposition of epsilon era change into GQ and simulated-Q components.",
   "author": "Spatial Research Team",
   "icon": "activity",

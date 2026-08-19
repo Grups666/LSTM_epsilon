@@ -986,7 +986,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
     const sections = [this.activeRegime].map((regime) => `
       <section class="epsilon-stats-section" style="margin-top:10px;padding-top:12px;border-top:1px solid #e2e8f0">
-        <h3 style="margin:0 0 8px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#64748b">${this.regimeLabel(regime)}</h3>
+        <h3 style="margin:0 0 8px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:#64748b">${this.regimeLabel(regime)}</h3>
         ${this.renderStatsTable(basin, regime)}
       </section>
     `).join("");
@@ -1304,7 +1304,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const unit = this.analysisView === "trend" ? " / decade" : "";
     return `
       <div style="margin:0 0 14px">
-        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px">${this.escape(this.focusTitle())} ${this.analysisView === "trend" ? "continuous epsilon slope" : "post-1990 epsilon shift"}</div>
+        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:8px">${this.escape(this.focusTitle())} ${this.analysisView === "trend" ? "continuous epsilon slope" : "post-1990 epsilon shift"}</div>
         ${this.renderContinuousLegendBar()}
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px">
           ${this.metricCard("Median estimate", `${this.formatPct(median)}${unit}`, median)}
@@ -1391,7 +1391,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       return `
         <div class="epsilon-overview-definitions">
           <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Flow condition</span><span>${regimeDefinition}</span></div>
-          <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Color scale</span><span>Cyan-blue indicates a negative Theil-Sen slope, gray is near zero, and magenta indicates a positive slope. Values are percent per decade.</span></div>
+          <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Color scale</span><span>Violet indicates a negative Theil-Sen slope, gray is near zero, and amber indicates a positive slope. Values are percent per decade.</span></div>
           <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Significance</span><span>Increase or Decrease requires Kendall FDR q &lt; 0.05. Otherwise the direction is unresolved; that is not evidence that epsilon is stable.</span></div>
         </div>
       `;
@@ -1462,9 +1462,17 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     if (!Number.isFinite(value)) return "#d8dee8";
     const extent = this.colorScaleExtent || 50;
     const t = Math.max(-1, Math.min(1, value / extent));
-    if (Math.abs(t) < 0.02) return "#cbd5e1";
-    if (t < 0) return this.mix("#00d7ff", "#cbd5e1", t + 1);
-    return this.mix("#cbd5e1", "#ff3bbd", t);
+    const palette = this.continuousPalette();
+    if (Math.abs(t) < 0.02) return palette.neutral;
+    if (t < 0) return this.mix(palette.negative, palette.neutral, t + 1);
+    return this.mix(palette.neutral, palette.positive, t);
+  }
+
+  continuousPalette() {
+    if (this.analysisView === "trend") {
+      return { negative: "#6750c9", neutral: "#d7dee8", positive: "#e58a17" };
+    }
+    return { negative: "#00d7ff", neutral: "#cbd5e1", positive: "#ff3bbd" };
   }
 
   shiftValue(basin, regime) {
@@ -1473,9 +1481,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
 
   renderContinuousLegendBar() {
     const extent = this.colorScaleExtent || 50;
+    const palette = this.continuousPalette();
     return `
       <div class="epsilon-continuous-key">
-        <div style="height:12px;border-radius:999px;background:linear-gradient(90deg,#00d7ff 0%,#cbd5e1 50%,#ff3bbd 100%);border:1px solid rgba(15,23,42,.12)"></div>
+        <div style="height:12px;border-radius:999px;background:linear-gradient(90deg,${palette.negative} 0%,${palette.neutral} 50%,${palette.positive} 100%);border:1px solid rgba(15,23,42,.12)"></div>
         <div class="epsilon-continuous-labels">
           <span>${this.formatPct(-extent)}</span>
           <span>0%</span>
@@ -1492,7 +1501,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       ["N", basin[`${regime}_pre_n`], basin[`${regime}_post_n`]]
     ];
     return `
-      <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead>
           <tr style="color:#64748b">
             <th style="text-align:left;padding:5px 4px;border-bottom:1px solid #e2e8f0">Metric</th>
@@ -1569,30 +1578,30 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     style.id = "epsilon-preview-styles";
     style.textContent = `
       .epsilon-toolbar{position:fixed;top:14px;left:calc(50% + 155px);transform:translateX(-50%);z-index:120;display:flex;align-items:center;gap:8px;max-width:calc(100vw - 380px);min-height:42px;padding:5px 6px 5px 12px;border:1px solid #dbe3ef;border-radius:8px;background:rgba(255,255,255,.96);box-shadow:0 8px 24px rgba(15,23,42,.12);backdrop-filter:blur(10px)}
-      .epsilon-toolbar-label{color:#334155;font-size:11px;font-weight:700;white-space:nowrap}
+      .epsilon-toolbar-label{color:#334155;font-size:12.5px;font-weight:700;white-space:nowrap}
       .epsilon-toolbar-segments{display:flex;align-items:center;gap:2px;padding:2px;border-radius:6px;background:#eef2f7}
-      .epsilon-toolbar-segments button,.epsilon-toolbar-overview{min-height:30px;border:0;border-radius:5px;padding:0 11px;color:#64748b;background:transparent;font-size:10.5px;font-weight:700;white-space:nowrap;cursor:pointer}
+      .epsilon-toolbar-segments button,.epsilon-toolbar-overview{min-height:32px;border:0;border-radius:5px;padding:0 12px;color:#64748b;background:transparent;font-size:12px;font-weight:700;white-space:nowrap;cursor:pointer}
       .epsilon-toolbar-segments button:hover{color:#0f172a}
       .epsilon-toolbar-segments button.active{background:#fff;color:#1d4ed8;box-shadow:0 1px 3px rgba(15,23,42,.14)}
       .epsilon-toolbar-overview{background:#183b56;color:#fff}
       .epsilon-toolbar-overview:hover{background:#0f2f48}
       .epsilon-curve-preview{box-sizing:border-box;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;background:#fbfdff;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
       .epsilon-curve-preview:hover{background:#eef7ff;border-color:#60a5fa!important;box-shadow:0 0 0 1px rgba(96,165,250,.26),0 0 18px rgba(96,165,250,.18)}
-      .epsilon-inspector-context{margin:0 0 16px;color:#64748b;font-size:11.5px;line-height:1.55}
+      .epsilon-inspector-context{margin:0 0 16px;color:#64748b;font-size:12.5px;line-height:1.58}
       .epsilon-inspector-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:16px}
       .epsilon-signal-panel{margin-bottom:16px;padding:12px;border:1px solid #dbe3ef;border-radius:7px;background:#f8fafc}
-      .epsilon-classification-kicker{margin-bottom:6px;font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase}
+      .epsilon-classification-kicker{margin-bottom:6px;font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase}
       .epsilon-classification-main{display:flex;align-items:flex-start;gap:8px;color:#0f172a;font-size:12.5px;font-weight:700;line-height:1.4}
       .epsilon-classification-dot{width:13px;height:13px;margin-top:2px;border:1px solid rgba(15,23,42,.2);border-radius:50%;flex:0 0 auto}
-      .epsilon-classification-subtitle{margin-top:5px;color:#64748b;font-size:10px;line-height:1.45}
+      .epsilon-classification-subtitle{margin-top:6px;color:#64748b;font-size:11.5px;line-height:1.5}
       .epsilon-metric-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px}
       .epsilon-metric-value{font-size:17px;font-weight:400;color:#64748b}
       .epsilon-metric-value--emphasis,
       .epsilon-metric-value--skill{font-weight:700}
       .epsilon-metric-value--skill{color:var(--epsilon-skill-light)}
-      .epsilon-metric-label{font-size:11px;color:#64748b;margin-top:3px}
-      .epsilon-streamflow-completeness{margin:0 0 16px;padding:14px 3px 0;border:0;border-top:1px solid #dbe3ef;border-radius:0;background:transparent;font-size:10.5px;line-height:1.45;color:#64748b}
-      .epsilon-completeness-title{margin-bottom:8px;color:#334155;font-size:10.5px;font-weight:700;text-transform:none;letter-spacing:0}
+      .epsilon-metric-label{font-size:12px;color:#64748b;margin-top:3px}
+      .epsilon-streamflow-completeness{margin:0 0 16px;padding:14px 3px 0;border:0;border-top:1px solid #dbe3ef;border-radius:0;background:transparent;font-size:11.5px;line-height:1.5;color:#64748b}
+      .epsilon-completeness-title{margin-bottom:8px;color:#334155;font-size:12px;font-weight:700;text-transform:none;letter-spacing:0}
       .epsilon-completeness-row{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px;padding:2px 0}
       .epsilon-completeness-row span:last-child{color:#475569}
       .epsilon-completeness-subtitle{margin-top:8px;padding-top:7px;border-top:1px solid #e2e8f0;color:#64748b}
@@ -1602,28 +1611,28 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-completeness-note{margin-top:6px;color:#64748b}
       .epsilon-overview-modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:150;pointer-events:none}
       .epsilon-overview-modal.visible{display:flex}
-      .epsilon-overview-dialog{width:min(940px,calc(100vw - 64px));max-height:min(800px,calc(100vh - 64px));background:#fff;border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
+      .epsilon-overview-dialog{width:min(1040px,calc(100vw - 64px));max-height:min(840px,calc(100vh - 64px));background:#fff;border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 22px 58px rgba(15,23,42,.24);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
       .epsilon-overview-header{height:58px;min-height:58px;flex:0 0 58px;padding:0 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:16px;background:#f8fafc}
-      .epsilon-overview-title{font-size:14px;font-weight:700;color:#0f172a;letter-spacing:0}
+      .epsilon-overview-title{font-size:15px;font-weight:700;color:#0f172a;letter-spacing:0}
       .epsilon-overview-close{width:32px;height:32px;border:0;background:transparent;color:#64748b;font-size:0;line-height:1;cursor:pointer;border-radius:6px;position:relative;padding:0}
       .epsilon-overview-close:hover{background:#eef2f7;color:#0f172a}
       .epsilon-overview-close::before,.epsilon-overview-close::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:1.5px;border-radius:999px;background:currentColor;transform-origin:center}
       .epsilon-overview-close::before{transform:translate(-50%,-50%) rotate(45deg)}
       .epsilon-overview-close::after{transform:translate(-50%,-50%) rotate(-45deg)}
-      .epsilon-overview-body{padding:18px;overflow:auto;color:#334155;font-size:13px;line-height:1.65}
-      .epsilon-overview-layout{display:grid;grid-template-columns:116px minmax(0,1fr);align-items:start}
+      .epsilon-overview-body{padding:20px;overflow:auto;color:#334155;font-size:13.5px;line-height:1.65}
+      .epsilon-overview-layout{display:grid;grid-template-columns:134px minmax(0,1fr);align-items:start}
       .epsilon-overview-nav{position:sticky;top:0;display:grid;gap:2px;padding:2px 14px 6px 0;border-right:1px solid #e2e8f0}
-      .epsilon-overview-nav-title{margin:0 0 6px;padding:0 8px;color:#94a3b8;font-size:9px;font-weight:700;text-transform:uppercase}
-      .epsilon-overview-nav a{display:block;padding:6px 8px;border-left:2px solid transparent;color:#64748b;font-size:10.5px;font-weight:600;line-height:1.25;text-decoration:none}
+      .epsilon-overview-nav-title{margin:0 0 7px;padding:0 8px;color:#94a3b8;font-size:10.5px;font-weight:700;text-transform:uppercase}
+      .epsilon-overview-nav a{display:block;padding:7px 8px;border-left:2px solid transparent;color:#64748b;font-size:11.5px;font-weight:600;line-height:1.3;text-decoration:none}
       .epsilon-overview-nav a:hover{color:#0f172a;background:#f8fafc}
       .epsilon-overview-nav a.active{border-left-color:#2563eb;background:#eff6ff;color:#1d4ed8}
       .epsilon-overview-content{min-width:0;padding-left:18px}
       .epsilon-overview-content section,.epsilon-story-panel[id]{scroll-margin-top:16px}
       .epsilon-overview-body section + section{margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0}
-      .epsilon-overview-body h3{margin:0 0 8px;font-size:13px;color:#0f172a;letter-spacing:.03em;text-transform:uppercase}
+      .epsilon-overview-body h3{margin:0 0 8px;font-size:14px;color:#0f172a;letter-spacing:.03em;text-transform:uppercase}
       .epsilon-overview-body p{margin:0 0 10px}
       .epsilon-overview-lead{color:#475569}
-      .epsilon-overview-definitions{display:grid;gap:9px;margin-top:10px;color:#475569;font-size:12px;line-height:1.55}
+      .epsilon-overview-definitions{display:grid;gap:10px;margin-top:10px;color:#475569;font-size:13px;line-height:1.58}
       .epsilon-overview-definition{position:relative;padding-left:14px}
       .epsilon-overview-definition::before{content:"";position:absolute;left:1px;top:7px;width:5px;height:5px;border-radius:50%;background:#64748b}
       .epsilon-overview-definition-title{display:block;margin-bottom:1px;color:#0f172a;font-weight:700}
@@ -1631,83 +1640,83 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-evidence-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
       .epsilon-evidence-item{min-width:0;padding:12px;border:1px solid #dbe3ef;border-radius:7px;background:#f8fafc}
       .epsilon-evidence-item--primary{border-top:3px solid #15803d;padding-top:10px}
-      .epsilon-evidence-kicker{display:block;margin-bottom:5px;color:#64748b;font-size:9px;font-weight:700;text-transform:uppercase}
+      .epsilon-evidence-kicker{display:block;margin-bottom:5px;color:#64748b;font-size:10.5px;font-weight:700;text-transform:uppercase}
       .epsilon-evidence-value{color:#166534;font-size:23px;font-weight:750;line-height:1.1;font-variant-numeric:tabular-nums}
-      .epsilon-evidence-item>strong,.epsilon-evidence-association strong{display:block;margin-top:5px;color:#0f172a;font-size:11px;line-height:1.4}
-      .epsilon-evidence-item p{margin:6px 0!important;color:#475569;font-size:10.5px;line-height:1.5}
-      .epsilon-evidence-item small{display:block;color:#64748b;font-size:9.5px;line-height:1.45}
+      .epsilon-evidence-item>strong,.epsilon-evidence-association strong{display:block;margin-top:5px;color:#0f172a;font-size:12px;line-height:1.45}
+      .epsilon-evidence-item p{margin:6px 0!important;color:#475569;font-size:12px;line-height:1.55}
+      .epsilon-evidence-item small{display:block;color:#64748b;font-size:11px;line-height:1.5}
       .epsilon-evidence-association{display:grid;grid-template-columns:minmax(190px,1fr) auto;gap:4px 16px;align-items:end;margin-top:10px;padding:11px 0;border-top:1px solid #dbe3ef;border-bottom:1px solid #dbe3ef}
       .epsilon-evidence-association .epsilon-evidence-kicker{margin:0}
       .epsilon-evidence-association strong{margin:2px 0 0}
       .epsilon-evidence-association-value{color:#166534;font-size:20px;font-weight:750;line-height:1;font-variant-numeric:tabular-nums}
-      .epsilon-evidence-association p{grid-column:1/-1;margin:3px 0 0!important;color:#64748b;font-size:10px;line-height:1.5}
-      .epsilon-evidence-guardrail{margin-top:10px;padding-left:10px;border-left:2px solid #94a3b8;color:#64748b;font-size:10px;line-height:1.5}
+      .epsilon-evidence-association p{grid-column:1/-1;margin:3px 0 0!important;color:#64748b;font-size:11.5px;line-height:1.52}
+      .epsilon-evidence-guardrail{margin-top:10px;padding-left:10px;border-left:2px solid #94a3b8;color:#64748b;font-size:11.5px;line-height:1.52}
       .epsilon-evidence-guardrail strong{color:#334155}
-      .epsilon-evidence-method{margin:8px 0 0!important;color:#64748b;font-size:9.5px;line-height:1.48}
+      .epsilon-evidence-method{margin:8px 0 0!important;color:#64748b;font-size:11px;line-height:1.5}
       .epsilon-method-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin-top:10px}
       .epsilon-method-facts>div{display:grid;gap:2px;padding:8px 0;border-top:1px solid #edf1f6}
-      .epsilon-method-facts strong{color:#0f172a;font-size:10.5px}
-      .epsilon-method-facts span{color:#64748b;font-size:10.5px;line-height:1.48}
+      .epsilon-method-facts strong{color:#0f172a;font-size:12px}
+      .epsilon-method-facts span{color:#64748b;font-size:11.5px;line-height:1.52}
       .epsilon-equation-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
       .epsilon-equation-card{display:grid;gap:5px;min-width:0;padding:9px;border:1px solid #dbe3ef;border-radius:6px;background:#f8fafc}
       .epsilon-equation-card:last-child{grid-column:1/-1}
-      .epsilon-equation-card>span{color:#334155;font-size:10px;font-weight:700}
-      .epsilon-equation-card code,.epsilon-driver-guide code{display:block;overflow-wrap:anywhere;color:#0f172a;font:600 10px/1.45 Consolas,monospace}
-      .epsilon-method-caution{margin:10px 0 0!important;padding-left:10px;border-left:2px solid #94a3b8;color:#64748b;font-size:10.5px;line-height:1.5}
+      .epsilon-equation-card>span{color:#334155;font-size:11.5px;font-weight:700}
+      .epsilon-equation-card code,.epsilon-driver-guide code{display:block;overflow-wrap:anywhere;color:#0f172a;font:600 11px/1.5 Consolas,monospace}
+      .epsilon-method-caution{margin:10px 0 0!important;padding-left:10px;border-left:2px solid #94a3b8;color:#64748b;font-size:11.5px;line-height:1.52}
       .epsilon-method-caution strong{color:#334155}
       .epsilon-shift-panel,.epsilon-attribution-panel,.epsilon-trend-panel{margin:12px 0 0;padding:12px 0 0;border:0;border-top:1px solid #dbe3ef;border-radius:0;background:transparent}
-      .epsilon-attribution-title,.epsilon-driver-legend-title{font-size:11px;font-weight:700;color:#0f172a;margin-bottom:8px}
+      .epsilon-attribution-title,.epsilon-driver-legend-title{font-size:12px;font-weight:700;color:#0f172a;margin-bottom:8px}
       .epsilon-attribution-columns,.epsilon-attribution-row{display:grid;grid-template-columns:14px 56px minmax(70px,1fr) 48px 48px;gap:6px;align-items:center}
-      .epsilon-attribution-columns{padding:0 0 3px;font-size:9px;color:#94a3b8;text-align:right}
+      .epsilon-attribution-columns{padding:0 0 3px;font-size:10px;color:#94a3b8;text-align:right}
       .epsilon-attribution-columns span:nth-child(3){text-align:left}
-      .epsilon-attribution-row{padding:4px 0;font-size:10.5px;color:#475569}
+      .epsilon-attribution-row{padding:5px 0;font-size:11.5px;color:#475569}
       .epsilon-attribution-swatch,.epsilon-driver-swatch{width:11px;height:11px;border-radius:50%;border:1px solid rgba(15,23,42,.22);background:var(--driver-color);box-sizing:border-box;display:inline-block;flex:0 0 auto}
       .epsilon-attribution-regime{color:#64748b}
       .epsilon-attribution-driver{font-weight:700;color:#334155}
       .epsilon-attribution-value{text-align:right;color:#64748b;white-space:nowrap;font-variant-numeric:tabular-nums}
-      .epsilon-attribution-note,.epsilon-driver-legend-note{margin-top:7px;font-size:9.5px;line-height:1.4;color:#64748b}
-      .epsilon-shift-row{min-width:0;padding:7px 0;font-size:10px;color:#64748b}
+      .epsilon-attribution-note,.epsilon-driver-legend-note{margin-top:8px;font-size:11px;line-height:1.5;color:#64748b}
+      .epsilon-shift-row{min-width:0;padding:8px 0;font-size:11.5px;color:#64748b}
       .epsilon-shift-row+.epsilon-shift-row{border-top:1px solid #e2e8f0}
       .epsilon-shift-main{display:flex;align-items:baseline;justify-content:space-between;gap:10px;min-width:0;margin-top:2px}
       .epsilon-shift-effect{color:#0f172a;font-size:15px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
       .epsilon-shift-ci{margin-top:2px;color:#475569;font-variant-numeric:tabular-nums}
-      .epsilon-trend-row{min-width:0;padding:7px 0;font-size:10px;color:#64748b}
+      .epsilon-trend-row{min-width:0;padding:8px 0;font-size:11.5px;color:#64748b}
       .epsilon-trend-row+.epsilon-trend-row{border-top:1px solid #e2e8f0}
       .epsilon-trend-main{display:flex;align-items:baseline;justify-content:space-between;gap:10px;min-width:0;margin-top:2px}
       .epsilon-trend-meta{display:flex;flex-wrap:wrap;gap:2px 12px;margin-top:4px;color:#64748b}
-      .epsilon-trend-regime{font-size:9px;font-weight:600;color:#64748b;text-transform:uppercase}
+      .epsilon-trend-regime{font-size:10.5px;font-weight:600;color:#64748b;text-transform:uppercase}
       .epsilon-trend-class{min-width:0;font-weight:700;color:#334155;line-height:1.3}
       .epsilon-trend-slope{white-space:nowrap}
       .epsilon-driver-legend{margin-top:10px}
       .epsilon-continuous-key{padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
-      .epsilon-continuous-labels{display:flex;justify-content:space-between;margin-top:6px;color:#64748b;font-size:10px}
+      .epsilon-continuous-labels{display:flex;justify-content:space-between;margin-top:6px;color:#64748b;font-size:11.5px}
       .epsilon-driver-legend--compact{margin-top:0}
       .epsilon-driver-legend-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px}
-      .epsilon-driver-legend-item{display:inline-flex;align-items:center;gap:5px;color:#475569;font-size:10.5px;white-space:nowrap}
+      .epsilon-driver-legend-item{display:inline-flex;align-items:center;gap:6px;color:#475569;font-size:11.5px;white-space:nowrap}
       .epsilon-driver-guide{margin-top:10px;padding:10px 0 0;border-top:1px solid #e2e8f0}
       .epsilon-driver-guide-formula{display:flex;flex-wrap:wrap;gap:5px 16px;margin-bottom:9px}
       .epsilon-driver-guide-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px}
       .epsilon-driver-guide-grid>div{display:grid;gap:1px}
-      .epsilon-driver-guide-grid strong{color:#0f172a;font-size:10.5px}
-      .epsilon-driver-guide-grid span{color:#64748b;font-size:10px;line-height:1.45}
+      .epsilon-driver-guide-grid strong{color:#0f172a;font-size:12px}
+      .epsilon-driver-guide-grid span{color:#64748b;font-size:11.5px;line-height:1.5}
       .epsilon-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
       .epsilon-overview-filter{margin:14px 0 16px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
       .epsilon-filter-title{font-size:12px;font-weight:800;margin-bottom:8px;color:#0f172a}
       .epsilon-filter-grid{display:grid;grid-template-columns:minmax(112px,.7fr) minmax(112px,.7fr) minmax(180px,1.4fr);gap:10px;align-items:end}
-      .epsilon-filter-field{display:grid;gap:4px;margin:0;color:#64748b;font-size:11px;line-height:1.3}
-      .epsilon-filter-field select,.epsilon-filter-field input{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;font-size:12px;padding:5px 6px}
+      .epsilon-filter-field{display:grid;gap:4px;margin:0;color:#64748b;font-size:12px;line-height:1.35}
+      .epsilon-filter-field select,.epsilon-filter-field input{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;font-size:13px;padding:6px 7px}
       .epsilon-filter-range{padding:0!important;accent-color:#2563eb}
-      .epsilon-field-mode-note{grid-column:1/-1;margin:1px 0 0;padding:9px 10px;border-left:2px solid #22c55e;background:#fff;color:#64748b;font-size:9.5px;line-height:1.45}
+      .epsilon-field-mode-note{grid-column:1/-1;margin:1px 0 0;padding:9px 10px;border-left:2px solid #22c55e;background:#fff;color:#64748b;font-size:11.5px;line-height:1.5}
       .epsilon-field-mode-note strong{color:#334155}
-      .epsilon-filter-count{font-size:11px;color:#475569;margin-top:8px;line-height:1.35}
+      .epsilon-filter-count{font-size:12px;color:#475569;margin-top:8px;line-height:1.4}
       .epsilon-story{position:relative}
       .epsilon-story::before{content:"";position:absolute;left:14px;top:54px;bottom:18px;width:2px;background:linear-gradient(#93b4ff,#b84235);border-radius:999px;opacity:.45}
-      .epsilon-story-lead{max-width:760px;color:#475569;font-size:12.5px;line-height:1.7;margin:0 0 14px}
+      .epsilon-story-lead{max-width:820px;color:#475569;font-size:13px;line-height:1.7;margin:0 0 14px}
       .epsilon-story-panel{position:relative;display:grid;grid-template-columns:minmax(250px,.92fr) minmax(320px,1.18fr);gap:18px;align-items:center;padding:12px 0 14px 42px}
       .epsilon-story-copy{position:relative}
       .epsilon-story-index{position:absolute;left:-42px;top:0;width:30px;height:30px;border-radius:50%;background:#1d4ed8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;box-shadow:0 0 0 5px rgba(255,255,255,.94)}
       .epsilon-story-copy h4{margin:0 0 7px;font-size:14px;color:#0f172a;letter-spacing:0}
-      .epsilon-story-copy p{margin:0;font-size:12px;line-height:1.72;color:#475569}
+      .epsilon-story-copy p{margin:0;font-size:13px;line-height:1.68;color:#475569}
       .epsilon-story-figure{min-height:150px;border:1px solid #e2e8f0;border-radius:7px;background:#fff;padding:8px;box-shadow:0 8px 24px rgba(15,23,42,.045)}
       .epsilon-story-figure svg{display:block;width:100%;height:auto}
       .epsilon-svg-box,.epsilon-svg-formula{fill:#f8fafc;stroke:#cbd5e1;stroke-width:1.2}
@@ -1716,7 +1725,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-svg-arrow{stroke:#94a3b8;stroke-width:1.4}
       .epsilon-svg-arrow-head{fill:#94a3b8}
       .epsilon-svg-title{fill:#0f172a;font-size:12px;font-weight:700}
-      .epsilon-svg-muted{fill:#64748b;font-size:10.5px}
+      .epsilon-svg-muted{fill:#64748b;font-size:11.5px}
+      .epsilon-map-legend-note{margin-top:9px;color:#64748b;font-size:11.5px;line-height:1.5}
       .epsilon-svg-equation{fill:#0f172a;font-size:15px;font-family:Consolas,monospace;font-weight:700}
       body.theme-dark .epsilon-curve-preview{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-toolbar{background:rgba(15,23,42,.96);border-color:#334155;box-shadow:0 8px 24px rgba(0,0,0,.32)}
@@ -2140,7 +2150,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         : `${this.focusTitle()} epsilon era change`,
       html: `
         ${this.renderContinuousLegendBar()}
-        <div style="font-size:10px;color:#64748b;margin-top:8px">${this.analysisView === "trend"
+        <div class="epsilon-map-legend-note">${this.analysisView === "trend"
           ? "Fold-centered Theil-Sen slope in percent per decade. FDR evidence is shown in the inspector."
           : "Fold-adjusted post-1990 annual-median effect. FDR evidence is shown in the inspector; gray means near zero, not Unresolved."}</div>
       `
