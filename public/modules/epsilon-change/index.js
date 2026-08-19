@@ -379,7 +379,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
             </div>
           </section>
           <section id="epsilon-overview-map-key">
-            <h3>Read the map</h3>
+            <h3>Map guide</h3>
             <div class="epsilon-overview-classification">
                ${this.renderOverviewLegend()}
             </div>
@@ -392,7 +392,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
           </section>
           ${this.analysisView === "change" ? this.renderGlobalEvidence() : ""}
           <section id="epsilon-overview-data-model">
-            <h3>Data, model and equations</h3>
+            <h3>Data &amp; model</h3>
             ${this.renderMethodEssentials()}
           </section>
           ${this.analysisView === "change" ? this.renderMethodStory() : this.renderFocusedMethod()}
@@ -438,14 +438,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   renderOverviewNavigation() {
     const items = [
       ["epsilon-overview-snapshot", "Current view"],
-      ["epsilon-overview-map-key", "Read the map"],
+      ["epsilon-overview-map-key", "Map guide"],
       ...(this.analysisView === "change" ? [
-        ["epsilon-overview-global-evidence", "Global field evidence"],
-        ["epsilon-overview-data-model", "Data, model and equations"],
+        ["epsilon-overview-global-evidence", "Global evidence"],
+        ["epsilon-overview-data-model", "Data &amp; model"],
         ["epsilon-overview-workflow", "Method workflow"]
       ] : [
-        ["epsilon-overview-data-model", "Data, model and equations"],
-        ["epsilon-overview-focused-method", "Interpretation boundary"]
+        ["epsilon-overview-data-model", "Data &amp; model"],
+        ["epsilon-overview-focused-method", "Interpretation"]
       ])
     ];
     return `
@@ -518,7 +518,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const coveragePct = 100 * Number(coverage?.fieldCoverageFraction);
     return `
       <section id="epsilon-overview-global-evidence">
-        <h3>Global field evidence</h3>
+        <h3>Global evidence</h3>
         <p class="epsilon-overview-lead">A catchment can remain Unresolved after local FDR control while a spatially replicated field-level pattern is still supported. These tests pool catchment effects without relabeling any individual map point.${coverage ? ` At the fixed NSE &gt; 0.5 protocol, ${Number(coverage.fieldEligibleCatchments).toLocaleString()} of ${Number(coverage.reliabilityQualifiedCatchments).toLocaleString()} reliability-qualified catchments contribute to the all-recession field test (${this.formatNumber(coveragePct, 1)}%).` : ""}</p>
         <div class="epsilon-evidence-grid">
           <article class="epsilon-evidence-item epsilon-evidence-item--primary">
@@ -615,7 +615,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     if (this.analysisView === "decomposition") {
       return `
         <section id="epsilon-overview-focused-method">
-          <h3>Interpretation boundary</h3>
+          <h3>Interpretation</h3>
           ${this.renderAttributionDefinitions()}
           <p class="epsilon-method-caution"><strong>Descriptive decomposition.</strong> GQ is computed from the same out-of-fold daily estimates as epsilon and Q. The identity closes algebraically, but dominance is not a causal climate attribution and has no separate significance claim.</p>
         </section>
@@ -623,7 +623,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     }
     return `
       <section id="epsilon-overview-focused-method">
-        <h3>Interpretation boundary</h3>
+        <h3>Interpretation</h3>
         <div class="epsilon-overview-definitions">
           <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Slope</span><span>Fold-centered annual epsilon medians are summarized by a Theil-Sen slope in percent per decade.</span></div>
           <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Evidence</span><span>Kendall tests are corrected across catchments with Benjamini-Hochberg FDR. A non-significant slope is unresolved evidence, not proof of no change.</span></div>
@@ -1573,7 +1573,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const style = document.createElement("style");
     style.id = "epsilon-preview-styles";
     style.textContent = `
-      .epsilon-toolbar{position:fixed;top:14px;left:calc(50% + 170px);transform:translateX(-50%);z-index:120;display:flex;align-items:center;gap:8px;max-width:calc(100vw - 420px);min-height:46px;padding:6px 7px 6px 13px;border:1px solid #dbe3ef;border-radius:8px;background:rgba(255,255,255,.96);box-shadow:0 8px 24px rgba(15,23,42,.12);backdrop-filter:blur(10px)}
+      .epsilon-toolbar{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:120;display:flex;align-items:center;gap:8px;max-width:calc(100vw - 32px);min-height:46px;padding:6px 7px 6px 13px;border:1px solid #dbe3ef;border-radius:8px;background:rgba(255,255,255,.96);box-shadow:0 8px 24px rgba(15,23,42,.12);backdrop-filter:blur(10px)}
       .epsilon-toolbar-label{color:#334155;font-size:14px;font-weight:700;white-space:nowrap}
       .epsilon-toolbar-segments{display:flex;align-items:center;gap:2px;padding:2px;border-radius:6px;background:#eef2f7}
       .epsilon-toolbar-segments button,.epsilon-toolbar-overview{min-height:34px;border:0;border-radius:5px;padding:0 13px;color:#64748b;background:transparent;font-size:13.5px;font-weight:700;white-space:nowrap;cursor:pointer}
@@ -1619,7 +1619,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-layout{display:grid;grid-template-columns:190px minmax(0,1fr);align-items:start}
       .epsilon-overview-nav{position:sticky;top:0;display:grid;gap:2px;padding:2px 14px 6px 0;border-right:1px solid #e2e8f0}
       .epsilon-overview-nav-title{margin:0 0 8px;padding:0 8px;color:#94a3b8;font-size:12.5px;font-weight:700;text-transform:uppercase}
-      .epsilon-overview-nav a{display:block;padding:8px;border-left:2px solid transparent;color:#64748b;font-size:14px;font-weight:600;line-height:1.35;text-decoration:none}
+      .epsilon-overview-nav a{display:block;padding:8px;border-left:2px solid transparent;color:#64748b;font-size:14px;font-weight:600;line-height:1.35;text-decoration:none;white-space:nowrap}
       .epsilon-overview-nav a:hover{color:#0f172a;background:#f8fafc}
       .epsilon-overview-nav a.active{border-left-color:#2563eb;background:#eff6ff;color:#1d4ed8}
       .epsilon-overview-content{min-width:0;padding-left:18px}

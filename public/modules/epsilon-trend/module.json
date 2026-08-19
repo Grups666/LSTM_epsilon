@@ -2,7 +2,7 @@
   "id": "epsilon-trend",
   "name": "Temporal Robustness",
   "version": "0.1.0",
-  "assetVersion": "2026-08-19-overview-navigation-v18",
+  "assetVersion": "2026-08-19-centered-toolbar-v19",
   "description": "Fold-centered continuous epsilon trends as a prespecified sensitivity check.",
   "author": "Spatial Research Team",
   "icon": "activity",
