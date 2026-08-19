@@ -16,6 +16,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.byId = new Map();
     this.selected = null;
     this.overviewNavScrollHandler = null;
+    this.overviewNavScrollTimer = null;
+    this.overviewNavPendingId = null;
     this.analysisView = ["change", "decomposition", "trend"].includes(manifest.analysisView)
       ? manifest.analysisView
       : "change";
@@ -464,19 +466,34 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const links = [...nav.querySelectorAll("a")];
     const targets = links.map((link) => body.querySelector(link.getAttribute("href"))).filter(Boolean);
     const activate = (id) => links.forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${id}`));
+    const schedulePendingActivation = () => {
+      if (!this.overviewNavPendingId) return;
+      if (this.overviewNavScrollTimer) clearTimeout(this.overviewNavScrollTimer);
+      this.overviewNavScrollTimer = setTimeout(() => {
+        activate(this.overviewNavPendingId);
+        this.overviewNavPendingId = null;
+        this.overviewNavScrollTimer = null;
+      }, 140);
+    };
     links.forEach((link) => {
       link.onclick = (event) => {
         event.preventDefault();
         const target = body.querySelector(link.getAttribute("href"));
         if (!target) return;
-        activate(target.id);
+        this.overviewNavPendingId = target.id;
+        if (this.overviewNavScrollTimer) clearTimeout(this.overviewNavScrollTimer);
         const targetTop = target.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop;
         const compact = window.innerWidth <= 760;
         const offset = compact ? 68 : 12;
         body.scrollTo({ top: Math.max(0, targetTop - offset), behavior: compact ? "auto" : "smooth" });
+        schedulePendingActivation();
       };
     });
     this.overviewNavScrollHandler = () => {
+      if (this.overviewNavPendingId) {
+        schedulePendingActivation();
+        return;
+      }
       const top = body.getBoundingClientRect().top + (window.innerWidth <= 760 ? 96 : 34);
       let current = targets[0];
       for (const target of targets) {
@@ -643,7 +660,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     if (overviewBody && this.overviewNavScrollHandler) {
       overviewBody.removeEventListener("scroll", this.overviewNavScrollHandler);
     }
+    if (this.overviewNavScrollTimer) clearTimeout(this.overviewNavScrollTimer);
     this.overviewNavScrollHandler = null;
+    this.overviewNavScrollTimer = null;
+    this.overviewNavPendingId = null;
     this.overviewModal?.remove();
     this.distributionModal?.remove();
     this.overviewModal = null;
