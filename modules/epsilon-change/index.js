@@ -325,9 +325,6 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ctx.globalAlpha = selected ? 0.98 : 0.72;
         ctx.fill();
         ctx.globalAlpha = 1;
-        ctx.lineWidth = selected ? 2.2 : hovered ? 2.0 : 0.7;
-        ctx.strokeStyle = selected ? "#0f172a" : hovered ? "#1d4ed8" : "rgba(15,23,42,0.24)";
-        ctx.stroke();
       }
     }
   }
