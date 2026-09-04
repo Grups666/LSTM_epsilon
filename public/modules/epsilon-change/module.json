@@ -2,7 +2,7 @@
   "id": "epsilon-change",
   "name": "Epsilon Change",
   "version": "0.1.0",
-  "assetVersion": "2026-09-04-unresolved-control-v23",
+  "assetVersion": "2026-09-04-pvalue-soil-clarity-v24",
   "description": "Fold-adjusted post-1990 annual-median epsilon effects with an All / Low / High flow selector.",
   "author": "Spatial Research Team",
   "icon": "activity",
