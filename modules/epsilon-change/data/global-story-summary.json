@@ -239,8 +239,8 @@
     ]
   },
   "currentStageCaveats": {
-    "soilMoistureInput": "SM_% currently stores a 0-1 clipped, layer-thickness-weighted mean of ERA5-Land swvl1-swvl4; it is volumetric root-zone soil moisture, not a standardized SSI.",
-    "lpGammaPrior": "LP/gamma prior fitting used a simple mean of swvl1-swvl3, so the soil-moisture aggregation is not identical to the model input.",
+    "soilMoistureInput": "SM_% intentionally stores a 0-1 clipped, layer-thickness-weighted mean of ERA5-Land swvl1-swvl4, representing volumetric root-zone soil moisture.",
+    "lpGammaPrior": "The model input uses the four-layer thickness-weighted series, while LP/gamma prior fitting used an equal-weight mean of swvl1-swvl3. These two soil-moisture scales should be made identical before rerunning.",
     "sequenceContinuity": "Retained rows are date-aligned, but current training windows do not require adjacent calendar dates; long observed-Q gaps can be compressed inside a sequence.",
     "status": "Current-stage results are archived and should be re-evaluated after a harmonized, gap-safe rerun."
   },

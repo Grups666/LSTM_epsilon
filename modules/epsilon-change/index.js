@@ -554,10 +554,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <div class="epsilon-equation-grid">
         <div class="epsilon-equation-card"><span>Recession equation</span><code>dQ/dt = -epsilon * Q^2 - epsilon * alpha * AET * Q</code></div>
         <div class="epsilon-equation-card"><span>Component identity</span><code>GQ(t) = epsilon(t) * Qsim(t)</code><code>delta log epsilon = delta log GQ - delta log Qsim</code></div>
-        <div class="epsilon-equation-card"><span>Reliability & inference rules</span><code>skill_pre &gt; threshold AND skill_post &gt; threshold</code><code>Increase / Decrease only when era-shift FDR q &lt; 0.05</code></div>
+        <div class="epsilon-equation-card"><span>Reliability & inference rules</span><code>skill_pre &gt; threshold AND skill_post &gt; threshold</code><code>H0: beta_post = 0; t = beta_post / SE_HAC</code><code>Increase / Decrease only when era-shift FDR q &lt; 0.05</code></div>
       </div>
       <p class="epsilon-method-caution"><strong>Interpretation boundary.</strong> The primary result is an association between model-inferred epsilon and the two climate eras. The GQ / Q decomposition is a descriptive identity, and neither result alone identifies an external climate cause.</p>
-      ${this.globalStory?.currentStageCaveats ? `<p class="epsilon-method-caution epsilon-method-caution--stage"><strong>Current-stage audit.</strong> The model input called SM_% is a 0-1 clipped, layer-thickness-weighted ERA5-Land swvl1-swvl4 mean, not a standardized SSI. LP/gamma priors used a swvl1-swvl3 mean, and sequence construction did not enforce adjacent calendar dates. The present results are archived pending a harmonized, gap-safe rerun.</p>` : ""}
+      ${this.globalStory?.currentStageCaveats ? `<p class="epsilon-method-caution epsilon-method-caution--stage"><strong>Current-stage audit.</strong> SM_% intentionally represents volumetric root-zone soil moisture. The model input uses a thickness-weighted swvl1-swvl4 mean, whereas LP/gamma prior fitting used an equal-weight swvl1-swvl3 mean. That aggregation mismatch and the absence of a calendar-adjacency rule should be corrected in a harmonized, gap-safe rerun.</p>` : ""}
     `;
   }
 
@@ -1483,7 +1483,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <div class="epsilon-overview-definitions">
         <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Flow condition</span><span>${regimeDefinition}</span></div>
         <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Era effect</span><span>Color is the fold-adjusted percent change in annual-median epsilon after 1990. It remains continuous so unresolved catchments are not erased or painted as zero.</span></div>
-        <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Local evidence</span><span>Annual medians require at least three recession days, 10 valid years in each era, and five paired-fold years per era. At the current reliability threshold, ${this.insufficientExcludedCount.toLocaleString()} catchments lack that support and are excluded before classification. Increase or Decrease requires Benjamini-Hochberg FDR q &lt; 0.05; otherwise the direction is Unresolved, not Stable.</span></div>
+        <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Local evidence</span><span>For each catchment and flow condition, the two-sided p-value tests H0: beta_post = 0 in fold-adjusted log annual epsilon using a HAC standard error. It tests whether the estimated pre/post era shift is distinguishable from zero, not model skill or climate causation. Annual medians require at least three recession days, 10 valid years in each era, and five paired-fold years per era. At the current reliability threshold, ${this.insufficientExcludedCount.toLocaleString()} catchments lack that support and are excluded before classification. Increase or Decrease requires Benjamini-Hochberg FDR q &lt; 0.05; otherwise the direction is Unresolved, not Stable.</span></div>
       </div>
     `;
   }
