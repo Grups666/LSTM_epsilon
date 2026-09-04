@@ -2,7 +2,7 @@
   "id": "epsilon-change",
   "name": "Epsilon Change",
   "version": "0.1.0",
-  "assetVersion": "2026-08-19-smooth-stable-nav-v21",
+  "assetVersion": "2026-09-04-borderless-map-points-v22",
   "description": "Fold-adjusted post-1990 annual-median epsilon effects with an All / Low / High flow selector.",
   "author": "Spatial Research Team",
   "icon": "activity",
