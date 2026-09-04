@@ -2,7 +2,7 @@
   "id": "epsilon-trend",
   "name": "Temporal Robustness",
   "version": "0.1.0",
-  "assetVersion": "2026-09-04-borderless-map-points-v22",
+  "assetVersion": "2026-09-04-unresolved-control-v23",
   "description": "Fold-centered continuous epsilon trends as a prespecified sensitivity check.",
   "author": "Spatial Research Team",
   "icon": "activity",
@@ -14,6 +14,7 @@
   "defaultRegime": "all",
   "skillFilterMetric": "nse",
   "skillFilterThreshold": 0.5,
+  "showUnresolved": false,
   "globalStoryFile": "../epsilon-change/data/global-story-summary.json",
   "datasets": [{
     "id": "epsilon-catchment-distributions",

@@ -2,7 +2,7 @@
   "id": "epsilon-change",
   "name": "Epsilon Change",
   "version": "0.1.0",
-  "assetVersion": "2026-09-04-borderless-map-points-v22",
+  "assetVersion": "2026-09-04-unresolved-control-v23",
   "description": "Fold-adjusted post-1990 annual-median epsilon effects with an All / Low / High flow selector.",
   "author": "Spatial Research Team",
   "icon": "activity",
@@ -15,6 +15,7 @@
   "defaultRegime": "all",
   "skillFilterMetric": "nse",
   "skillFilterThreshold": 0.5,
+  "showUnresolved": false,
   "datasets": [
     {
       "id": "epsilon-catchment-distributions",
