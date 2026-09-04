@@ -2,9 +2,17 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
 
 import numpy as np
 import pandas as pd
+
+
+SRC_DIR = Path(__file__).resolve().parents[1]
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from soil_moisture import ROOT_ZONE_COLUMNS, root_zone_soil_moisture
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,15 +57,6 @@ def daily_pet_fao56_pm(df: pd.DataFrame) -> np.ndarray:
     return np.maximum(np.nan_to_num(pet, nan=0.0, posinf=0.0, neginf=0.0), 0.0).astype("float32")
 
 
-def rootzone_sm(df: pd.DataFrame) -> np.ndarray:
-    """Weighted root-zone soil moisture from ERA5-Land volumetric layers."""
-
-    weights = np.array([0.07, 0.21, 0.72, 1.89], dtype="float64")
-    vals = df[["swvl1", "swvl2", "swvl3", "swvl4"]].to_numpy("float64")
-    sm = np.average(vals, axis=1, weights=weights)
-    return np.clip(np.nan_to_num(sm, nan=0.0, posinf=1.0, neginf=0.0), 0.0, 1.0).astype("float32")
-
-
 def convert_year(path: Path, out_path: Path) -> tuple[int, int]:
     cols = [
         "GCIN",
@@ -67,10 +66,7 @@ def convert_year(path: Path, out_path: Path) -> tuple[int, int]:
         "u10",
         "v10",
         "sp",
-        "swvl1",
-        "swvl2",
-        "swvl3",
-        "swvl4",
+        *ROOT_ZONE_COLUMNS,
         "tp",
         "ssr",
         "str",
@@ -85,7 +81,7 @@ def convert_year(path: Path, out_path: Path) -> tuple[int, int]:
             "precipitation_mmd": df["tp"].clip(lower=0.0).astype("float32"),
             "temperature_C": (df["t2m"].astype("float64") - 273.15).astype("float32"),
             "pet_mmd": daily_pet_fao56_pm(df),
-            "SM_%": rootzone_sm(df),
+            "SM_%": root_zone_soil_moisture(df),
             "streamflow_mmd": df["qobs_streamflow_mm"].clip(lower=0.0).astype("float32"),
             "observed_AET_mm": df["aet"].astype("float32"),
         }

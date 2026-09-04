@@ -42,6 +42,8 @@ GCIN, date, precipitation_mmd, temperature_C, pet_mmd,
 SM_%, streamflow_mmd, observed_AET_mm
 ```
 
+The archived run used different soil-depth aggregations in model input and LP/gamma fitting. The next-run contract is locked to one calculation in both paths: the depth-weighted ERA5-Land 0-100 cm root-zone profile, `SM_RZ = 0.07*swvl1 + 0.21*swvl2 + 0.72*swvl3`. The published archived estimates are unchanged until that rerun is completed.
+
 Observed-Q duration is based on valid daily values rather than nominal table bounds:
 
 ```text

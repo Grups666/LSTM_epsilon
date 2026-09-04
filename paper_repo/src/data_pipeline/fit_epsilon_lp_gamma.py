@@ -5,13 +5,21 @@ from __future__ import annotations
 import argparse
 from collections import defaultdict
 from pathlib import Path
+import sys
 
 import numpy as np
 import pandas as pd
 
 
+SRC_DIR = Path(__file__).resolve().parents[1]
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from soil_moisture import ROOT_ZONE_COLUMNS, root_zone_soil_moisture
+
+
 EPS = 1e-6
-VARIABLES = ["t2m", "d2m", "u10", "v10", "sp", "ssr", "str", "aet", "swvl1", "swvl2", "swvl3"]
+VARIABLES = ["t2m", "d2m", "u10", "v10", "sp", "ssr", "str", "aet", *ROOT_ZONE_COLUMNS]
 
 
 def parse_args() -> argparse.Namespace:
@@ -65,7 +73,7 @@ def main() -> None:
         df = pd.read_parquet(path, columns=["GCIN", *VARIABLES])
         df["GCIN"] = df["GCIN"].astype(str)
         df["pet_mmd"] = penman_monteith_pet_mm_day(df)
-        df["sm_rootzone"] = df[["swvl1", "swvl2", "swvl3"]].mean(axis=1)
+        df["sm_rootzone"] = root_zone_soil_moisture(df)
         valid = (df["pet_mmd"] > EPS) & (df["aet"] > EPS) & (df["sm_rootzone"] > EPS)
         d = df.loc[valid, ["GCIN", "pet_mmd", "aet", "sm_rootzone"]].copy()
         d["x"] = np.log(d["sm_rootzone"].clip(lower=EPS))

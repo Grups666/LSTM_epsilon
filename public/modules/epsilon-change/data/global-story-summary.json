@@ -239,8 +239,8 @@
     ]
   },
   "currentStageCaveats": {
-    "soilMoistureInput": "SM_% intentionally stores a 0-1 clipped, layer-thickness-weighted mean of ERA5-Land swvl1-swvl4, representing volumetric root-zone soil moisture.",
-    "lpGammaPrior": "The model input uses the four-layer thickness-weighted series, while LP/gamma prior fitting used an equal-weight mean of swvl1-swvl3. These two soil-moisture scales should be made identical before rerunning.",
+    "soilMoistureInput": "Archived SM_% used a thickness-weighted swvl1-swvl4 mean, while the archived LP/gamma fit used an equal-weight swvl1-swvl3 mean.",
+    "lpGammaPrior": "The locked rerun contract uses the same depth-weighted ERA5-Land 0-100 cm root-zone series in both paths: 0.07*swvl1 + 0.21*swvl2 + 0.72*swvl3.",
     "sequenceContinuity": "Retained rows are date-aligned, but current training windows do not require adjacent calendar dates; long observed-Q gaps can be compressed inside a sequence.",
     "status": "Current-stage results are archived and should be re-evaluated after a harmonized, gap-safe rerun."
   },

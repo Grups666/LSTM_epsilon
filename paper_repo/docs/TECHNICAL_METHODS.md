@@ -33,6 +33,8 @@ _private/processed/epsilon_model_inputs_pure_gcin_1950_2019/
 
 Observed streamflow and boundary identity use the original GCIN identifier. Private daily data and checkpoints are not published.
 
+The archived run used a thickness-weighted `swvl1-swvl4` model input but an equal-weight `swvl1-swvl3` LP/gamma fit. The locked rerun contract uses the same 0-100 cm root-zone definition in both paths: `SM_RZ = 0.07*swvl1 + 0.21*swvl2 + 0.72*swvl3`. A shared source implementation prevents the two paths from diverging again. The fourth ERA5-Land layer (100-289 cm) is excluded from the primary AET limitation variable.
+
 ## Temporal Cross-Fitting
 
 The pre and post periods are independently divided into five contiguous calendar blocks. Fold `k` holds out pre block `k` and post block `k` together.

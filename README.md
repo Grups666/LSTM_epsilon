@@ -35,6 +35,8 @@ The module uses the pure GCIN paired temporal cross-fit. It summarizes out-of-ti
 
 Each of five rotations holds out one contiguous pre-1990 block and one contiguous post-1990 block for all catchments. The other four blocks from each period train one shared model. There is no validation set or test-guided checkpoint selection.
 
+The next-run soil-moisture contract is fixed to a thickness-weighted ERA5-Land 0-100 cm root-zone value (`0.07*swvl1 + 0.21*swvl2 + 0.72*swvl3`) for both model input and LP/gamma fitting. Current published numbers remain the archived pre-harmonization baseline.
+
 The generated data file is:
 
 `public/modules/epsilon-change/data/epsilon-catchment-distributions.json`
