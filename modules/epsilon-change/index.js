@@ -557,7 +557,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         <div class="epsilon-equation-card"><span>Reliability & inference rules</span><code>skill_pre &gt; threshold AND skill_post &gt; threshold</code><code>H0: beta_post = 0; t = beta_post / SE_HAC</code><code>Increase / Decrease only when era-shift FDR q &lt; 0.05</code></div>
       </div>
       <p class="epsilon-method-caution"><strong>Interpretation boundary.</strong> The primary result is an association between model-inferred epsilon and the two climate eras. The GQ / Q decomposition is a descriptive identity, and neither result alone identifies an external climate cause.</p>
-      ${this.globalStory?.currentStageCaveats ? `<p class="epsilon-method-caution epsilon-method-caution--stage"><strong>Current-stage audit.</strong> SM_% intentionally represents volumetric root-zone soil moisture. The model input uses a thickness-weighted swvl1-swvl4 mean, whereas LP/gamma prior fitting used an equal-weight swvl1-swvl3 mean. That aggregation mismatch and the absence of a calendar-adjacency rule should be corrected in a harmonized, gap-safe rerun.</p>` : ""}
+      ${this.globalStory?.currentStageCaveats ? `<p class="epsilon-method-caution epsilon-method-caution--stage"><strong>Current-stage audit.</strong> Archived outputs used inconsistent soil-depth aggregations. The locked rerun contract uses the same thickness-weighted ERA5-Land 0-100 cm root-zone value in model input and LP/gamma fitting: 0.07*swvl1 + 0.21*swvl2 + 0.72*swvl3. Archived estimates remain unchanged until the gap-safe rerun.</p>` : ""}
     `;
   }
 
