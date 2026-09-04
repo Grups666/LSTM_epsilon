@@ -12,6 +12,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     this.data = null;
     this.globalStory = null;
     this.rawBasins = [];
+    this.supportedBasins = [];
     this.basins = [];
     this.byId = new Map();
     this.selected = null;
@@ -38,8 +39,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       metric: manifest.skillFilterMetric || "nse",
       threshold: Number.isFinite(Number(manifest.skillFilterThreshold)) ? Number(manifest.skillFilterThreshold) : 0.5
     };
+    this.showUnresolved = manifest.showUnresolved === true;
     this.reliabilityEligibleCount = 0;
     this.insufficientExcludedCount = 0;
+    this.unresolvedAvailableCount = 0;
+    this.unresolvedHiddenCount = 0;
     this.displayRegimes = ["all", "low", "high"];
     this.handleModalPointer = (event) => this.onDistributionPointer(event);
     this.handleFeatureClick = (payload) => {
@@ -187,8 +191,17 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     });
     this.reliabilityEligibleCount = reliabilityEligible.length;
     const supported = reliabilityEligible.filter((basin) => this.hasAnalysisData(basin));
+    this.supportedBasins = supported;
     this.insufficientExcludedCount = reliabilityEligible.length - supported.length;
-    this.basins = supported;
+    this.unresolvedAvailableCount = this.supportsUnresolvedFilter()
+      ? supported.filter((basin) => this.isUnresolvedBasin(basin)).length
+      : 0;
+    this.unresolvedHiddenCount = this.supportsUnresolvedFilter() && !this.showUnresolved
+      ? this.unresolvedAvailableCount
+      : 0;
+    this.basins = this.unresolvedHiddenCount
+      ? supported.filter((basin) => !this.isUnresolvedBasin(basin))
+      : supported;
     this.byId = new Map(this.basins.map((basin) => [basin.id, basin]));
     if (this.selected && !this.byId.has(String(this.selected.id))) {
       this.selected = null;
@@ -218,9 +231,33 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     return this.hasSufficientShiftData(basin);
   }
 
+  supportsUnresolvedFilter() {
+    return this.analysisView === "change" || this.analysisView === "trend";
+  }
+
+  isUnresolvedBasin(basin) {
+    const regime = this.activeRegime;
+    if (this.analysisView === "trend") {
+      return this.trendState(basin[`${regime}_epsilon_trend_class`]) === "unresolved";
+    }
+    if (this.analysisView === "change") {
+      return this.shiftState(basin[`${regime}_epsilon_shift_class`]) === "unresolved";
+    }
+    return false;
+  }
+
   updateSkillFilter(metric, threshold, refreshOverview = true) {
     this.skillFilter.metric = metric;
     this.skillFilter.threshold = threshold;
+    this.applySkillFilter();
+    this.colorScaleExtent = this.computeContinuousExtent();
+    this.ensureLegend();
+    if (refreshOverview && this.overviewModal?.classList.contains("visible")) this.showOverview();
+    this.app.draw?.();
+  }
+
+  updateUnresolvedVisibility(show, refreshOverview = true) {
+    this.showUnresolved = Boolean(show);
     this.applySkillFilter();
     this.colorScaleExtent = this.computeContinuousExtent();
     this.ensureLegend();
@@ -320,7 +357,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         const hovered = this.app.hoveredLayer?.id === this.layerId && this.app.hoveredFeatureId === basin.id;
         const radius = selected ? 6.5 : hovered ? this.pointRadius(basin, viewport) + 2.2 : this.pointRadius(basin, viewport);
         ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        if (this.isUnresolvedBasin(basin)) {
+          ctx.moveTo(x, y - radius);
+          ctx.lineTo(x + radius * 0.9, y + radius * 0.58);
+          ctx.lineTo(x - radius * 0.9, y + radius * 0.58);
+          ctx.closePath();
+        } else {
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+        }
         ctx.fillStyle = this.basinColor(basin);
         ctx.globalAlpha = selected ? 0.98 : 0.72;
         ctx.fill();
@@ -439,7 +483,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       ["epsilon-overview-snapshot", "Current view"],
       ["epsilon-overview-map-key", "Map guide"],
       ...(this.analysisView === "change" ? [
-        ["epsilon-overview-global-evidence", "Global evidence"],
+        ["epsilon-overview-global-evidence", "Field evidence"],
         ["epsilon-overview-data-model", "Data &amp; model"],
         ["epsilon-overview-workflow", "Method workflow"]
       ] : [
@@ -502,7 +546,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   renderMethodEssentials() {
     return `
       <div class="epsilon-method-facts">
-        <div><strong>Daily data</strong><span>GCIN observed Q joined by catchment and date to ERA5-Land precipitation, temperature, PET, soil moisture and AET-related inputs.</span></div>
+        <div><strong>Daily data</strong><span>GCIN observed Q joined by catchment and date to ERA5-Land precipitation, temperature, PET, root-zone volumetric soil moisture and AET-related inputs.</span></div>
         <div><strong>Periods & regimes</strong><span>Pre 1950-1990; post 1991-2019. Low flow uses Qobs &le; catchment Q10; high flow uses Qobs &ge; catchment Q90.</span></div>
         <div><strong>Physics core</strong><span>Daily epsilon is inferred directly by the reference Ara LSTM-epsilon core. The governing equation, state reset and four-part loss are unchanged.</span></div>
         <div><strong>Evaluation</strong><span>Five paired temporal folds provide out-of-time estimates. NSE and KGE assess reconstructed Q and are indirect reliability checks for latent epsilon.</span></div>
@@ -513,6 +557,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         <div class="epsilon-equation-card"><span>Reliability & inference rules</span><code>skill_pre &gt; threshold AND skill_post &gt; threshold</code><code>Increase / Decrease only when era-shift FDR q &lt; 0.05</code></div>
       </div>
       <p class="epsilon-method-caution"><strong>Interpretation boundary.</strong> The primary result is an association between model-inferred epsilon and the two climate eras. The GQ / Q decomposition is a descriptive identity, and neither result alone identifies an external climate cause.</p>
+      ${this.globalStory?.currentStageCaveats ? `<p class="epsilon-method-caution epsilon-method-caution--stage"><strong>Current-stage audit.</strong> The model input called SM_% is a 0-1 clipped, layer-thickness-weighted ERA5-Land swvl1-swvl4 mean, not a standardized SSI. LP/gamma priors used a swvl1-swvl3 mean, and sequence construction did not enforce adjacent calendar dates. The present results are archived pending a harmonized, gap-safe rerun.</p>` : ""}
     `;
   }
 
@@ -528,9 +573,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const spreadPositive = 100 * Number(spreadConfirmation.positiveCatchmentFraction);
     const coverage = story.coverage;
     const coveragePct = 100 * Number(coverage?.fieldCoverageFraction);
+    const regional = story.regionalContext;
+    const withoutEurope = regional?.confirmationWithoutEurope;
+    const europeShare = 100 * Number(regional?.largestConfirmationContinentShare);
     return `
       <section id="epsilon-overview-global-evidence">
-        <h3>Global evidence</h3>
+        <h3>Field evidence</h3>
         <p class="epsilon-overview-lead">A catchment can remain Unresolved after local FDR control while a spatially replicated field-level pattern is still supported. These tests pool catchment effects without relabeling any individual map point.${coverage ? ` At the fixed NSE &gt; 0.5 protocol, ${Number(coverage.fieldEligibleCatchments).toLocaleString()} of ${Number(coverage.reliabilityQualifiedCatchments).toLocaleString()} reliability-qualified catchments contribute to the all-recession field test (${this.formatNumber(coveragePct, 1)}%).` : ""}</p>
         <div class="epsilon-evidence-grid">
           <article class="epsilon-evidence-item epsilon-evidence-item--primary">
@@ -548,11 +596,14 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
             <small>Discovery was weaker (${this.formatSignedPct(median.discovery.estimatePct)}; interval crossed zero). This field result complements, but does not replace, the catchment-level era-effect map.</small>
           </article>
         </div>
+        ${regional && withoutEurope ? `
+          <div class="epsilon-evidence-guardrail"><strong>Geographic scope.</strong> The confirmation estimate is multi-regional but Europe-weighted: Europe contributes ${this.formatNumber(europeShare, 1)}% of eligible confirmation catchments. Europe and North America have intervals above zero; after excluding Europe, the estimate is ${this.formatSignedPct(withoutEurope.estimatePct)} (95% spatial-block CI ${this.formatSignedPct(withoutEurope.ciLowPct)} to ${this.formatSignedPct(withoutEurope.ciHighPct)}; p ${this.formatPValue(withoutEurope.pValue)}). The result should therefore be described as a Europe-centered, cross-regional pattern rather than a universal global response.</div>
+        ` : ""}
         ${soilJoint ? `
           <div class="epsilon-evidence-association">
             <div>
               <span class="epsilon-evidence-kicker">Hydroclimate association</span>
-              <strong>Wetter soil-moisture change aligns with a smaller annual-median epsilon shift</strong>
+              <strong>Wetter root-zone volumetric soil-moisture change aligns with a smaller annual-median epsilon shift</strong>
             </div>
             <div class="epsilon-evidence-association-value">${this.formatSignedPct(soilJoint.estimatePctPerDiscoverySd)}</div>
             <p>This model uses the all-recession annual-median effect, not distribution spread. Estimate is per discovery-sample SD after joint precipitation adjustment and 10-degree spatial-block fixed effects; 95% block-bootstrap CI ${this.formatSignedPct(soilJoint.ciLowPctPerDiscoverySd)} to ${this.formatSignedPct(soilJoint.ciHighPctPerDiscoverySd)}. This is an association, not a causal climate attribution.</p>
@@ -584,8 +635,17 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
             <span>Threshold</span>
             <input class="epsilon-filter-range" type="range" min="-1" max="1" step="0.05" value="${this.formatNumber(this.skillFilter.threshold, 2)}" aria-label="Minimum reliability threshold slider">
           </label>
+          ${this.supportsUnresolvedFilter() ? `
+            <label class="epsilon-filter-unresolved">
+              <input class="epsilon-filter-unresolved-input" type="checkbox"${this.showUnresolved ? " checked" : ""}>
+              <span>
+                <strong>Show unresolved</strong>
+                <small>Display uncertain directions</small>
+              </span>
+            </label>
+          ` : ""}
         </div>
-        <div class="epsilon-field-mode-note"><strong>Scientific view is fixed.</strong> The top selector changes the flow condition; this control only filters catchments by reconstructed-streamflow skill. It never changes the estimand or significance rule.</div>
+        <div class="epsilon-field-mode-note"><strong>Scientific view is fixed.</strong> These controls change visibility only. They never recalculate the era effect, p-value, FDR family or significance class.</div>
         <div class="epsilon-filter-count">${this.filterCountText()}</div>
       </div>
     `;
@@ -597,6 +657,11 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       `${this.reliabilityEligibleCount.toLocaleString()} pass reliability`,
       `${this.insufficientExcludedCount.toLocaleString()} insufficient-support excluded`
     ];
+    if (this.supportsUnresolvedFilter()) {
+      parts.push(this.showUnresolved
+        ? `${this.unresolvedAvailableCount.toLocaleString()} unresolved shown`
+        : `${this.unresolvedHiddenCount.toLocaleString()} unresolved hidden`);
+    }
     return parts.join(" | ");
   }
 
@@ -606,6 +671,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     const metric = root.querySelector(".epsilon-filter-metric");
     const number = root.querySelector(".epsilon-filter-number");
     const range = root.querySelector(".epsilon-filter-range");
+    const unresolved = root.querySelector(".epsilon-filter-unresolved-input");
     const apply = (value, refreshOverview = true) => {
       const threshold = Number(value);
       const next = Number.isFinite(threshold) ? threshold : 0.5;
@@ -621,6 +687,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
     number.onchange = () => apply(number.value);
     range.oninput = () => apply(range.value, false);
     range.onchange = () => apply(range.value, true);
+    if (unresolved) unresolved.onchange = () => this.updateUnresolvedVisibility(unresolved.checked);
   }
 
   renderFocusedMethod() {
@@ -743,8 +810,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         ${this.renderStoryPanel({
           index: "08",
           id: "epsilon-overview-global-field",
-          title: "Test a spatially replicated global field story",
-          body: "Catchments are assigned by 10-degree spatial blocks to a 40% discovery set and an untouched 60% confirmation set. Candidate field patterns are locked after discovery, then tested with random-effects aggregation, spatial block bootstrap intervals and Holm family-wise correction. This separates local unresolved labels from evidence about the global distribution.",
+          title: "Test a spatially replicated field pattern",
+          body: "Catchments are assigned by 10-degree spatial blocks to a 40% discovery set and an untouched 60% confirmation set. Candidate field patterns are locked after discovery, then tested with random-effects aggregation, spatial block bootstrap intervals and Holm family-wise correction. A later continent audit checks whether the field estimate is geographically broad or dominated by one region.",
           figure: this.renderGlobalEvidenceFigure()
         })}
         ${this.renderStoryPanel({
@@ -1153,11 +1220,12 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   categoryBanner(basin) {
     const color = this.basinColor(basin);
     const label = this.escape(this.basinLabel(basin));
+    const unresolvedClass = this.isUnresolvedBasin(basin) ? " epsilon-classification-dot--unresolved" : "";
     return `
       <div class="epsilon-classification-banner">
         <div class="epsilon-classification-kicker">${this.escape(this.analysisTitle())}</div>
         <div class="epsilon-classification-main">
-          <span class="epsilon-classification-dot" style="background:${color}"></span>
+          <span class="epsilon-classification-dot${unresolvedClass}" style="background:${color}"></span>
           <span aria-label="${this.escape(this.basinLabel(basin))}">${label}</span>
         </div>
         <div class="epsilon-classification-subtitle">${this.escape(this.basinLabelSubtitle())}</div>
@@ -1317,6 +1385,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <div style="margin:0 0 14px">
         <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:8px">${this.escape(this.focusTitle())} ${this.analysisView === "trend" ? "continuous epsilon slope" : "post-1990 epsilon shift"}</div>
         ${this.renderContinuousLegendBar()}
+        <div class="epsilon-evidence-shape-key">
+          <span class="epsilon-evidence-shape-key-triangle"></span>
+          <span>Triangle = Unresolved direction${this.showUnresolved ? " (shown)" : " (hidden by the current control)"}</span>
+        </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px">
           ${this.metricCard("Median estimate", `${this.formatPct(median)}${unit}`, median)}
           ${this.metricCard("FDR increase", increaseCount.toLocaleString())}
@@ -1411,7 +1483,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       <div class="epsilon-overview-definitions">
         <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Flow condition</span><span>${regimeDefinition}</span></div>
         <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Era effect</span><span>Color is the fold-adjusted percent change in annual-median epsilon after 1990. It remains continuous so unresolved catchments are not erased or painted as zero.</span></div>
-        <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Local evidence</span><span>Annual medians require at least three recession days, 10 years in each era, and five paired-fold years per era. Increase or Decrease requires Benjamini-Hochberg FDR q &lt; 0.05; otherwise the direction is Unresolved, not Stable.</span></div>
+        <div class="epsilon-overview-definition"><span class="epsilon-overview-definition-title">Local evidence</span><span>Annual medians require at least three recession days, 10 valid years in each era, and five paired-fold years per era. At the current reliability threshold, ${this.insufficientExcludedCount.toLocaleString()} catchments lack that support and are excluded before classification. Increase or Decrease requires Benjamini-Hochberg FDR q &lt; 0.05; otherwise the direction is Unresolved, not Stable.</span></div>
       </div>
     `;
   }
@@ -1455,7 +1527,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
   computeContinuousExtent() {
     const regime = this.activeRegime;
     if (this.analysisView === "decomposition") return 1;
-    const values = this.basins
+    const values = (this.supportedBasins || this.basins)
       .map((basin) => this.analysisView === "trend"
         ? Number(basin[`${regime}_epsilon_slope_pct_decade`])
         : this.shiftValue(basin, regime))
@@ -1603,7 +1675,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-signal-panel{margin-bottom:16px;padding:12px;border:1px solid #dbe3ef;border-radius:7px;background:#f8fafc}
       .epsilon-classification-kicker{margin-bottom:6px;font-size:12px;font-weight:700;color:#94a3b8;text-transform:uppercase}
       .epsilon-classification-main{display:flex;align-items:flex-start;gap:8px;color:#0f172a;font-size:14px;font-weight:700;line-height:1.45}
-      .epsilon-classification-dot{width:13px;height:13px;margin-top:2px;border:1px solid rgba(15,23,42,.2);border-radius:50%;flex:0 0 auto}
+      .epsilon-classification-dot{width:13px;height:13px;margin-top:2px;border:0;border-radius:50%;flex:0 0 auto}
+      .epsilon-classification-dot--unresolved{border-radius:0;clip-path:polygon(50% 0,96% 88%,4% 88%)}
       .epsilon-classification-subtitle{margin-top:6px;color:#64748b;font-size:13px;line-height:1.55}
       .epsilon-metric-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px}
       .epsilon-metric-value{font-size:17px;font-weight:400;color:#64748b}
@@ -1675,6 +1748,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-equation-card code,.epsilon-driver-guide code{display:block;overflow-wrap:anywhere;color:#0f172a;font:600 12.5px/1.55 Consolas,monospace}
       .epsilon-method-caution{margin:10px 0 0!important;padding-left:10px;border-left:2px solid #94a3b8;color:#64748b;font-size:13.5px;line-height:1.55}
       .epsilon-method-caution strong{color:#334155}
+      .epsilon-method-caution--stage{border-left-color:#d97706;background:#fffbeb;padding:9px 10px}
       .epsilon-shift-panel,.epsilon-attribution-panel,.epsilon-trend-panel{margin:12px 0 0;padding:12px 0 0;border:0;border-top:1px solid #dbe3ef;border-radius:0;background:transparent}
       .epsilon-attribution-title,.epsilon-driver-legend-title{font-size:14px;font-weight:700;color:#0f172a;margin-bottom:8px}
       .epsilon-attribution-columns,.epsilon-attribution-row{display:grid;grid-template-columns:14px 56px minmax(70px,1fr) 48px 48px;gap:6px;align-items:center}
@@ -1701,6 +1775,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-driver-legend{margin-top:10px}
       .epsilon-continuous-key{padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
       .epsilon-continuous-labels{display:flex;justify-content:space-between;margin-top:7px;color:#64748b;font-size:13px}
+      .epsilon-evidence-shape-key{display:flex;align-items:center;gap:7px;margin-top:8px;color:#64748b;font-size:13px;line-height:1.4}
+      .epsilon-evidence-shape-key-triangle{width:12px;height:12px;flex:0 0 auto;background:#94a3b8;clip-path:polygon(50% 0,96% 88%,4% 88%)}
       .epsilon-driver-legend--compact{margin-top:0}
       .epsilon-driver-legend-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px}
       .epsilon-driver-legend-item{display:inline-flex;align-items:center;gap:6px;color:#475569;font-size:13px;white-space:nowrap}
@@ -1713,10 +1789,15 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       .epsilon-overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
       .epsilon-overview-filter{margin:14px 0 16px;padding:10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc}
       .epsilon-filter-title{font-size:14px;font-weight:800;margin-bottom:8px;color:#0f172a}
-      .epsilon-filter-grid{display:grid;grid-template-columns:minmax(112px,.7fr) minmax(112px,.7fr) minmax(180px,1.4fr);gap:10px;align-items:end}
+      .epsilon-filter-grid{display:grid;grid-template-columns:minmax(108px,.65fr) minmax(108px,.65fr) minmax(170px,1.25fr) minmax(175px,.9fr);gap:10px;align-items:end}
       .epsilon-filter-field{display:grid;gap:5px;margin:0;color:#64748b;font-size:13.5px;line-height:1.4}
       .epsilon-filter-field select,.epsilon-filter-field input{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;font-size:14px;padding:7px 8px}
       .epsilon-filter-range{padding:0!important;accent-color:#2563eb}
+      .epsilon-filter-unresolved{display:flex;align-items:center;gap:9px;min-height:37px;padding:5px 8px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#334155;cursor:pointer}
+      .epsilon-filter-unresolved input{width:16px;height:16px;margin:0;accent-color:#2563eb;flex:0 0 auto}
+      .epsilon-filter-unresolved span{display:grid;min-width:0;line-height:1.22}
+      .epsilon-filter-unresolved strong{font-size:13.5px;white-space:nowrap}
+      .epsilon-filter-unresolved small{color:#64748b;font-size:11.5px;white-space:nowrap}
       .epsilon-field-mode-note{grid-column:1/-1;margin:1px 0 0;padding:10px 11px;border-left:2px solid #22c55e;background:#fff;color:#64748b;font-size:13px;line-height:1.55}
       .epsilon-field-mode-note strong{color:#334155}
       .epsilon-filter-count{font-size:13.5px;color:#475569;margin-top:9px;line-height:1.45}
@@ -1804,6 +1885,7 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-method-facts span,
       body.theme-dark .epsilon-driver-guide-grid span,
       body.theme-dark .epsilon-method-caution{color:#94a3b8}
+      body.theme-dark .epsilon-method-caution--stage{background:#241a0b;border-left-color:#f59e0b}
       body.theme-dark .epsilon-equation-card{background:#111827;border-color:#263449}
       body.theme-dark .epsilon-attribution-panel,
       body.theme-dark .epsilon-trend-panel{background:transparent;border-color:#263449}
@@ -1834,6 +1916,8 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
       body.theme-dark .epsilon-filter-field{color:#94a3b8}
       body.theme-dark .epsilon-filter-field select,
       body.theme-dark .epsilon-filter-field input{background:#0f172a;border-color:#334155;color:#e5edf7}
+      body.theme-dark .epsilon-filter-unresolved{background:#0f172a;border-color:#334155;color:#e5edf7}
+      body.theme-dark .epsilon-filter-unresolved small{color:#94a3b8}
       body.theme-dark .epsilon-filter-count{color:#94a3b8}
       body.theme-dark .epsilon-field-mode-note{background:#0f172a;color:#94a3b8}
       body.theme-dark .epsilon-field-mode-note strong{color:#e5edf7}
@@ -2160,6 +2244,10 @@ window.EpsilonChangeModule = class EpsilonChangeModule {
         : `${this.focusTitle()} epsilon era change`,
       html: `
         ${this.renderContinuousLegendBar()}
+        <div class="epsilon-evidence-shape-key">
+          <span class="epsilon-evidence-shape-key-triangle"></span>
+          <span>Unresolved ${this.showUnresolved ? "shown" : "hidden"}</span>
+        </div>
         <div class="epsilon-map-legend-note">${this.analysisView === "trend"
           ? "Fold-centered Theil-Sen slope in percent per decade. FDR evidence is shown in the inspector."
           : "Fold-adjusted post-1990 annual-median effect. FDR evidence is shown in the inspector; gray means near zero, not Unresolved."}</div>
